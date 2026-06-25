@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { PayloadComposer } from './components/composer/PayloadComposer';
 import { MessageBubble } from './components/chat/MessageBubble';
 import { SettingsModal } from './components/settings/SettingsModal';
@@ -13,61 +13,16 @@ import {
     IconFileCode
 } from '@tabler/icons-react';
 
-const FULL_SYSTEM_PROMPT = `# ROLE AND OBJECTIVE
-You are an elite AI coding assistant. Your primary task is to generate code modifications that will be automatically parsed and applied by a custom VS Code extension.
-
-Strictest adherence to the XML-based output format is mandatory.
-
-# THE CONTRACT: XML-BASED DSL
-Wrap all file system operations inside a <workspace_edit> root tag.
-
-## 1. Create File
-<create_file path="path/to/new/file.ts">
-// Complete file content goes here
-</create_file>
-
-## 2. Update File (Search and Replace)
-<update_file path="path/to/existing/file.ts">
-    <change>
-        <search>
-Exact lines of code to find. Include enough context to be unique.
-        </search>
-        <replace>
-The new lines of code that will replace the search block.
-        </replace>
-    </change>
-</update_file>
-
-## 3. Delete Path
-<delete_path path="path/to/delete.ts" />
-
-## 4. Move / Rename Path
-<move_path src="old/path.ts" dest="new/path.ts" />
-
-## 5. Create Directory
-<create_dir path="new/folder/path" />
-
-# CRITICAL RULES
-1. NEVER use placeholders like "// ... existing code ...". Always output full replacement code.
-2. Spacing, indentation, and content inside the <search> block must be an exact verbatim match of the file.
-3. Output ONLY valid XML inside the <workspace_edit> block. Do not use markdown code fences around the XML tags.`;
-
 const EmptyState = () => {
     const { sendEvent } = useIPC();
-    const [copied, setCopied] = useState(false);
+    const copied = useAgentStore((state) => state.isPromptCopied);
 
     const handleDownloadInstructions = () => {
         sendEvent({ type: 'DOWNLOAD_INSTRUCTIONS' });
     };
 
-    const handleCopyPrompt = async () => {
-        try {
-            await navigator.clipboard.writeText(FULL_SYSTEM_PROMPT);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        } catch (err) {
-            console.error('Failed to copy text: ', err);
-        }
+    const handleCopyPrompt = () => {
+        sendEvent({ type: 'COPY_PROMPT' });
     };
 
     const supportedTools = [

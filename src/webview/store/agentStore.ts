@@ -13,11 +13,13 @@ interface AgentState {
     isAgentTyping: boolean;
     settings: AgentSettings;
     isSettingsOpen: boolean;
+    isPromptCopied: boolean; // Tracking prompt copy feedback state
     pipelineProgress: PipelineProgress;
 
     hydrateSession: (session: ChatSession) => void;
     hydrateSettings: (settings: AgentSettings) => void;
     setAgentTyping: (isTyping: boolean) => void;
+    setPromptCopied: (copied: boolean) => void;
     clearSession: () => void;
     toggleSettings: () => void;
     setPipelineProgress: (progress: PipelineProgress) => void;
@@ -29,18 +31,17 @@ export const useAgentStore = create<AgentState>((set) => ({
     isAgentTyping: false,
     settings: { autoScroll: true, strictParsing: false },
     isSettingsOpen: false,
+    isPromptCopied: false,
     pipelineProgress: { stage: 'idle', current: 0, total: 0 },
 
     hydrateSession: (session: ChatSession) => set({ messages: session.messages }),
     hydrateSettings: (settings: AgentSettings) => set({ settings }),
     setAgentTyping: (isTyping: boolean) => set({ isAgentTyping: isTyping }),
+    setPromptCopied: (copied: boolean) => set({ isPromptCopied: copied }),
     clearSession: () => set({ messages: [] }),
     toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
     setPipelineProgress: (progress: PipelineProgress) => set({ pipelineProgress: progress }),
 
-    /**
-     * Patches a single operation's status by ID — O(n) scan but avoids full React tree re-render.
-     */
     updateOperationStatus: (operationId: string, status: OperationStatus) =>
         set((state) => ({
             messages: state.messages.map((msg) => {

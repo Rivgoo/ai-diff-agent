@@ -20,8 +20,6 @@ export class MessageRouter {
     private settingsManager: SettingsManager;
     private editOrchestrator: EditOrchestrator;
 
-    // Stores the raw AnyOperation[] from the last parsed payload so non-update ops
-    // can be committed by EditOrchestrator on accept.
     private pendingOperations = new Map<string, AnyOperation>();
 
     constructor(
@@ -37,7 +35,6 @@ export class MessageRouter {
 
         this.orchestrator = new DiffOrchestrator((opId: string, status: OperationStatus) => {
             this.sessionManager.updateOperationStatus(opId, status);
-            // Fix §3.5 — emit granular OPERATION_UPDATED instead of full STATE_HYDRATE
             this.postMessageCallback({ type: 'OPERATION_UPDATED', operationId: opId, status });
         });
 
@@ -52,14 +49,10 @@ export class MessageRouter {
         return this.orchestrator.lensProvider;
     }
 
-    /**
-     * Fix §3.2 — Accept for non-update operations now routes through EditOrchestrator.
-     */
     public async acceptOperation(opId: string): Promise<void> {
         const rawOp = this.pendingOperations.get(opId);
 
         if (rawOp && rawOp.type !== 'update_file') {
-            // Commit the non-update operation (create_file, delete_path, move_path, create_dir)
             OutputLogger.log(`Committing deferred operation ${opId} (${rawOp.type})`, 'INFO');
             const success = await this.editOrchestrator.applyOperations([rawOp]);
             if (success) {
@@ -71,7 +64,6 @@ export class MessageRouter {
                 this.postMessageCallback({ type: 'OPERATION_UPDATED', operationId: opId, status: 'error' });
             }
         } else {
-            // update_file operations: just clear decorations and mark applied
             this.orchestrator.acceptOperation(opId);
         }
     }
@@ -114,6 +106,9 @@ export class MessageRouter {
                 break;
             case 'OPEN_DIFF':
                 this.handleOpenDiff(event.operationId);
+                break;
+            case 'COPY_PROMPT':
+                this.handleCopyPrompt();
                 break;
             case 'DOWNLOAD_INSTRUCTIONS':
                 this.handleDownloadInstructions();
@@ -165,9 +160,6 @@ export class MessageRouter {
         }
     }
 
-    /**
-     * Fix §3.3 — Open the native VS Code diff editor using the registered VirtualFsProvider.
-     */
     private async handleOpenDiff(operationId: string): Promise<void> {
         const session = this.sessionManager.getSession();
         let targetOp: DiffOperation | undefined;
@@ -196,6 +188,21 @@ export class MessageRouter {
         }
     }
 
+    private async handleCopyPrompt(): Promise<void> {
+        try {
+            const instructionsPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'prompt-instructions.md');
+            const fileBytes = await vscode.workspace.fs.readFile(instructionsPath);
+            const content = new TextDecoder().decode(fileBytes);
+            
+            await vscode.env.clipboard.writeText(content);
+            this.postMessageCallback({ type: 'PROMPT_COPIED' });
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Unknown read error';
+            OutputLogger.log(`Failed to copy prompt instructions to clipboard: ${msg}`, 'ERROR');
+            vscode.window.showErrorMessage(`Failed to copy instructions: ${msg}`);
+        }
+    }
+
     private async handleDownloadInstructions(): Promise<void> {
         try {
             const instructionsPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'prompt-instructions.md');
@@ -217,11 +224,6 @@ export class MessageRouter {
         }
     }
 
-    /**
-     * Fix §3.10 — Remove 300ms fake delay; emit real PIPELINE_STATE progress events.
-     * Fix §3.2  — Store all AnyOperation objects for deferred commit.
-     * Fix §3.11 — Validate all paths with PathSandbox before staging.
-     */
     private async handlePayloadSubmission(payload: string): Promise<void> {
         const userMsg: ChatMessage = {
             id: Date.now().toString(),
@@ -237,21 +239,18 @@ export class MessageRouter {
         this.postMessageCallback({ type: 'PIPELINE_STATE', stage: 'parsing', current: 0, total: 0 });
 
         try {
-            // --- PARSE ---
             const parseResult = this.parser.parse(payload);
             if (!parseResult.success) {
                 throw new Error(`Parsing failed: ${parseResult.error.message}`);
             }
             OutputLogger.log(`Parsed ${parseResult.value.length} operations`, 'INFO');
 
-            // --- VALIDATE ---
             this.postMessageCallback({ type: 'PIPELINE_STATE', stage: 'validating', current: 0, total: parseResult.value.length });
             const validationResult = this.validator.validate(parseResult.value);
             if (!validationResult.success) {
                 throw new Error(`Validation failed: ${validationResult.error.message}`);
             }
 
-            // --- PATH SANDBOX ---
             this.postMessageCallback({ type: 'PIPELINE_STATE', stage: 'resolving', current: 0, total: validationResult.value.length });
             for (const op of validationResult.value) {
                 PathSandbox.validate(op.path);
@@ -261,7 +260,6 @@ export class MessageRouter {
             }
             OutputLogger.log('All paths validated within workspace boundary', 'INFO');
 
-            // --- BUILD DIFF OPERATIONS & STORE RAW OPS ---
             const diffOps: DiffOperation[] = validationResult.value.map((op: AnyOperation) => ({
                 id: op.id,
                 type: op.type,
@@ -270,12 +268,10 @@ export class MessageRouter {
                 changes: op.type === 'update_file' ? (op as any).changes : []
             }));
 
-            // Store raw AnyOperation for deferred commit of non-update ops on accept
             for (const op of validationResult.value) {
                 this.pendingOperations.set(op.id, op);
             }
 
-            // Register update_file ops with VirtualFsProvider for diff viewer
             for (const op of validationResult.value) {
                 if (op.type === 'update_file') {
                     this.virtualFsProvider.registerOperation(op as UpdateFileOperation);
@@ -292,7 +288,6 @@ export class MessageRouter {
             this.sessionManager.addMessage(agentMsg);
             this.syncState();
 
-            // --- STAGE update_file ops in editor ---
             this.postMessageCallback({ type: 'PIPELINE_STATE', stage: 'staging', current: 0, total: diffOps.length });
             await this.orchestrator.stageOperations(diffOps);
             this.postMessageCallback({ type: 'PIPELINE_STATE', stage: 'reviewing', current: diffOps.length, total: diffOps.length });

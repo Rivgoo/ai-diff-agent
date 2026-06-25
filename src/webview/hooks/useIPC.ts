@@ -20,6 +20,7 @@ export const useIPC = () => {
     const setAgentTyping = useAgentStore((state) => state.setAgentTyping);
     const updateOperationStatus = useAgentStore((state) => state.updateOperationStatus);
     const setPipelineProgress = useAgentStore((state) => state.setPipelineProgress);
+    const setPromptCopied = useAgentStore((state) => state.setPromptCopied);
 
     useEffect(() => {
         const handleMessage = (event: MessageEvent<ExtensionEvent>) => {
@@ -34,13 +35,15 @@ export const useIPC = () => {
                 case 'AGENT_TYPING':
                     setAgentTyping(message.isTyping);
                     break;
-                // Fix §3.5 — patch single operation, no full re-render
                 case 'OPERATION_UPDATED':
                     updateOperationStatus(message.operationId, message.status);
                     break;
-                // Fix §3.10 — display real pipeline progress
                 case 'PIPELINE_STATE':
                     setPipelineProgress({ stage: message.stage, current: message.current, total: message.total });
+                    break;
+                case 'PROMPT_COPIED':
+                    setPromptCopied(true);
+                    setTimeout(() => setPromptCopied(false), 2000);
                     break;
                 case 'ERROR_OCCURRED':
                     console.error('Agent Error:', message.message);
