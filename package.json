@@ -2,7 +2,7 @@
   "name": "ai-diff-agent",
   "displayName": "AI Diff Agent",
   "description": "Agentic Diff Engine for LLM code application with Human-in-the-loop control.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -16,7 +16,7 @@
       "activitybar": [
         {
           "id": "ai-diff-agent-sidebar-container",
-          "title": "AI Agent Chat",
+          "title": "AI Diff Agent",
           "icon": "$(hubot)"
         }
       ]
@@ -34,6 +34,40 @@
       {
         "command": "ai-diff-agent.start",
         "title": "AI Diff Agent: Focus Chat"
+      },
+      {
+        "command": "ai-diff-agent.action.accept",
+        "title": "AI Diff Agent: Accept Change"
+      },
+      {
+        "command": "ai-diff-agent.action.reject",
+        "title": "AI Diff Agent: Reject Change"
+      },
+      {
+        "command": "ai-diff-agent.action.acceptAll",
+        "title": "AI Diff Agent: Accept All Pending Changes"
+      },
+      {
+        "command": "ai-diff-agent.action.rejectAll",
+        "title": "AI Diff Agent: Reject All Pending Changes"
+      },
+      {
+        "command": "ai-diff-agent.showLog",
+        "title": "AI Diff Agent: Show Output Log"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "ai-diff-agent.action.acceptAll",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a",
+        "when": "view.ai-diff-agent-sidebar-view.visible"
+      },
+      {
+        "command": "ai-diff-agent.action.rejectAll",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "view.ai-diff-agent-sidebar-view.visible"
       }
     ],
     "configuration": {

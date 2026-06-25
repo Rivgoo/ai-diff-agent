@@ -1,17 +1,20 @@
 import * as vscode from 'vscode';
 import { ExtensionEvent, WebviewEvent } from '../../shared/ipc';
 import { MessageRouter } from '../chat/messageRouter';
+import { VirtualFsProvider } from '../../infrastructure/providers/virtualFsProvider';
 
 export class SidebarWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'ai-diff-agent-sidebar-view';
     private view?: vscode.WebviewView;
     public readonly router: MessageRouter;
 
-    constructor(private readonly context: vscode.ExtensionContext) {
-        // Forward context for direct storage and resources folder read accesses
+    constructor(
+        private readonly context: vscode.ExtensionContext,
+        virtualFsProvider: VirtualFsProvider
+    ) {
         this.router = new MessageRouter(context, (event: ExtensionEvent) => {
             this.view?.webview.postMessage(event);
-        });
+        }, virtualFsProvider);
     }
 
     public resolveWebviewView(
@@ -59,7 +62,9 @@ export class SidebarWebviewProvider implements vscode.WebviewViewProvider {
     private getNonce(): string {
         let text = '';
         const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        for (let i = 0; i < 32; i++) { text += possible.charAt(Math.floor(Math.random() * possible.length)); }
+        for (let i = 0; i < 32; i++) {
+            text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
         return text;
     }
 }

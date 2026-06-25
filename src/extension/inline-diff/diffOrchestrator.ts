@@ -3,20 +3,27 @@ import { DiffOperation, OperationStatus } from '../../shared/models';
 import { UndoTracker } from './undoTracker';
 import { DecorationManager } from './decorationManager';
 import { ActionLensProvider } from './actionLensProvider';
-import { BlockMatcher } from './blockMatcher';
+import { SearchEngine } from '../../core/matcher/searchEngine';
+import { VsCodeDocument } from '../../infrastructure/adapters/vsCodeDocument';
+import { PathSandbox } from '../../vscode/workspace/pathSandbox';
+import { OutputLogger } from '../../infrastructure/logging/outputLogger';
 
 /**
  * Coordinates the transactional application of AI code changes into the VS Code Editor.
- * Includes conflict detection for manual user edits.
+ * Uses the canonical SearchEngine (not BlockMatcher) for all matching.
+ * Conflict detection guards against manual user edits during review.
  */
 export class DiffOrchestrator {
     private undoTracker = new UndoTracker();
     private decorationManager = new DecorationManager();
     public lensProvider = new ActionLensProvider();
-    
+    private searchEngine = new SearchEngine();
+
     // Tracks active ranges to detect manual conflicts
     private activeRanges = new Map<string, { uri: vscode.Uri; range: vscode.Range }[]>();
-    private isApplyingEdit = false;
+
+    // Fix §3.7: Replace boolean with Set to handle concurrent async edits correctly
+    private inFlightEditIds = new Set<string>();
 
     constructor(private readonly statusUpdateCallback: (opId: string, status: OperationStatus) => void) {}
 
@@ -24,7 +31,8 @@ export class DiffOrchestrator {
      * Listens to document changes to detect if a user manually edits a block under AI review.
      */
     public handleDocumentChange(event: vscode.TextDocumentChangeEvent): void {
-        if (this.isApplyingEdit || event.contentChanges.length === 0) return;
+        // Suppress conflict detection for any edit we are currently applying
+        if (this.inFlightEditIds.size > 0 || event.contentChanges.length === 0) return;
 
         const changedDocUri = event.document.uri.toString();
 
@@ -32,18 +40,15 @@ export class DiffOrchestrator {
             for (const activeRangeData of ranges) {
                 if (activeRangeData.uri.toString() !== changedDocUri) continue;
 
-                // Check if any manual edit intersects with our AI-modified range
                 for (const change of event.contentChanges) {
                     if (activeRangeData.range.intersection(change.range)) {
-                        // User modified the reviewing block manually!
-                        // Remove UI overlays and mark as manual conflict.
+                        OutputLogger.log(`Manual edit conflict detected for operation ${opId}`, 'WARN');
                         this.decorationManager.clearDecorations(opId);
                         this.lensProvider.removeLenses(opId);
                         this.undoTracker.clear(opId);
                         this.activeRanges.delete(opId);
-                        
                         this.statusUpdateCallback(opId, 'manual_modified');
-                        return; // Process one operation conflict at a time
+                        return;
                     }
                 }
             }
@@ -52,48 +57,88 @@ export class DiffOrchestrator {
 
     public async stageOperations(operations: DiffOperation[]): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) return;
-        const rootUri = workspaceFolders[0].uri;
+        if (!workspaceFolders) {
+            OutputLogger.log('stageOperations called with no workspace open', 'WARN');
+            return;
+        }
 
         for (const op of operations) {
-            if (op.type !== 'update_file') continue;
+            if (op.type !== 'update_file') {
+                // Non-update operations are registered for deferred commit on accept
+                // They don't need staging in the editor — mark as pending (unchanged)
+                OutputLogger.log(`Operation ${op.id} (${op.type}) registered for deferred commit`, 'INFO');
+                continue;
+            }
 
-            const fileUri = vscode.Uri.joinPath(rootUri, op.path);
+            // Validate path is within workspace boundary
+            let fileUri: vscode.Uri;
+            try {
+                fileUri = PathSandbox.validate(op.path);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                OutputLogger.log(`Path validation failed for ${op.path}: ${msg}`, 'ERROR');
+                this.statusUpdateCallback(op.id, 'error');
+                continue;
+            }
+
             let document: vscode.TextDocument;
-            
             try {
                 document = await vscode.workspace.openTextDocument(fileUri);
-            } catch (e) {
+            } catch {
+                OutputLogger.log(`File not found for staging: ${op.path}`, 'ERROR');
                 this.statusUpdateCallback(op.id, 'error');
                 continue;
             }
 
             const editor = await vscode.window.showTextDocument(document, { preview: false, preserveFocus: true });
+            const domainDoc = new VsCodeDocument(document);
             const edit = new vscode.WorkspaceEdit();
-            
-            const matchedBlocks = [];
+
+            const matchedBlocks: { range: vscode.Range; replace: string; originalText: string }[] = [];
+            let stagingFailed = false;
+
             for (const change of op.changes) {
-                const range = BlockMatcher.findMatch(document, change.search);
-                if (!range) {
+                const matchResult = this.searchEngine.findMatch(domainDoc, change.search);
+
+                if (matchResult.status !== 'MATCHED') {
+                    OutputLogger.log(
+                        `Match failed for op ${op.id} in ${op.path}. Reason: ${matchResult.status === 'FAILED' ? matchResult.reason : 'unknown'}`,
+                        'WARN'
+                    );
                     this.statusUpdateCallback(op.id, 'conflict');
-                    return;
+                    stagingFailed = true;
+                    break;
                 }
-                matchedBlocks.push({ range, replace: change.replace, search: change.search });
+
+                OutputLogger.log(
+                    `Matched change block in ${op.path} with confidence="${matchResult.confidence}"`,
+                    'INFO'
+                );
+
+                const vsRange = new vscode.Range(
+                    new vscode.Position(matchResult.range.start.line, matchResult.range.start.character),
+                    new vscode.Position(matchResult.range.end.line, matchResult.range.end.character)
+                );
+                matchedBlocks.push({ range: vsRange, replace: change.replace, originalText: change.search });
             }
 
+            if (stagingFailed) continue;
+
+            // Apply changes bottom-up to prevent offset drift during multi-block staging
             matchedBlocks.sort((a, b) => b.range.start.compareTo(a.range.start));
             const trackedRanges: { uri: vscode.Uri; range: vscode.Range }[] = [];
 
             for (const match of matchedBlocks) {
                 edit.replace(fileUri, match.range, match.replace);
 
-                const lineDelta = match.replace.split('\n').length - match.search.split('\n').length;
+                const lineDelta = match.replace.split('\n').length - match.originalText.split('\n').length;
                 const newEndLine = match.range.end.line + lineDelta;
-                const newRange = new vscode.Range(match.range.start.line, 0, newEndLine, 999);
+                const newRange = new vscode.Range(match.range.start.line, 0, Math.max(match.range.start.line, newEndLine), 999);
 
+                // Store original search text (not the range) for drift-safe revert
                 this.undoTracker.track(op.id, {
                     uri: fileUri,
-                    originalText: match.search,
+                    originalText: match.originalText,
                     appliedRange: newRange
                 });
 
@@ -102,15 +147,17 @@ export class DiffOrchestrator {
                 trackedRanges.push({ uri: fileUri, range: newRange });
             }
 
-            // Lock edits to prevent triggering our own change listener
-            this.isApplyingEdit = true;
+            // Fix §3.7: Use operation ID as in-flight token
+            this.inFlightEditIds.add(op.id);
             const success = await vscode.workspace.applyEdit(edit);
-            this.isApplyingEdit = false;
+            this.inFlightEditIds.delete(op.id);
 
             if (success) {
                 this.activeRanges.set(op.id, trackedRanges);
                 this.statusUpdateCallback(op.id, 'reviewing');
+                OutputLogger.log(`Staged operation ${op.id} for ${op.path}`, 'INFO');
             } else {
+                OutputLogger.log(`applyEdit returned false for operation ${op.id}`, 'ERROR');
                 this.statusUpdateCallback(op.id, 'error');
             }
         }
@@ -119,25 +166,76 @@ export class DiffOrchestrator {
     public async acceptOperation(operationId: string): Promise<void> {
         this.clearTracking(operationId);
         this.statusUpdateCallback(operationId, 'applied');
+        OutputLogger.log(`Operation ${operationId} accepted`, 'INFO');
     }
 
+    /**
+     * Fix §3.8: On reject, re-match the stored originalText against the current document
+     * instead of trusting stored range coordinates which may have drifted.
+     */
     public async rejectOperation(operationId: string): Promise<void> {
         const reverts = this.undoTracker.consumeRevertData(operationId);
+
         if (reverts.length > 0) {
             const edit = new vscode.WorkspaceEdit();
-            reverts.sort((a, b) => b.appliedRange.start.compareTo(a.appliedRange.start));
-            
-            for (const revert of reverts) {
-                edit.replace(revert.uri, revert.appliedRange, revert.originalText);
+
+            // Group reverts by document so we open each file once
+            const byUri = new Map<string, typeof reverts>();
+            for (const r of reverts) {
+                const key = r.uri.toString();
+                const existing = byUri.get(key) ?? [];
+                existing.push(r);
+                byUri.set(key, existing);
             }
-            
-            this.isApplyingEdit = true;
+
+            for (const [, fileReverts] of byUri.entries()) {
+                // Re-open the current document state to get fresh content
+                let document: vscode.TextDocument | undefined;
+                try {
+                    document = await vscode.workspace.openTextDocument(fileReverts[0].uri);
+                } catch {
+                    OutputLogger.log(`Could not open document for revert of op ${operationId}`, 'ERROR');
+                    continue;
+                }
+
+                const domainDoc = new VsCodeDocument(document);
+
+                // Re-match each original text block against the live document
+                // to get accurate current positions (fixes offset drift §3.8)
+                const resolvedReverts: { range: vscode.Range; text: string }[] = [];
+                for (const revert of fileReverts) {
+                    const matchResult = this.searchEngine.findMatch(domainDoc, revert.originalText);
+                    if (matchResult.status === 'MATCHED') {
+                        const vsRange = new vscode.Range(
+                            new vscode.Position(matchResult.range.start.line, matchResult.range.start.character),
+                            new vscode.Position(matchResult.range.end.line, matchResult.range.end.character)
+                        );
+                        resolvedReverts.push({ range: vsRange, text: revert.originalText });
+                    } else {
+                        // Fall back to stored range if re-match fails (e.g. content already reverted)
+                        OutputLogger.log(
+                            `Re-match for revert of op ${operationId} failed (${matchResult.status === 'FAILED' ? matchResult.reason : 'unknown'}), using stored range`,
+                            'WARN'
+                        );
+                        resolvedReverts.push({ range: revert.appliedRange, text: revert.originalText });
+                    }
+                }
+
+                // Apply reverts bottom-up to prevent offset conflicts
+                resolvedReverts.sort((a, b) => b.range.start.compareTo(a.range.start));
+                for (const r of resolvedReverts) {
+                    edit.replace(fileReverts[0].uri, r.range, r.text);
+                }
+            }
+
+            this.inFlightEditIds.add(operationId);
             await vscode.workspace.applyEdit(edit);
-            this.isApplyingEdit = false;
+            this.inFlightEditIds.delete(operationId);
         }
 
         this.clearTracking(operationId);
         this.statusUpdateCallback(operationId, 'rejected');
+        OutputLogger.log(`Operation ${operationId} rejected and reverted`, 'INFO');
     }
 
     private clearTracking(operationId: string): void {

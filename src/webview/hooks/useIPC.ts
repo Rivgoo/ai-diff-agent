@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { WebviewEvent, ExtensionEvent } from '../../shared/ipc';
-import { useChatStore } from '../store/chatStore';
+import { useAgentStore } from '../store/agentStore';
 
 class VSCodeAPIWrapper {
     private static instance: any;
@@ -15,9 +15,11 @@ class VSCodeAPIWrapper {
 
 export const useIPC = () => {
     const vscode = useRef(VSCodeAPIWrapper.acquire());
-    const hydrateSession = useChatStore((state) => state.hydrateSession);
-    const hydrateSettings = useChatStore((state) => state.hydrateSettings);
-    const setAgentTyping = useChatStore((state) => state.setAgentTyping);
+    const hydrateSession = useAgentStore((state) => state.hydrateSession);
+    const hydrateSettings = useAgentStore((state) => state.hydrateSettings);
+    const setAgentTyping = useAgentStore((state) => state.setAgentTyping);
+    const updateOperationStatus = useAgentStore((state) => state.updateOperationStatus);
+    const setPipelineProgress = useAgentStore((state) => state.setPipelineProgress);
 
     useEffect(() => {
         const handleMessage = (event: MessageEvent<ExtensionEvent>) => {
@@ -32,15 +34,22 @@ export const useIPC = () => {
                 case 'AGENT_TYPING':
                     setAgentTyping(message.isTyping);
                     break;
+                // Fix §3.5 — patch single operation, no full re-render
+                case 'OPERATION_UPDATED':
+                    updateOperationStatus(message.operationId, message.status);
+                    break;
+                // Fix §3.10 — display real pipeline progress
+                case 'PIPELINE_STATE':
+                    setPipelineProgress({ stage: message.stage, current: message.current, total: message.total });
+                    break;
                 case 'ERROR_OCCURRED':
-                    console.error("Agent Error:", message.message);
+                    console.error('Agent Error:', message.message);
                     break;
             }
         };
 
         window.addEventListener('message', handleMessage);
-        
-        // Request initial states on mount
+
         sendEvent({ type: 'REQUEST_STATE_SYNC' });
         sendEvent({ type: 'REQUEST_SETTINGS_SYNC' });
 

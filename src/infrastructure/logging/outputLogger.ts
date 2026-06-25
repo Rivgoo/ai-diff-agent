@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 /**
  * Global observability utility providing unified diagnostic logging.
  * Decouples engine logs and redirects them to a dedicated VS Code Output Channel.
+ * Wire: call OutputLogger.initialize() once in extension.ts activation.
  */
 export class OutputLogger {
     private static channel: vscode.OutputChannel | undefined;
@@ -14,13 +15,22 @@ export class OutputLogger {
     }
 
     public static log(message: string, level: 'INFO' | 'WARN' | 'ERROR' = 'INFO'): void {
-        this.initialize();
+        if (!this.channel) {
+            this.initialize();
+        }
         const timestamp = new Date().toISOString();
-        this.channel?.appendLine(`[${timestamp}] [${level}] ${message}`);
+        this.channel!.appendLine(`[${timestamp}] [${level}] ${message}`);
     }
 
     public static show(): void {
-        this.initialize();
-        this.channel?.show(true);
+        if (!this.channel) {
+            this.initialize();
+        }
+        this.channel!.show(true);
+    }
+
+    public static dispose(): void {
+        this.channel?.dispose();
+        this.channel = undefined;
     }
 }
