@@ -173,9 +173,10 @@ const EmptyState = () => {
                     To use the agent, tell your favorite LLM to format its code modifications inside our custom XML-based DSL template.
                 </div>
 
+                {/* Highly Adaptive Button Container */}
                 <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: '1fr 1fr', 
+                    display: 'flex', 
+                    flexWrap: 'wrap', 
                     gap: '8px',
                     marginTop: '4px' 
                 }}>
@@ -196,7 +197,10 @@ const EmptyState = () => {
                             fontSize: '11px',
                             fontWeight: 600,
                             fontFamily: 'var(--vscode-font-family)',
-                            transition: 'opacity 0.15s ease'
+                            transition: 'opacity 0.15s ease',
+                            flex: '1 1 130px', // Responsive flex shrink/grow with ideal minimum basis
+                            whiteSpace: 'nowrap', // Protects text from ugly wrapping inside button
+                            minHeight: '32px'
                         }}
                         onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
                         onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
@@ -231,7 +235,10 @@ const EmptyState = () => {
                             fontSize: '11px',
                             fontWeight: 600,
                             fontFamily: 'var(--vscode-font-family)',
-                            transition: 'opacity 0.15s ease'
+                            transition: 'opacity 0.15s ease',
+                            flex: '1 1 130px', // Responsive flex shrink/grow with ideal minimum basis
+                            whiteSpace: 'nowrap', // Protects text from ugly wrapping inside button
+                            minHeight: '32px'
                         }}
                         onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
                         onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
