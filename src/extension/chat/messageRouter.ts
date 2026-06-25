@@ -224,7 +224,7 @@ export class MessageRouter {
         }
     }
 
-    private async handlePayloadSubmission(payload: string): Promise<void> {
+    public async handlePayloadSubmission(payload: string): Promise<void> {
         const userMsg: ChatMessage = {
             id: Date.now().toString(),
             role: 'user',
@@ -260,13 +260,30 @@ export class MessageRouter {
             }
             OutputLogger.log('All paths validated within workspace boundary', 'INFO');
 
-            const diffOps: DiffOperation[] = validationResult.value.map((op: AnyOperation) => ({
-                id: op.id,
-                type: op.type,
-                path: op.path,
-                status: 'pending' as const,
-                changes: op.type === 'update_file' ? (op as any).changes : []
-            }));
+            const diffOps: DiffOperation[] = validationResult.value.map((op: AnyOperation) => {
+                let additions = 0;
+                let deletions = 0;
+
+                if (op.type === 'create_file') {
+                    additions = op.content ? op.content.split(/\r?\n/).length : 0;
+                } else if (op.type === 'update_file') {
+                    for (const change of op.changes) {
+                        deletions += change.search ? change.search.split(/\r?\n/).length : 0;
+                        additions += change.replace ? change.replace.split(/\r?\n/).length : 0;
+                    }
+                }
+
+                const hasStats = op.type === 'create_file' || op.type === 'update_file';
+
+                return {
+                    id: op.id,
+                    type: op.type,
+                    path: op.path,
+                    status: 'pending' as const,
+                    changes: op.type === 'update_file' ? (op as any).changes : [],
+                    stats: hasStats ? { additions, deletions } : undefined
+                };
+            });
 
             for (const op of validationResult.value) {
                 this.pendingOperations.set(op.id, op);

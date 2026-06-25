@@ -3,6 +3,11 @@
  * STRICT RULE: No VS Code API imports allowed in this file.
  */
 
+export interface ChangeStats {
+    readonly additions: number;
+    readonly deletions: number;
+}
+
 export type OperationStatus = 'pending' | 'reviewing' | 'applied' | 'rejected' | 'conflict' | 'error' | 'manual_modified';
 export type MessageRole = 'user' | 'agent' | 'system';
 export type OperationType = 'create_file' | 'update_file' | 'delete_path' | 'move_path' | 'create_dir';
@@ -35,6 +40,7 @@ export interface DiffOperation {
     status: OperationStatus;
     changes: ChangeBlock[];
     errorMessage?: string;
+    stats?: ChangeStats;
 }
 
 export interface ChatMessage {

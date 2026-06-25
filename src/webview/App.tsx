@@ -3,6 +3,7 @@ import { PayloadComposer } from './components/composer/PayloadComposer';
 import { MessageBubble } from './components/chat/MessageBubble';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { PipelineProgress } from './components/progress/PipelineProgress';
+import { StickyBatchBar } from './components/review/StickyBatchBar';
 import { useAgentStore } from './store/agentStore';
 import { useIPC } from './hooks/useIPC';
 import { 
@@ -26,58 +27,55 @@ const EmptyState = () => {
     };
 
     const supportedTools = [
-        { name: 'create_file', label: 'Create File', color: 'var(--vscode-testing-iconPassed)' },
-        { name: 'update_file', label: 'Update File', color: 'var(--vscode-textLink-foreground)' },
-        { name: 'delete_path', label: 'Delete Path', color: 'var(--vscode-testing-iconFailed)' },
-        { name: 'move_path', label: 'Move/Rename', color: 'var(--vscode-editorWarning-foreground)' },
-        { name: 'create_dir', label: 'Create Directory', color: 'var(--vscode-badge-background)' }
+        { name: 'create_file', label: 'Create', color: 'var(--vscode-testing-iconPassed)' },
+        { name: 'update_file', label: 'Update', color: 'var(--vscode-textLink-foreground)' },
+        { name: 'delete_path', label: 'Delete', color: 'var(--vscode-testing-iconFailed)' },
+        { name: 'move_path', label: 'Move', color: 'var(--vscode-editorWarning-foreground)' }
     ];
 
     return (
         <div style={{ 
-            padding: '12px 10px', 
+            padding: '8px 6px', 
             display: 'flex', 
             flexDirection: 'column', 
-            gap: '16px', 
+            gap: '12px', 
             color: 'var(--vscode-descriptionForeground)',
             fontFamily: 'var(--vscode-font-family)',
             maxWidth: '100%',
             boxSizing: 'border-box'
         }}>
-            {/* Visual Header Banner */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '6px' }}>
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    width: '40px',
-                    height: '40px',
+                    width: '32px',
+                    height: '32px',
                     borderRadius: '50%',
                     backgroundColor: 'var(--vscode-button-secondaryBackground)',
                     color: 'var(--vscode-textLink-foreground)',
                     marginBottom: '2px',
                     border: '1px solid var(--vscode-panel-border)'
                 }}>
-                    <IconRobot size={24} />
+                    <IconRobot size={20} />
                 </div>
-                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--vscode-foreground)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--vscode-foreground)' }}>
                     AI Diff Agent
                 </div>
-                <div style={{ fontSize: '11.5px', lineHeight: '1.4', padding: '0 6px' }}>
-                    Automate file generation, structural changes, and code updates safely with human-in-the-loop review.
+                <div style={{ fontSize: '11px', lineHeight: '1.35', padding: '0 4px' }}>
+                    Automate structural edits and code updates safely with transactional human-in-the-loop review.
                 </div>
             </div>
 
-            {/* Supported Operations Section */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ fontSize: '10.5px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--vscode-foreground)' }}>
-                    Supported Engine Operations
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--vscode-foreground)' }}>
+                    Operations
                 </div>
                 <div style={{ 
                     display: 'flex', 
                     flexWrap: 'wrap', 
-                    gap: '6px',
-                    padding: '4px 0'
+                    gap: '4px',
+                    padding: '2px 0'
                 }}>
                     {supportedTools.map((tool) => (
                         <div 
@@ -85,19 +83,18 @@ const EmptyState = () => {
                             style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                padding: '3px 8px',
+                                gap: '4px',
+                                padding: '2px 6px',
                                 backgroundColor: 'var(--vscode-editor-background)',
                                 border: '1px solid var(--vscode-panel-border)',
-                                borderRadius: '12px',
-                                fontSize: '10.5px',
-                                color: 'var(--vscode-foreground)',
-                                whiteSpace: 'nowrap'
+                                borderRadius: '10px',
+                                fontSize: '10px',
+                                color: 'var(--vscode-foreground)'
                             }}
                         >
                             <span style={{ 
-                                width: '5px', 
-                                height: '5px', 
+                                width: '4px', 
+                                height: '4px', 
                                 borderRadius: '50%', 
                                 backgroundColor: tool.color,
                                 flexShrink: 0
@@ -108,98 +105,85 @@ const EmptyState = () => {
                 </div>
             </div>
 
-            {/* Prompt Instructions Call to Action Card */}
             <div style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '10px',
-                padding: '12px 10px',
+                gap: '8px',
+                padding: '8px',
                 backgroundColor: 'var(--vscode-welcomePage-tileBackground, var(--vscode-editor-background))',
                 border: '1px solid var(--vscode-panel-border)',
-                borderRadius: '6px',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.06)'
+                borderRadius: '6px'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--vscode-foreground)' }}>
-                    <IconFileCode size={18} style={{ color: 'var(--vscode-textLink-foreground)' }} />
-                    <div style={{ fontSize: '12px', fontWeight: 600 }}>Configure LLM System Prompt</div>
+                    <IconFileCode size={16} style={{ color: 'var(--vscode-textLink-foreground)' }} />
+                    <div style={{ fontSize: '11.5px', fontWeight: 600 }}>System Prompt Setup</div>
                 </div>
                 
-                <div style={{ fontSize: '11px', lineHeight: '1.45' }}>
-                    To use the agent, tell your favorite LLM to format its code modifications inside our custom XML-based DSL template.
+                <div style={{ fontSize: '10.5px', lineHeight: '1.35' }}>
+                    Instruct your LLM to format changes inside the custom XML-based DSL template.
                 </div>
 
-                {/* Highly Adaptive Button Container */}
                 <div style={{ 
                     display: 'flex', 
                     flexWrap: 'wrap', 
-                    gap: '6px',
+                    gap: '4px',
                     marginTop: '2px' 
                 }}>
-                    {/* Copy Full System Prompt Button */}
                     <button
                         onClick={handleCopyPrompt}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '6px',
-                            padding: '6px 8px',
+                            gap: '4px',
+                            padding: '4px 6px',
                             backgroundColor: 'var(--vscode-button-secondaryBackground)',
                             color: 'var(--vscode-button-secondaryForeground)',
                             border: 'none',
                             borderRadius: '4px',
                             cursor: 'pointer',
-                            fontSize: '11px',
+                            fontSize: '10.5px',
                             fontWeight: 600,
                             fontFamily: 'var(--vscode-font-family)',
-                            transition: 'opacity 0.15s ease',
-                            flex: '1 1 120px',
-                            whiteSpace: 'nowrap',
-                            minHeight: '28px'
+                            flex: '1 1 100px',
+                            minHeight: '24px'
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
-                        onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
                     >
                         {copied ? (
                             <>
-                                <IconCheck size={14} style={{ color: 'var(--vscode-testing-iconPassed)' }} />
+                                <IconCheck size={12} style={{ color: 'var(--vscode-testing-iconPassed)' }} />
                                 Copied!
                             </>
                         ) : (
                             <>
-                                <IconCopy size={14} />
-                                Copy System Prompt
+                                <IconCopy size={12} />
+                                Copy Prompt
                             </>
                         )}
                     </button>
 
-                    {/* Download Guide Button */}
                     <button
                         onClick={handleDownloadInstructions}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '6px',
-                            padding: '6px 8px',
+                            gap: '4px',
+                            padding: '4px 6px',
                             backgroundColor: 'var(--vscode-button-background)',
                             color: 'var(--vscode-button-foreground)',
                             border: 'none',
                             borderRadius: '4px',
                             cursor: 'pointer',
-                            fontSize: '11px',
+                            fontSize: '10.5px',
                             fontWeight: 600,
                             fontFamily: 'var(--vscode-font-family)',
-                            transition: 'opacity 0.15s ease',
-                            flex: '1 1 120px',
-                            whiteSpace: 'nowrap',
-                            minHeight: '28px'
+                            flex: '1 1 100px',
+                            minHeight: '24px'
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
-                        onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
                     >
-                        <IconDownload size={14} />
-                        Get System Prompt
+                        <IconDownload size={12} />
+                        Get Instructions
                     </button>
                 </div>
             </div>
@@ -222,7 +206,6 @@ export const App = () => {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--vscode-sideBar-background)', position: 'relative' }}>
-            {/* Global style override to fix VS Code webview default body padding */}
             <style>{`
                 body {
                     padding: 0 !important;
@@ -239,11 +222,9 @@ export const App = () => {
 
             <SettingsModal />
 
-            {/* Pipeline progress bar */}
             <PipelineProgress />
 
-            {/* Messages Area with compact paddings */}
-            <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '6px 4px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {messages.length === 0 ? (
                     <EmptyState />
                 ) : (
@@ -252,13 +233,14 @@ export const App = () => {
                     ))
                 )}
                 {isTyping && (
-                    <div style={{ color: 'var(--vscode-descriptionForeground)', fontStyle: 'italic', paddingLeft: '4px', fontSize: '11.5px' }}>
-                        Applying...
+                    <div style={{ color: 'var(--vscode-descriptionForeground)', fontStyle: 'italic', paddingLeft: '4px', fontSize: '11px' }}>
+                        Applying changes...
                     </div>
                 )}
             </div>
 
-            {/* Payload Composer */}
+            <StickyBatchBar />
+
             <PayloadComposer />
         </div>
     );
