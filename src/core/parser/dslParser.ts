@@ -1,0 +1,258 @@
+import { Result } from '../../shared/contracts';
+import { AnyOperation, ChangeBlock } from '../models/operations';
+import { StreamScanner, Token } from '../lexer/scanner';
+
+/**
+ * Main parser responsible for translating the XML-like Token stream 
+ * into fully validated domain operations.
+ */
+export class DSLParser {
+    private readonly scanner = new StreamScanner();
+
+    public parse(rawInput: string): Result<AnyOperation[]> {
+        try {
+            const cleanedInput = this.stripMarkdownFences(rawInput);
+            const tokens = this.scanner.tokenize(cleanedInput);
+
+            let index = 0;
+            while (index < tokens.length) {
+                const token = tokens[index];
+
+                if (token.type === 'OPEN_TAG' && token.name === 'workspace_edit') {
+                    const workspaceResult = this.parseWorkspaceEdit(tokens, index);
+                    if (workspaceResult.success) {
+                        return Result.ok(workspaceResult.value.operations);
+                    } else {
+                        return Result.fail(workspaceResult.error);
+                    }
+                }
+                index++;
+            }
+
+            // Fallback: If no <workspace_edit> is found, attempt loose parsing of isolated tool blocks
+            const looseResult = this.parseOperationsList(tokens, 0, tokens.length);
+            return Result.ok(looseResult.operations);
+
+        } catch (error) {
+            return Result.fail(error instanceof Error ? error : new Error('Unknown structural parse error'));
+        }
+    }
+
+    private parseWorkspaceEdit(tokens: Token[], startIdx: number): Result<{ operations: AnyOperation[]; nextIndex: number }> {
+        let index = startIdx + 1;
+        const operations: AnyOperation[] = [];
+
+        while (index < tokens.length) {
+            const token = tokens[index];
+
+            if (token.type === 'CLOSE_TAG' && token.name === 'workspace_edit') {
+                return Result.ok({ operations, nextIndex: index + 1 });
+            }
+
+            const parsedOp = this.tryParseOperation(tokens, index);
+            if (parsedOp) {
+                operations.push(parsedOp.operation);
+                index = parsedOp.nextIndex;
+            } else {
+                index++;
+            }
+        }
+
+        return Result.ok({ operations, nextIndex: index }); // Loose termination protection
+    }
+
+    private parseOperationsList(tokens: Token[], start: number, end: number): { operations: AnyOperation[] } {
+        const operations: AnyOperation[] = [];
+        let index = start;
+
+        while (index < end) {
+            const parsedOp = this.tryParseOperation(tokens, index);
+            if (parsedOp) {
+                operations.push(parsedOp.operation);
+                index = parsedOp.nextIndex;
+            } else {
+                index++;
+            }
+        }
+
+        return { operations };
+    }
+
+    private tryParseOperation(tokens: Token[], startIdx: number): { operation: AnyOperation; nextIndex: number } | null {
+        const token = tokens[startIdx];
+
+        if (token.type !== 'OPEN_TAG' && token.type !== 'SELF_CLOSING_TAG') {
+            return null;
+        }
+
+        const path = token.attributes.path;
+        const id = this.generateId();
+
+        if (token.name === 'create_file' && path) {
+            const contentResult = this.consumeContentUntilClose(tokens, startIdx, 'create_file');
+            return {
+                operation: {
+                    id,
+                    type: 'create_file',
+                    path,
+                    content: this.stripMarkdownFences(contentResult.content),
+                    status: 'pending'
+                },
+                nextIndex: contentResult.nextIndex
+            };
+        }
+
+        if (token.name === 'update_file' && path) {
+            const changesResult = this.parseChangeBlocks(tokens, startIdx);
+            return {
+                operation: {
+                    id,
+                    type: 'update_file',
+                    path,
+                    changes: changesResult.changes,
+                    status: 'pending'
+                },
+                nextIndex: changesResult.nextIndex
+            };
+        }
+
+        if (token.name === 'delete_path' && path) {
+            return {
+                operation: { id, type: 'delete_path', path, status: 'pending' },
+                nextIndex: startIdx + 1
+            };
+        }
+
+        if (token.name === 'move_path') {
+            const src = token.attributes.src;
+            const dest = token.attributes.dest;
+            if (src && dest) {
+                return {
+                    operation: {
+                        id,
+                        type: 'move_path',
+                        path: src,
+                        destinationPath: dest,
+                        status: 'pending'
+                    },
+                    nextIndex: startIdx + 1
+                };
+            }
+        }
+
+        if (token.name === 'create_dir' && path) {
+            return {
+                operation: { id, type: 'create_dir', path, status: 'pending' },
+                nextIndex: startIdx + 1
+            };
+        }
+
+        return null;
+    }
+
+    private parseChangeBlocks(tokens: Token[], startIdx: number): { changes: ChangeBlock[]; nextIndex: number } {
+        let index = startIdx + 1;
+        const changes: ChangeBlock[] = [];
+
+        while (index < tokens.length) {
+            const token = tokens[index];
+
+            if (token.type === 'CLOSE_TAG' && token.name === 'update_file') {
+                return { changes, nextIndex: index + 1 };
+            }
+
+            if (token.type === 'OPEN_TAG' && token.name === 'change') {
+                const blockResult = this.parseSingleChange(tokens, index);
+                if (blockResult.change) {
+                    changes.push(blockResult.change);
+                }
+                index = blockResult.nextIndex;
+            } else {
+                index++;
+            }
+        }
+
+        return { changes, nextIndex: index };
+    }
+
+    private parseSingleChange(tokens: Token[], startIdx: number): { change: ChangeBlock | null; nextIndex: number } {
+        let index = startIdx + 1;
+        let search: string | null = null;
+        let replace: string | null = null;
+
+        while (index < tokens.length) {
+            const token = tokens[index];
+
+            if (token.type === 'CLOSE_TAG' && token.name === 'change') {
+                if (search !== null && replace !== null) {
+                    return {
+                        change: { search, replace },
+                        nextIndex: index + 1
+                    };
+                }
+                return { change: null, nextIndex: index + 1 };
+            }
+
+            if (token.type === 'OPEN_TAG' && token.name === 'search') {
+                const res = this.consumeContentUntilClose(tokens, index, 'search');
+                search = res.content;
+                index = res.nextIndex;
+            } else if (token.type === 'OPEN_TAG' && token.name === 'replace') {
+                const res = this.consumeContentUntilClose(tokens, index, 'replace');
+                replace = res.content;
+                index = res.nextIndex;
+            } else {
+                index++;
+            }
+        }
+
+        return { change: null, nextIndex: index };
+    }
+
+    private consumeContentUntilClose(tokens: Token[], startIdx: number, tagName: string): { content: string; nextIndex: number } {
+        let index = startIdx + 1;
+        const builder: string[] = [];
+
+        while (index < tokens.length) {
+            const token = tokens[index];
+
+            if (token.type === 'CLOSE_TAG' && token.name === tagName) {
+                return { content: builder.join(''), nextIndex: index + 1 };
+            }
+
+            if (token.type === 'TEXT_CONTENT') {
+                builder.push(token.content);
+            } else {
+                builder.push(this.reconstructTagLiteral(token));
+            }
+            index++;
+        }
+
+        return { content: builder.join(''), nextIndex: index };
+    }
+
+    private reconstructTagLiteral(token: Token): string {
+        const attributes = Object.entries(token.attributes)
+            .map(([k, v]) => ` ${k}="${v}"`)
+            .join('');
+
+        if (token.type === 'OPEN_TAG') {
+            return `<${token.name}${attributes}>`;
+        }
+        if (token.type === 'CLOSE_TAG') {
+            return `</${token.name}>`;
+        }
+        return `<${token.name}${attributes} />`;
+    }
+
+    private stripMarkdownFences(content: string): string {
+        return content
+            .replace(/^```[\w]*\r?\n/gm, '')
+            .replace(/```\s*$/gm, '')
+            .trim();
+    }
+
+    private generateId(): string {
+        return Math.random().toString(36).substring(2, 9);
+    }
+}
