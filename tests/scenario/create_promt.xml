@@ -1,0 +1,63 @@
+<workspace_edit>
+    <!-- Тестування явного створення директорій -->
+    <create_dir path="src/components/button" />
+    <create_dir path="src/utils" />
+
+    <!-- Тестування створення файлу стилів -->
+    <create_file path="src/components/button/Button.css">
+.custom-btn {
+    padding: 8px 16px;
+    background-color: #007acc;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+.custom-btn:hover {
+    background-color: #0062a3;
+}
+
+.custom-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+    </create_file>
+
+    <!-- Тестування створення React компонента -->
+    <create_file path="src/components/button/Button.tsx">
+import React from 'react';
+import './Button.css';
+
+interface ButtonProps {
+    label: string;
+    onClick: () => void;
+}
+
+export const Button = ({ label, onClick }: ButtonProps) => {
+    return (
+        <button className="custom-btn" onClick={onClick}>
+            {label}
+        </button>
+    );
+};
+    </create_file>
+
+    <!-- Тестування очищення брудного шляху через PathNormalizer -->
+    <!-- Навіть якщо AI помилково додасть префікс проєкту, система нормалізує шлях -->
+    <create_file path="ai-diff-agent/src/utils/mathHelper.ts">
+export const add = (a: number, b: number): number => {
+    return a + b;
+};
+
+export const subtract = (a: number, b: number): number => {
+    return a - b;
+};
+
+export const multiply = (a: number, b: number): number => {
+    return a * b;
+};
+    </create_file>
+</workspace_edit>

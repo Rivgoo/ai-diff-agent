@@ -1,0 +1,42 @@
+<workspace_edit>
+    <!-- Тестування оновлення існуючого файлу з точним пошуком фрагменту -->
+    <update_file path="src/components/button/Button.tsx">
+        <change>
+            <search>
+interface ButtonProps {
+    label: string;
+    onClick: () => void;
+}
+
+export const Button = ({ label, onClick }: ButtonProps) => {
+    return (
+        <button className="custom-btn" onClick={onClick}>
+            {label}
+        </button>
+    );
+};
+            </search>
+            <replace>
+interface ButtonProps {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+}
+
+export const Button = ({ label, onClick, disabled = false }: ButtonProps) => {
+    return (
+        <button className="custom-btn" onClick={onClick} disabled={disabled}>
+            {label}
+        </button>
+    );
+};
+            </replace>
+        </change>
+    </update_file>
+
+    <!-- Тестування перенесення та перейменування файлу -->
+    <move_path src="src/utils/mathHelper.ts" dest="src/helpers/math.ts" />
+
+    <!-- Тестування безпечного видалення файлу (буде збережено компенсаційний бекап) -->
+    <delete_path path="src/components/button/Button.css" />
+</workspace_edit>

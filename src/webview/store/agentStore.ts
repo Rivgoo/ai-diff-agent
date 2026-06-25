@@ -13,7 +13,7 @@ interface AgentState {
     isAgentTyping: boolean;
     settings: AgentSettings;
     isSettingsOpen: boolean;
-    isPromptCopied: boolean; // Tracking prompt copy feedback state
+    isPromptCopied: boolean;
     pipelineProgress: PipelineProgress;
 
     hydrateSession: (session: ChatSession) => void;

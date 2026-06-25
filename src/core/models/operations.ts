@@ -1,9 +1,5 @@
 import { BaseOperation, Range } from '../../shared/contracts';
 
-/**
- * Domain models representing deterministic actions requested by the AI.
- */
-
 export interface CreateFileOperation extends BaseOperation {
     readonly type: 'create_file';
     readonly content: string;
@@ -25,7 +21,6 @@ export interface CreateDirOperation extends BaseOperation {
 export interface ChangeBlock {
     readonly search: string;
     readonly replace: string;
-    /** Range computed by the matching engine relative to current document state */
     matchRange?: Range;
 }
 

@@ -26,44 +26,27 @@ export const useIPC = () => {
         const handleMessage = (event: MessageEvent<ExtensionEvent>) => {
             const message = event.data;
             switch (message.type) {
-                case 'STATE_HYDRATE':
-                    hydrateSession(message.session);
-                    break;
-                case 'SETTINGS_HYDRATE':
-                    hydrateSettings(message.settings);
-                    break;
-                case 'AGENT_TYPING':
-                    setAgentTyping(message.isTyping);
-                    break;
-                case 'OPERATION_UPDATED':
-                    updateOperationStatus(message.operationId, message.status);
-                    break;
-                case 'PIPELINE_STATE':
-                    setPipelineProgress({ stage: message.stage, current: message.current, total: message.total });
-                    break;
-                case 'PROMPT_COPIED':
+                case 'STATE_HYDRATE': hydrateSession(message.session); break;
+                case 'SETTINGS_HYDRATE': hydrateSettings(message.settings); break;
+                case 'AGENT_TYPING': setAgentTyping(message.isTyping); break;
+                case 'OPERATION_UPDATED': updateOperationStatus(message.operationId, message.status); break;
+                case 'PIPELINE_STATE': setPipelineProgress({ stage: message.stage, current: message.current, total: message.total }); break;
+                case 'PROMPT_COPIED': 
                     setPromptCopied(true);
                     setTimeout(() => setPromptCopied(false), 2000);
                     break;
-                case 'ERROR_OCCURRED':
-                    console.error('Agent Error:', message.message);
-                    break;
+                case 'ERROR_OCCURRED': console.error(message.message); break;
             }
         };
 
         window.addEventListener('message', handleMessage);
-
         sendEvent({ type: 'REQUEST_STATE_SYNC' });
         sendEvent({ type: 'REQUEST_SETTINGS_SYNC' });
 
-        return () => {
-            window.removeEventListener('message', handleMessage);
-        };
+        return () => window.removeEventListener('message', handleMessage);
     }, []);
 
-    const sendEvent = (event: WebviewEvent) => {
-        vscode.current.postMessage(event);
-    };
+    const sendEvent = (event: WebviewEvent) => vscode.current.postMessage(event);
 
     return { sendEvent };
 };

@@ -1,14 +1,9 @@
-/**
- * Core Domain Models shared between Webview UI and Extension Host.
- * STRICT RULE: No VS Code API imports allowed in this file.
- */
-
 export interface ChangeStats {
     readonly additions: number;
     readonly deletions: number;
 }
 
-export type OperationStatus = 'pending' | 'reviewing' | 'applied' | 'rejected' | 'conflict' | 'error' | 'manual_modified';
+export type OperationStatus = 'pending' | 'applied_dirty' | 'saved' | 'reverted' | 'conflict' | 'error';
 export type MessageRole = 'user' | 'agent' | 'system';
 export type OperationType = 'create_file' | 'update_file' | 'delete_path' | 'move_path' | 'create_dir';
 
@@ -39,6 +34,8 @@ export interface DiffOperation {
     path: string;
     status: OperationStatus;
     changes: ChangeBlock[];
+    sourcePath?: string;
+    destinationPath?: string;
     errorMessage?: string;
     stats?: ChangeStats;
 }

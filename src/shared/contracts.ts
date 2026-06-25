@@ -1,10 +1,5 @@
-/**
- * Shared contracts defining basic structural types used by legacy core files.
- * Restored to guarantee backward compatibility and compilation with core components.
- */
-
 export type OperationType = 'create_file' | 'update_file' | 'delete_path' | 'move_path' | 'create_dir';
-export type OperationStatus = 'pending' | 'matched' | 'conflict' | 'applied' | 'rejected' | 'error' | 'manual_modified';
+export type OperationStatus = 'pending' | 'applied_dirty' | 'saved' | 'reverted' | 'conflict' | 'error';
 
 export interface Position {
     readonly line: number;
