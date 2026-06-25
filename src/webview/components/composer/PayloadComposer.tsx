@@ -16,7 +16,6 @@ export const PayloadComposer = () => {
     const toggleSettings = useAgentStore((state) => state.toggleSettings);
     const { stage } = useAgentStore((state) => state.pipelineProgress);
     
-    // A pipeline is considered "processing" if it's running automation tasks.
     const activeStages = ['parsing', 'validating', 'resolving', 'staging'];
     const isProcessing = activeStages.includes(stage);
 
@@ -42,6 +41,14 @@ export const PayloadComposer = () => {
         }
     };
 
+    const handleClearSession = () => {
+        sendEvent({ type: 'CLEAR_SESSION' });
+    };
+
+    const handleDownloadInstructions = () => {
+        sendEvent({ type: 'DOWNLOAD_INSTRUCTIONS' });
+    };
+
     useComposerShortcuts(textareaRef, {
         onSubmit: handleSubmit,
         onCancel: handleCancel,
@@ -55,9 +62,9 @@ export const PayloadComposer = () => {
         border: `1px solid ${isFocused ? 'var(--vscode-focusBorder)' : 'var(--vscode-input-border)'}`,
         borderRadius: '6px',
         margin: '12px',
-        overflow: 'visible', // Changed to visible so outer box-shadow is not clipped
+        overflow: 'visible',
         transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
-        boxShadow: isFocused ? '0 0 0 2px var(--vscode-focusBorder)' : 'none' // Outward focus outline
+        boxShadow: isFocused ? '0 0 0 2px var(--vscode-focusBorder)' : 'none'
     };
 
     return (
@@ -78,6 +85,8 @@ export const PayloadComposer = () => {
                 onSubmit={handleSubmit}
                 onCancel={handleCancel}
                 onToggleSettings={toggleSettings}
+                onClearSession={handleClearSession}
+                onDownloadInstructions={handleDownloadInstructions}
             />
         </div>
     );

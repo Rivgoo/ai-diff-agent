@@ -1,7 +1,7 @@
 import React from 'react';
 import { ComposerButton } from './ComposerButton';
 import { ActionHints } from './ActionHints';
-import { IconSend, IconX, IconAdjustmentsHorizontal } from '@tabler/icons-react';
+import { IconSend, IconX, IconAdjustmentsHorizontal, IconTrash, IconDownload } from '@tabler/icons-react';
 
 interface ComposerActionBarProps {
     isFocused: boolean;
@@ -10,6 +10,8 @@ interface ComposerActionBarProps {
     onSubmit: () => void;
     onCancel: () => void;
     onToggleSettings: () => void;
+    onClearSession: () => void;
+    onDownloadInstructions: () => void;
 }
 
 export const ComposerActionBar = ({
@@ -18,7 +20,9 @@ export const ComposerActionBar = ({
     hasValue,
     onSubmit,
     onCancel,
-    onToggleSettings
+    onToggleSettings,
+    onClearSession,
+    onDownloadInstructions
 }: ComposerActionBarProps) => {
     
     return (
@@ -29,12 +33,18 @@ export const ComposerActionBar = ({
             padding: '4px 8px',
             borderTop: '1px solid transparent',
             position: 'relative',
-            top: '-5px' // Lifted 5px upwards to match the styling requirements
+            top: '-5px'
         }}>
-            {/* Left side tools - Only Settings is kept here */}
+            {/* Left side tools - Settings, Clear Chat, and Download Instructions grouped together */}
             <div style={{ display: 'flex', gap: '4px' }}>
                 <ComposerButton title="Composer Settings" onClick={onToggleSettings}>
                     <IconAdjustmentsHorizontal size={16} />
+                </ComposerButton>
+                <ComposerButton title="Clear Chat History" onClick={onClearSession}>
+                    <IconTrash size={16} />
+                </ComposerButton>
+                <ComposerButton title="Get AI Instructions" onClick={onDownloadInstructions}>
+                    <IconDownload size={16} />
                 </ComposerButton>
             </div>
 
