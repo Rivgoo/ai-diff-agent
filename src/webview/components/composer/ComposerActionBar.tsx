@@ -1,7 +1,7 @@
 import React from 'react';
 import { ComposerButton } from './ComposerButton';
 import { ActionHints } from './ActionHints';
-import { IconSend, IconX, IconPaperclip, IconAdjustmentsHorizontal } from '@tabler/icons-react';
+import { IconSend, IconX, IconAdjustmentsHorizontal } from '@tabler/icons-react';
 
 interface ComposerActionBarProps {
     isFocused: boolean;
@@ -29,13 +29,10 @@ export const ComposerActionBar = ({
             padding: '4px 8px',
             borderTop: '1px solid transparent',
             position: 'relative',
-            top: '-5px' // Lifted 5px upwards as requested
+            top: '-5px' // Lifted 5px upwards to match the styling requirements
         }}>
-            {/* Left side tools */}
+            {/* Left side tools - Only Settings is kept here */}
             <div style={{ display: 'flex', gap: '4px' }}>
-                <ComposerButton title="Attach context (Coming soon)" disabled>
-                    <IconPaperclip size={16} />
-                </ComposerButton>
                 <ComposerButton title="Composer Settings" onClick={onToggleSettings}>
                     <IconAdjustmentsHorizontal size={16} />
                 </ComposerButton>

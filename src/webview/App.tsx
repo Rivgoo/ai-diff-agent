@@ -6,30 +6,7 @@ import { PipelineProgress } from './components/progress/PipelineProgress';
 import { useAgentStore } from './store/agentStore';
 import { useIPC } from './hooks/useIPC';
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react';
-
-const SettingsIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style={{ display: 'block' }}>
-        <path d="M9.1 1.006L8.9 1H7.1l-.2.006-.35.912-.136.082a5.55 5.55 0 00-.733.533l-.116.108-.94-.31-.137.054-.9.9-.054.137.31.94-.108.116a5.55 5.55 0 00-.533.733l-.082.136-.912.35L1 7.1v1.8l.006.2.912.35.082.136c.148.243.326.49.533.733l.108.116-.31.94.054.137.9.9.137-.054.94-.31.116.108c.243.207.49.385.733.533l.136.082.35.912.2.006h1.8l.2-.006.35-.912.136-.082c.243-.148.49-.326.733-.533l.116-.108.94.31.137.054.9-.9.054-.137-.31-.94.108-.116c.207-.243.385-.49.533-.733l.082-.136.912-.35.006-.2V7.1l-.006-.2-.912-.35-.082-.136a5.55 5.55 0 00-.533-.733l-.108-.116.31-.94-.054-.137-.9-.9-.137.054-.94.31-.116-.108a5.54 5.55 0 00-.733-.533l-.136-.082-.35-.912zM8 11a3 3 0 110-6 3 3 0 010 6z" />
-    </svg>
-);
-
-const TrashIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style={{ display: 'block' }}>
-        <path fillRule="evenodd" clipRule="evenodd" d="M10 3h3v1h-1v9l-1 1H4l-1-1V4H2V3h3V2l1-1h4l1 1v1zm-1 0V2H6v1h3zM4 13h7V4H4v9zm2-8H5v7h1V5zm3 0H8v7h1V5z" />
-    </svg>
-);
-
-const MoreIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style={{ display: 'block' }}>
-        <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
-    </svg>
-);
-
-const DownloadIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={{ display: 'block' }}>
-        <path fillRule="evenodd" clipRule="evenodd" d="M8 1l.64.15 4 4-.71.7L9 3.01v8.43l-.5.5h-1l-.5-.5V3.01L4.07 5.86l-.71-.7 4-4L8 1zm-5 11h10v1H3v-1z" />
-    </svg>
-);
+import { IconSettings, IconTrash, IconDots, IconDownload } from '@tabler/icons-react';
 
 const EmptyState = () => (
     <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '16px', color: 'var(--vscode-descriptionForeground)' }}>
@@ -81,14 +58,14 @@ export const App = () => {
                 <span style={{ fontWeight: 600, color: 'var(--vscode-foreground)', fontSize: '12px' }}>AI Diff Agent</span>
                 <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
                     <VSCodeButton appearance="icon" onClick={toggleSettings} title="Settings">
-                        <SettingsIcon />
+                        <IconSettings size={16} />
                     </VSCodeButton>
                     <VSCodeButton appearance="icon" onClick={handleClearSession} title="Clear Chat History">
-                        <TrashIcon />
+                        <IconTrash size={16} />
                     </VSCodeButton>
                     <div style={{ position: 'relative' }}>
                         <VSCodeButton appearance="icon" onClick={() => setIsMenuOpen(!isMenuOpen)} title="More Options">
-                            <MoreIcon />
+                            <IconDots size={16} />
                         </VSCodeButton>
                         {isMenuOpen && (
                             <div style={{
@@ -112,7 +89,7 @@ export const App = () => {
                                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--vscode-list-activeSelectionBackground)')}
                                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                                 >
-                                    <DownloadIcon /> Get AI Instructions
+                                    <IconDownload size={14} /> Get AI Instructions
                                 </button>
                             </div>
                         )}
@@ -139,7 +116,7 @@ export const App = () => {
                 )}
             </div>
 
-            {/* Replaced ChatInput with the new PayloadComposer */}
+            {/* Payload Composer */}
             <PayloadComposer />
         </div>
     );

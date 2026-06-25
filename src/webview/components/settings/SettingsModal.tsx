@@ -1,12 +1,7 @@
 import { VSCodeCheckbox, VSCodeButton, VSCodeDivider } from '@vscode/webview-ui-toolkit/react';
 import { useAgentStore } from '../../store/agentStore';
 import { useIPC } from '../../hooks/useIPC';
-
-const CloseIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style={{ display: 'block' }}>
-        <path fillRule="evenodd" clipRule="evenodd" d="M7.11 8l-3.47-3.48.7-.7 3.49 3.47 3.48-3.47.7.7L9 8l3.48 3.48-.7.7-3.48-3.48-3.49 3.48-.7-.7L7.11 8z" />
-    </svg>
-);
+import { IconX } from '@tabler/icons-react';
 
 export const SettingsModal = () => {
     const { sendEvent } = useIPC();
@@ -33,7 +28,7 @@ export const SettingsModal = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h2 style={{ margin: 0, fontSize: '16px', color: 'var(--vscode-foreground)' }}>Agent Settings</h2>
                 <VSCodeButton appearance="icon" onClick={toggleSettings} title="Close Settings">
-                    <CloseIcon />
+                    <IconX size={16} />
                 </VSCodeButton>
             </div>
             <VSCodeDivider />

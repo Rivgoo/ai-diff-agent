@@ -1,6 +1,7 @@
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react';
 import { DiffOperation } from '../../../shared/models';
 import { useIPC } from '../../hooks/useIPC';
+import { IconCheck, IconX, IconArrowsDiff } from '@tabler/icons-react';
 
 interface DiffReviewCardProps {
     operation: DiffOperation;
@@ -72,7 +73,6 @@ export const DiffReviewCard = ({ operation }: DiffReviewCardProps) => {
                         }}>
                             {typeLabel}
                         </span>
-                        {/* Fix §6.4 — show full path, not just filename */}
                         <span style={{
                             fontFamily: 'var(--vscode-editor-font-family)',
                             fontSize: '12px',
@@ -85,7 +85,6 @@ export const DiffReviewCard = ({ operation }: DiffReviewCardProps) => {
                             {operation.path}
                         </span>
                     </div>
-                    {/* Fix §6.4 — show change count */}
                     {isUpdateFile && changeCount > 0 && (
                         <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground)', paddingLeft: '2px' }}>
                             {changeCount} change block{changeCount !== 1 ? 's' : ''}
@@ -126,7 +125,6 @@ export const DiffReviewCard = ({ operation }: DiffReviewCardProps) => {
             {/* Action row */}
             {canInteract && (
                 <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                    {/* Fix §6.4 — "Open Diff" for update_file ops in reviewing state */}
                     {isUpdateFile && operation.status === 'reviewing' && (
                         <VSCodeButton
                             appearance="icon"
@@ -134,7 +132,9 @@ export const DiffReviewCard = ({ operation }: DiffReviewCardProps) => {
                             style={{ fontSize: '11px' }}
                             onClick={() => sendEvent({ type: 'OPEN_DIFF', operationId: operation.id })}
                         >
-                            ⇄ Diff
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <IconArrowsDiff size={14} /> Diff
+                            </div>
                         </VSCodeButton>
                     )}
                     <VSCodeButton
@@ -142,14 +142,18 @@ export const DiffReviewCard = ({ operation }: DiffReviewCardProps) => {
                         style={{ padding: '2px 8px', fontSize: '11px' }}
                         onClick={() => sendEvent({ type: 'ACTION_REJECT', operationId: operation.id })}
                     >
-                        Reject
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <IconX size={14} /> Reject
+                        </div>
                     </VSCodeButton>
                     <VSCodeButton
                         appearance="primary"
                         style={{ padding: '2px 8px', fontSize: '11px' }}
                         onClick={() => sendEvent({ type: 'ACTION_ACCEPT', operationId: operation.id })}
                     >
-                        {operation.type === 'update_file' ? 'Accept' : 'Accept & Apply'}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <IconCheck size={14} /> {operation.type === 'update_file' ? 'Accept' : 'Accept & Apply'}
+                        </div>
                     </VSCodeButton>
                 </div>
             )}

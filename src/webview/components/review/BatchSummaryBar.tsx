@@ -1,6 +1,7 @@
 import { VSCodeButton } from '@vscode/webview-ui-toolkit/react';
 import { DiffOperation } from '../../../shared/models';
 import { useIPC } from '../../hooks/useIPC';
+import { IconCheck, IconX } from '@tabler/icons-react';
 
 interface BatchSummaryBarProps {
     operations: DiffOperation[];
@@ -35,14 +36,18 @@ export const BatchSummaryBar = ({ operations }: BatchSummaryBarProps) => {
                     style={{ fontSize: '11px', padding: '2px 8px' }}
                     onClick={() => sendEvent({ type: 'ACTION_REJECT_ALL' })}
                 >
-                    ✕ Reject All
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <IconX size={14} /> Reject All
+                    </div>
                 </VSCodeButton>
                 <VSCodeButton
                     appearance="primary"
                     style={{ fontSize: '11px', padding: '2px 8px' }}
                     onClick={() => sendEvent({ type: 'ACTION_ACCEPT_ALL' })}
                 >
-                    ✓ Accept All
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <IconCheck size={14} /> Accept All
+                    </div>
                 </VSCodeButton>
             </div>
         </div>
