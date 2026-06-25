@@ -1,10 +1,7 @@
 import React from 'react';
 import { ComposerButton } from './ComposerButton';
 import { ActionHints } from './ActionHints';
-import { ApplyIcon } from '../icons/ApplyIcon';
-import { CancelIcon } from '../icons/CancelIcon';
-import { AttachIcon } from '../icons/AttachIcon';
-import { SettingsModeIcon } from '../icons/SettingsModeIcon';
+import { IconSend, IconX, IconPaperclip, IconAdjustmentsHorizontal } from '@tabler/icons-react';
 
 interface ComposerActionBarProps {
     isFocused: boolean;
@@ -30,15 +27,17 @@ export const ComposerActionBar = ({
             justifyContent: 'space-between',
             alignItems: 'center',
             padding: '4px 8px',
-            borderTop: '1px solid transparent', // Can be styled if needed
+            borderTop: '1px solid transparent',
+            position: 'relative',
+            top: '-5px' // Lifted 5px upwards as requested
         }}>
             {/* Left side tools */}
             <div style={{ display: 'flex', gap: '4px' }}>
                 <ComposerButton title="Attach context (Coming soon)" disabled>
-                    <AttachIcon />
+                    <IconPaperclip size={16} />
                 </ComposerButton>
                 <ComposerButton title="Composer Settings" onClick={onToggleSettings}>
-                    <SettingsModeIcon />
+                    <IconAdjustmentsHorizontal size={16} />
                 </ComposerButton>
             </div>
 
@@ -48,7 +47,7 @@ export const ComposerActionBar = ({
                 
                 {isProcessing ? (
                     <ComposerButton appearance="danger" onClick={onCancel} title="Cancel Processing (Esc)">
-                        <CancelIcon /> Cancel
+                        <IconX size={16} /> Cancel
                     </ComposerButton>
                 ) : (
                     <ComposerButton 
@@ -57,7 +56,7 @@ export const ComposerActionBar = ({
                         disabled={!hasValue}
                         title="Apply AI Payload (Enter)"
                     >
-                        <ApplyIcon /> Apply
+                        <IconSend size={16} /> Apply
                     </ComposerButton>
                 )}
             </div>

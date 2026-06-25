@@ -17,7 +17,6 @@ export const PayloadComposer = () => {
     const { stage } = useAgentStore((state) => state.pipelineProgress);
     
     // A pipeline is considered "processing" if it's running automation tasks.
-    // 'reviewing' means it's awaiting user input, which is safe to start a new payload.
     const activeStages = ['parsing', 'validating', 'resolving', 'staging'];
     const isProcessing = activeStages.includes(stage);
 
@@ -56,9 +55,9 @@ export const PayloadComposer = () => {
         border: `1px solid ${isFocused ? 'var(--vscode-focusBorder)' : 'var(--vscode-input-border)'}`,
         borderRadius: '6px',
         margin: '12px',
-        overflow: 'hidden',
-        transition: 'border-color 0.2s ease',
-        boxShadow: isFocused ? '0 0 0 1px var(--vscode-focusBorder) inset' : 'none'
+        overflow: 'visible', // Changed to visible so outer box-shadow is not clipped
+        transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+        boxShadow: isFocused ? '0 0 0 2px var(--vscode-focusBorder)' : 'none' // Outward focus outline
     };
 
     return (
