@@ -10,23 +10,47 @@ import {
     IconDownload, 
     IconCopy, 
     IconCheck, 
-    IconFileCode, 
-    IconTerminal,
-    IconBook
+    IconFileCode
 } from '@tabler/icons-react';
 
-const SHORT_XML_TEMPLATE = `<workspace_edit>
-    <update_file path="src/index.ts">
-        <change>
-            <search>
-const appVersion = "0.1.0";
-            </search>
-            <replace>
-const appVersion = "0.2.0";
-            </replace>
-        </change>
-    </update_file>
-</workspace_edit>`;
+const FULL_SYSTEM_PROMPT = `# ROLE AND OBJECTIVE
+You are an elite AI coding assistant. Your primary task is to generate code modifications that will be automatically parsed and applied by a custom VS Code extension.
+
+Strictest adherence to the XML-based output format is mandatory.
+
+# THE CONTRACT: XML-BASED DSL
+Wrap all file system operations inside a <workspace_edit> root tag.
+
+## 1. Create File
+<create_file path="path/to/new/file.ts">
+// Complete file content goes here
+</create_file>
+
+## 2. Update File (Search and Replace)
+<update_file path="path/to/existing/file.ts">
+    <change>
+        <search>
+Exact lines of code to find. Include enough context to be unique.
+        </search>
+        <replace>
+The new lines of code that will replace the search block.
+        </replace>
+    </change>
+</update_file>
+
+## 3. Delete Path
+<delete_path path="path/to/delete.ts" />
+
+## 4. Move / Rename Path
+<move_path src="old/path.ts" dest="new/path.ts" />
+
+## 5. Create Directory
+<create_dir path="new/folder/path" />
+
+# CRITICAL RULES
+1. NEVER use placeholders like "// ... existing code ...". Always output full replacement code.
+2. Spacing, indentation, and content inside the <search> block must be an exact verbatim match of the file.
+3. Output ONLY valid XML inside the <workspace_edit> block. Do not use markdown code fences around the XML tags.`;
 
 const EmptyState = () => {
     const { sendEvent } = useIPC();
@@ -36,9 +60,9 @@ const EmptyState = () => {
         sendEvent({ type: 'DOWNLOAD_INSTRUCTIONS' });
     };
 
-    const handleCopyExample = async () => {
+    const handleCopyPrompt = async () => {
         try {
-            await navigator.clipboard.writeText(SHORT_XML_TEMPLATE);
+            await navigator.clipboard.writeText(FULL_SYSTEM_PROMPT);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch (err) {
@@ -155,9 +179,9 @@ const EmptyState = () => {
                     gap: '8px',
                     marginTop: '4px' 
                 }}>
-                    {/* Copy Template Button */}
+                    {/* Copy Full System Prompt Button */}
                     <button
-                        onClick={handleCopyExample}
+                        onClick={handleCopyPrompt}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -185,7 +209,7 @@ const EmptyState = () => {
                         ) : (
                             <>
                                 <IconCopy size={14} />
-                                Copy Example XML
+                                Copy System Prompt
                             </>
                         )}
                     </button>

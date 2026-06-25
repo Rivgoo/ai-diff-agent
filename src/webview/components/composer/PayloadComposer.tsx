@@ -14,10 +14,12 @@ export const PayloadComposer = () => {
     const [isFocused, setIsFocused] = useState(false);
     
     const toggleSettings = useAgentStore((state) => state.toggleSettings);
+    const messages = useAgentStore((state) => state.messages);
     const { stage } = useAgentStore((state) => state.pipelineProgress);
     
     const activeStages = ['parsing', 'validating', 'resolving', 'staging'];
     const isProcessing = activeStages.includes(stage);
+    const isClearDisabled = messages.length === 0;
 
     useAutoResize(textareaRef, value);
 
@@ -42,11 +44,9 @@ export const PayloadComposer = () => {
     };
 
     const handleClearSession = () => {
-        sendEvent({ type: 'CLEAR_SESSION' });
-    };
-
-    const handleDownloadInstructions = () => {
-        sendEvent({ type: 'DOWNLOAD_INSTRUCTIONS' });
+        if (!isClearDisabled) {
+            sendEvent({ type: 'CLEAR_SESSION' });
+        }
     };
 
     useComposerShortcuts(textareaRef, {
@@ -82,11 +82,11 @@ export const PayloadComposer = () => {
                 isFocused={isFocused}
                 isProcessing={isProcessing}
                 hasValue={value.trim().length > 0}
+                isClearDisabled={isClearDisabled}
                 onSubmit={handleSubmit}
                 onCancel={handleCancel}
                 onToggleSettings={toggleSettings}
                 onClearSession={handleClearSession}
-                onDownloadInstructions={handleDownloadInstructions}
             />
         </div>
     );

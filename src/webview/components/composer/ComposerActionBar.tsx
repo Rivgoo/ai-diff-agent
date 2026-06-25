@@ -1,28 +1,28 @@
 import React from 'react';
 import { ComposerButton } from './ComposerButton';
 import { ActionHints } from './ActionHints';
-import { IconSend, IconX, IconAdjustmentsHorizontal, IconTrash, IconDownload } from '@tabler/icons-react';
+import { IconSend, IconX, IconAdjustmentsHorizontal, IconTrash } from '@tabler/icons-react';
 
 interface ComposerActionBarProps {
     isFocused: boolean;
     isProcessing: boolean;
     hasValue: boolean;
+    isClearDisabled: boolean;
     onSubmit: () => void;
     onCancel: () => void;
     onToggleSettings: () => void;
     onClearSession: () => void;
-    onDownloadInstructions: () => void;
 }
 
 export const ComposerActionBar = ({
     isFocused,
     isProcessing,
     hasValue,
+    isClearDisabled,
     onSubmit,
     onCancel,
     onToggleSettings,
-    onClearSession,
-    onDownloadInstructions
+    onClearSession
 }: ComposerActionBarProps) => {
     
     return (
@@ -35,16 +35,17 @@ export const ComposerActionBar = ({
             position: 'relative',
             top: '-5px'
         }}>
-            {/* Left side tools - Settings, Clear Chat, and Download Instructions grouped together */}
+            {/* Left side tools - Settings and Clear Chat (disabled dynamically) */}
             <div style={{ display: 'flex', gap: '4px' }}>
                 <ComposerButton title="Composer Settings" onClick={onToggleSettings}>
                     <IconAdjustmentsHorizontal size={16} />
                 </ComposerButton>
-                <ComposerButton title="Clear Chat History" onClick={onClearSession}>
+                <ComposerButton 
+                    title="Clear Chat History" 
+                    onClick={onClearSession}
+                    disabled={isClearDisabled}
+                >
                     <IconTrash size={16} />
-                </ComposerButton>
-                <ComposerButton title="Get AI Instructions" onClick={onDownloadInstructions}>
-                    <IconDownload size={16} />
                 </ComposerButton>
             </div>
 
