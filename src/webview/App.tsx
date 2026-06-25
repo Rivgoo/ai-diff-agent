@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChatInput } from './components/ChatInput';
+import { PayloadComposer } from './components/composer/PayloadComposer';
 import { MessageBubble } from './components/chat/MessageBubble';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { PipelineProgress } from './components/progress/PipelineProgress';
@@ -139,7 +139,8 @@ export const App = () => {
                 )}
             </div>
 
-            <ChatInput />
+            {/* Replaced ChatInput with the new PayloadComposer */}
+            <PayloadComposer />
         </div>
     );
 };

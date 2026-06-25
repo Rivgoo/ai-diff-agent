@@ -12,6 +12,7 @@ export type WebviewEvent =
     | { type: 'REQUEST_SETTINGS_SYNC' }
     | { type: 'UPDATE_SETTINGS'; settings: AgentSettings }
     | { type: 'SUBMIT_PAYLOAD'; payload: string }
+    | { type: 'CANCEL_PROCESSING' } // Dispatched when the user hits Cancel during a pipeline run
     | { type: 'ACTION_ACCEPT'; operationId: string }
     | { type: 'ACTION_REJECT'; operationId: string }
     | { type: 'ACTION_ACCEPT_ALL' }
@@ -24,9 +25,7 @@ export type WebviewEvent =
 export type ExtensionEvent =
     | { type: 'STATE_HYDRATE'; session: ChatSession }
     | { type: 'SETTINGS_HYDRATE'; settings: AgentSettings }
-    // Fix §3.5 — granular per-operation update without full session re-render
     | { type: 'OPERATION_UPDATED'; operationId: string; status: OperationStatus }
     | { type: 'AGENT_TYPING'; isTyping: boolean }
-    // Fix §3.10 — real pipeline progress replacing 300ms fake delay
     | { type: 'PIPELINE_STATE'; stage: PipelineStage; current: number; total: number }
     | { type: 'ERROR_OCCURRED'; message: string };
