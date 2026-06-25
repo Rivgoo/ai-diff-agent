@@ -61,7 +61,7 @@ export const PayloadComposer = () => {
         backgroundColor: 'var(--vscode-input-background)',
         border: `1px solid ${isFocused ? 'var(--vscode-focusBorder)' : 'var(--vscode-input-border)'}`,
         borderRadius: '6px',
-        margin: '12px',
+        margin: '6px', // Reduced from 12px to maximize horizontal layout size
         overflow: 'visible',
         transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
         boxShadow: isFocused ? '0 0 0 2px var(--vscode-focusBorder)' : 'none'
