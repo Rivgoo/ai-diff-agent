@@ -1,107 +1,64 @@
 .container {
-    padding: 8px 6px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    color: var(--vscode-descriptionForeground);
-}
-
-.header {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 6px;
-}
-
-.avatar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background-color: var(--vscode-button-secondaryBackground);
-    color: var(--vscode-textLink-foreground);
-    border: 1px solid var(--vscode-panel-border);
-}
-
-.title {
-    font-size: 13px;
-    font-weight: 600;
+    gap: 16px;
     color: var(--vscode-foreground);
+    font-family: var(--vscode-editor-font-family);
 }
 
-.subtitle {
-    font-size: 11px;
-    line-height: 1.35;
-    padding: 0 4px;
-}
-
-.opsLabel {
-    font-size: 9px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--vscode-foreground);
-}
-
-.opsList {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 2px 0;
-}
-
-.opTag {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 6px;
-    background-color: var(--vscode-editor-background);
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 10px;
+.asciiArt {
     font-size: 10px;
-    color: var(--vscode-foreground);
+    line-height: 1.2;
+    color: var(--vscode-descriptionForeground);
+    white-space: pre;
+    margin-bottom: 8px;
+    user-select: none;
 }
 
-.opDot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
+.textBlock {
+    font-size: 11.5px;
+    line-height: 1.5;
 }
 
-.promptCard {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 8px;
-    background-color: var(--vscode-welcomePage-tileBackground, var(--vscode-editor-background));
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 6px;
-}
-
-.promptHeader {
+.cmdLine {
     display: flex;
     align-items: center;
     gap: 6px;
-    color: var(--vscode-foreground);
-    font-size: 11.5px;
-    font-weight: 600;
+    color: var(--vscode-textLink-foreground);
+    margin-top: 8px;
 }
 
-.promptDesc {
+.toolsList {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-top: 8px;
     font-size: 10.5px;
-    line-height: 1.35;
+}
+
+.toolsList span {
+    color: var(--vscode-descriptionForeground);
 }
 
 .actions {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 2px;
+    gap: 8px;
+    margin-top: 12px;
 }
 
-.btnFill {
-    flex: 1 1 100px;
+.btn {
+    background: none;
+    border: 1px solid var(--vscode-panel-border);
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-editor-font-family);
+    font-size: 11px;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background-color 0.1s ease;
+}
+
+.btn:hover {
+    background-color: var(--vscode-list-hoverBackground);
 }

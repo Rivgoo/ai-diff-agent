@@ -2,16 +2,15 @@ import { useEffect, useRef } from 'react';
 import { useAgentStore } from '@/webview/store/agentStore';
 import { useIPC } from '@/webview/hooks/useIPC';
 import { SettingsModal } from '@/webview/features/settings/SettingsModal';
-import { PipelineProgress } from '@/webview/features/progress/PipelineProgress';
-import { StickyBatchBar } from '@/webview/features/review/StickyBatchBar';
-import { MessageBubble } from '@/webview/features/chat/MessageBubble';
+import { TerminalLog } from '@/webview/features/terminal/components/TerminalLog';
 import { EmptyState } from '@/webview/features/chat/EmptyState';
+import { StatusBarMinimal } from '@/webview/features/status-bar/StatusBarMinimal';
 import { FeatureComposer } from '@/webview/features/composer/FeatureComposer';
 import styles from './App.module.css';
 
 export const App = () => {
-    // Initialize IPC bridge once
-    useIPC();
+    // Initialize IPC bridge once globally
+    const { sendEvent } = useIPC();
 
     const messages = useAgentStore((state) => state.messages);
     const isTyping = useAgentStore((state) => state.isAgentTyping);
@@ -24,20 +23,29 @@ export const App = () => {
         }
     }, [messages, isTyping, settings.autoScroll]);
 
+    const handleOpenFile = (opId: string) => {
+        sendEvent({ type: 'OPEN_FILE', operationId: opId });
+    };
+
     return (
         <main className={styles.container}>
             <SettingsModal />
-            <PipelineProgress />
 
             <div ref={scrollRef} className={styles.scrollArea}>
                 {messages.length === 0 ? (
                     <EmptyState />
                 ) : (
-                    messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+                    messages.map((msg) => (
+                        <TerminalLog 
+                            key={msg.id} 
+                            message={msg} 
+                            onOpenFile={handleOpenFile} 
+                        />
+                    ))
                 )}
             </div>
 
-            <StickyBatchBar />
+            <StatusBarMinimal />
             <FeatureComposer />
         </main>
     );

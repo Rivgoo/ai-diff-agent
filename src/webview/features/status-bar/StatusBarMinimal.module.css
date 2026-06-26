@@ -1,0 +1,64 @@
+.statusBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    height: 26px;
+    background-color: var(--vscode-statusBar-background);
+    color: var(--vscode-statusBar-foreground);
+    border-top: 1px solid var(--vscode-panel-border);
+    font-size: 11px;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.leftGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rightGroup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.spinner {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--vscode-statusBar-foreground);
+    border-top-color: transparent;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { 
+    to { transform: rotate(360deg); } 
+}
+
+.errorText {
+    color: var(--vscode-editorError-foreground);
+}
+
+.actionBtn {
+    background: none;
+    border: none;
+    color: var(--vscode-statusBar-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0.8;
+    transition: opacity 0.1s ease;
+}
+
+.actionBtn:hover {
+    opacity: 1;
+}
+
+.saveBtn {
+    color: var(--vscode-testing-iconPassed);
+}

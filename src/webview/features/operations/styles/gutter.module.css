@@ -1,0 +1,52 @@
+.gutter {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 8px 6px 12px;
+    margin: 0;
+    border-left: 2px solid var(--vscode-editorError-foreground);
+    background-color: var(--vscode-editor-background);
+    grid-column: 1 / -1;
+    cursor: default;
+}
+
+.reasonTitle {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--vscode-editorError-foreground);
+    font-family: var(--vscode-editor-font-family);
+}
+
+.resolutionText {
+    font-size: 11px;
+    color: var(--vscode-foreground);
+    line-height: 1.4;
+}
+
+.codeBlock {
+    margin: 0;
+    padding: 4px 6px;
+    background-color: var(--vscode-textCodeBlock-background);
+    color: var(--vscode-editorError-foreground);
+    border-radius: 2px;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 10.5px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    border: 1px solid var(--vscode-panel-border);
+}
+
+.candidatesList {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 4px;
+}
+
+.candidateItem {
+    font-family: var(--vscode-editor-font-family);
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+    padding: 2px 4px;
+    border-left: 1px solid var(--vscode-panel-border);
+}

@@ -20,6 +20,7 @@ html, body {
     box-sizing: border-box;
 }
 
+/* Base override for button resets inside Webview */
 button {
     font-family: var(--vscode-font-family);
 }
