@@ -5,7 +5,7 @@ import { DecorationService } from '@/extension/transactions/decorationService';
 
 export function activate(context: vscode.ExtensionContext): void {
     OutputLogger.initialize();
-    OutputLogger.log('AI Diff Agent (v2.2 Architecture Refactored) activating...', 'INFO');
+    OutputLogger.log('AI Diff Agent activating...', 'INFO');
 
     const decorationService = new DecorationService();
 
@@ -14,6 +14,10 @@ export function activate(context: vscode.ExtensionContext): void {
             if (editor) {
                 decorationService.updateDecorationsForEditor(editor);
             }
+        }),
+        // Звільнення пам'яті: очищення кешу декорацій при закритті документа
+        vscode.workspace.onDidCloseTextDocument(doc => {
+            decorationService.clearDecorationsForDocument(doc.uri);
         })
     );
 

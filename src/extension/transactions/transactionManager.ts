@@ -1,5 +1,12 @@
 import * as vscode from 'vscode';
 import type { AnyOperation } from '../../core/models/operations';
+import { 
+    isCreateFileOperation, 
+    isUpdateFileOperation, 
+    isDeletePathOperation, 
+    isMovePathOperation, 
+    isCreateDirOperation 
+} from '../../core/models/operations';
 import { PathSandbox } from '../../vscode/workspace/pathSandbox';
 import { SearchEngine } from '../../core/matcher/searchEngine';
 import { VsCodeDocument } from '../../infrastructure/adapters/vsCodeDocument';
@@ -11,27 +18,25 @@ import { EditorService } from './editorService';
 import type { DecorationService } from './decorationService';
 import type { OperationStatus, ConflictDetails, ConflictReason, DiffOperation } from '../../shared/models';
 import { TransactionLock } from './transactionLock';
-
-// Resilient path resolver domain and adapters
 import { ResilientPathResolver } from '../../core/resolver/resilientPathResolver';
 import { VsCodeFileSystemAdapter } from '../../infrastructure/adapters/fsTargetAdapter';
 import { VsCodeWorkspaceSearchAdapter } from '../../infrastructure/adapters/workspaceSearchAdapter';
-
-// New Directory Cleanup Service
 import { DirectoryCleanupService } from './directoryCleanupService';
 
-/**
- * Orchestrates atomic transactions using the Saga Pattern.
- * Integrates cascading fallback path resolutions seamlessly.
- */
+interface PreFlightResult {
+    success: boolean;
+    failReason: string;
+    conflictMap: Map<string, ConflictDetails>;
+    opCandidatesMap: Map<string, string[]>;
+}
+
 export class TransactionManager {
-    private searchEngine = new SearchEngine();
-    private snapshotService = new SnapshotService();
-    private editorService = new EditorService();
-    private transactionLock = new TransactionLock();
-    private directoryCleanupService = new DirectoryCleanupService();
+    private readonly searchEngine = new SearchEngine();
+    private readonly snapshotService = new SnapshotService();
+    private readonly editorService = new EditorService();
+    private readonly transactionLock = new TransactionLock();
+    private readonly directoryCleanupService = new DirectoryCleanupService();
     
-    // Instantiating the resilient path resolver with physical vscode infrastructure adapters
     private readonly pathResolver = new ResilientPathResolver(
         new VsCodeFileSystemAdapter(),
         new VsCodeWorkspaceSearchAdapter()
@@ -43,123 +48,76 @@ export class TransactionManager {
         private readonly statusCallback: (opId: string, status: OperationStatus, metadata?: Partial<DiffOperation>) => void
     ) {}
 
-    /**
-     * Applies a batch of operations. Safely backs up files, stages edits in editor memory,
-     * and acquires concurrency locks. Resolves relative paths resiliently during pre-flight.
-     */
     public async applyBatch(operations: AnyOperation[]): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) throw new Error('No open workspace found.');
         
         const rootName = workspaceFolders[0].name;
         const rootUri = workspaceFolders[0].uri;
-        
-        const edit = new vscode.WorkspaceEdit();
-        const filesToOpen: vscode.Uri[] = [];
-        const pendingDecorations = new Map<string, { uri: vscode.Uri; ranges: vscode.Range[] }>();
-        const localCreatedDirs: vscode.Uri[] = [];
 
-        // Step 1: Secure concurrency locks (Batch scale lock coordination)
-        const opIds = operations.filter(op => op.status === 'pending').map(op => op.id);
-        if (!this.transactionLock.acquireBatch(opIds)) {
+        const pendingOpIds = operations.filter(op => op.status === 'pending').map(op => op.id);
+        if (!this.transactionLock.acquireBatch(pendingOpIds)) {
             OutputLogger.log('Transaction rejected. Lock held by other operations.', 'WARN');
-            for (const op of operations) {
-                if (op.status === 'pending') {
-                    this.statusCallback(op.id, 'conflict');
-                }
-            }
+            this.abortBatch(operations, 'Lock held by other operations.', new Map());
             return;
         }
 
-        let batchFailed = false;
-        let failReason = '';
-        const opAntiActionsMap = new Map<string, AntiAction[]>();
+        const preFlightResult = await this.executePreFlight(operations, rootName);
+
+        if (!preFlightResult.success) {
+            OutputLogger.log(`Pre-flight checks failed: ${preFlightResult.failReason}`, 'ERROR');
+            this.abortBatch(operations, preFlightResult.failReason, preFlightResult.conflictMap);
+            return;
+        }
+
+        await this.executeModifications(operations, rootUri, rootName, preFlightResult.opCandidatesMap);
+    }
+
+    private async executePreFlight(operations: AnyOperation[], rootName: string): Promise<PreFlightResult> {
         const conflictMap = new Map<string, ConflictDetails>();
-        
-        // Track candidate directory parents to inspect for empty post-transaction cleanups
         const opCandidatesMap = new Map<string, string[]>();
 
-        // Step 2: Pre-flight Verification Pass with Resilient Path Resolution
         for (const op of operations) {
             if (op.status !== 'pending') continue;
 
-            const baseOp = op as any;
-            const normalizedPath = PathNormalizer.normalize(baseOp.path, rootName);
+            const normalizedPath = PathNormalizer.normalize(op.path, rootName);
             let targetUri: vscode.Uri;
             
             try {
-                // Execute Cascading Heuristic Path Resolution
                 const resolution = await this.pathResolver.resolvePath(normalizedPath);
 
-                // Handling Ambiguous Matching Conflict
                 if (resolution.status === 'AMBIGUOUS_MATCH') {
-                    batchFailed = true;
-                    failReason = `Ambiguous matches found globally for: ${normalizedPath}`;
-                    conflictMap.set(op.id, {
-                        reason: 'AMBIGUOUS_MATCH',
-                        blockIndex: 0,
-                        totalBlocks: op.type === 'update_file' ? op.changes.length : 0,
-                        searchExcerpt: 'N/A',
-                        originalSearchBlock: '',
-                        candidatePaths: resolution.candidatePaths
-                    });
-                    break;
+                    conflictMap.set(op.id, this.buildConflict('AMBIGUOUS_MATCH', op, resolution.candidatePaths));
+                    return { success: false, failReason: 'Ambiguous matches found.', conflictMap, opCandidatesMap };
                 }
 
-                // Handling Strict File Not Found Errors (only for modifications and deletions)
-                if (resolution.status === 'NOT_FOUND') {
-                    if (op.type === 'update_file' || op.type === 'delete_path' || op.type === 'move_path') {
-                        batchFailed = true;
-                        failReason = `File resource not found in workspace: ${normalizedPath}`;
-                        conflictMap.set(op.id, {
-                            reason: 'FILE_NOT_FOUND',
-                            blockIndex: 0,
-                            totalBlocks: op.type === 'update_file' ? op.changes.length : 0,
-                            searchExcerpt: 'N/A',
-                            originalSearchBlock: ''
-                        });
-                        break;
-                    }
+                if (resolution.status === 'NOT_FOUND' && (isUpdateFileOperation(op) || isDeletePathOperation(op) || isMovePathOperation(op))) {
+                    conflictMap.set(op.id, this.buildConflict('FILE_NOT_FOUND', op));
+                    return { success: false, failReason: `File not found: ${normalizedPath}`, conflictMap, opCandidatesMap };
                 }
 
-                // Inject Resilient Path Warning Metadata on Successful Fallbacks
                 if (resolution.status === 'RESOLVED_RESILIENTLY') {
-                    baseOp.resolvedResiliently = true;
-                    baseOp.originalPath = baseOp.path;
-                    baseOp.path = resolution.resolvedPath; // Dynamically update file write destination
-                    OutputLogger.log(`Resiliently resolved path mapping: ${normalizedPath} -> ${resolution.resolvedPath}`, 'WARN');
+                    // Мутація DTO дозволена тут, оскільки це нормалізація шляху перед застосуванням
+                    (op as any).resolvedResiliently = true;
+                    (op as any).originalPath = op.path;
+                    (op as any).path = resolution.resolvedPath;
+                    OutputLogger.log(`Resolved path mapping: ${normalizedPath} -> ${resolution.resolvedPath}`, 'WARN');
                 }
 
-                const finalPath = PathNormalizer.normalize(baseOp.path, rootName);
+                const finalPath = PathNormalizer.normalize(op.path, rootName);
                 targetUri = PathSandbox.validate(finalPath);
             } catch (e) {
-                batchFailed = true;
-                failReason = `Path resolution or traversal validation failed: ${e instanceof Error ? e.message : 'Unknown error'}`;
-                conflictMap.set(op.id, {
-                    reason: 'PATH_TRAVERSAL',
-                    blockIndex: 0,
-                    totalBlocks: 0,
-                    searchExcerpt: 'N/A',
-                    originalSearchBlock: ''
-                });
-                break;
+                conflictMap.set(op.id, this.buildConflict('PATH_TRAVERSAL', op));
+                return { success: false, failReason: 'Path traversal validation failed.', conflictMap, opCandidatesMap };
             }
 
-            if (op.type === 'update_file') {
+            if (isUpdateFileOperation(op)) {
                 let document: vscode.TextDocument;
                 try {
                     document = await vscode.workspace.openTextDocument(targetUri);
                 } catch (e) {
-                    batchFailed = true;
-                    failReason = `Failed to open document: ${targetUri.fsPath}`;
-                    conflictMap.set(op.id, {
-                        reason: 'FILE_NOT_FOUND',
-                        blockIndex: 0,
-                        totalBlocks: op.changes.length,
-                        searchExcerpt: 'N/A',
-                        originalSearchBlock: ''
-                    });
-                    break;
+                    conflictMap.set(op.id, this.buildConflict('FILE_NOT_FOUND', op));
+                    return { success: false, failReason: `Failed to open document: ${targetUri.fsPath}`, conflictMap, opCandidatesMap };
                 }
 
                 const domainDoc = new VsCodeDocument(document);
@@ -167,302 +125,251 @@ export class TransactionManager {
                 for (let i = 0; i < op.changes.length; i++) {
                     const change = op.changes[i];
                     const match = this.searchEngine.findMatch(domainDoc, change.search);
+                    
                     if (match.status !== 'MATCHED') {
-                        batchFailed = true;
-                        const reasonText = match.status === 'FAILED' ? match.reason : 'unknown';
-                        failReason = `Search match failed in ${targetUri.fsPath}. Reason: ${reasonText}`;
-                        
-                        const reasonCode: ConflictReason = match.status === 'FAILED' && 
-                            (match.reason === 'NOT_FOUND' || match.reason === 'AMBIGUOUS_MATCH')
-                            ? match.reason
-                            : 'UNKNOWN';
-
+                        const reasonCode: ConflictReason = match.reason === 'AMBIGUOUS_MATCH' ? 'AMBIGUOUS_MATCH' : 'NOT_FOUND';
                         conflictMap.set(op.id, {
                             reason: reasonCode,
                             blockIndex: i + 1,
                             totalBlocks: op.changes.length,
                             searchExcerpt: change.search.split(/\r?\n/).slice(0, 3).join('\n'),
                             originalSearchBlock: change.search,
-                            matchesFound: match.status === 'FAILED' ? match.matchesFound : undefined
+                            matchesFound: match.matchesFound
                         });
-                        break;
+                        return { success: false, failReason: `Search match failed. Reason: ${match.reason}`, conflictMap, opCandidatesMap };
                     }
                 }
-                if (batchFailed) break;
-            } else if (op.type === 'move_path') {
+            } else if (isMovePathOperation(op)) {
                 try {
                     await vscode.workspace.fs.stat(targetUri);
                 } catch {
-                    batchFailed = true;
-                    failReason = `Source file for move not found: ${targetUri.fsPath}`;
-                    conflictMap.set(op.id, {
-                        reason: 'FILE_NOT_FOUND',
-                        blockIndex: 0,
-                        totalBlocks: 0,
-                        searchExcerpt: 'N/A',
-                        originalSearchBlock: ''
-                    });
-                    break;
+                    conflictMap.set(op.id, this.buildConflict('FILE_NOT_FOUND', op));
+                    return { success: false, failReason: `Source file not found: ${targetUri.fsPath}`, conflictMap, opCandidatesMap };
+                }
+            }
+
+            if (isDeletePathOperation(op) || isMovePathOperation(op)) {
+                const opCandidates: string[] = [];
+                let currentDir = normalizedPath.split('/').slice(0, -1).join('/');
+                while (currentDir) {
+                    opCandidates.push(currentDir);
+                    currentDir = currentDir.split('/').slice(0, -1).join('/');
+                }
+                if (opCandidates.length > 0) {
+                    opCandidatesMap.set(op.id, opCandidates);
                 }
             }
         }
 
-        // Step 3: Handle Pre-flight failure (Instant Atomic Abort)
-        if (batchFailed) {
-            OutputLogger.log(`Pre-flight checks failed. Aborting batch transaction: ${failReason}`, 'ERROR');
-            
-            for (const op of operations) {
-                this.transactionLock.release(op.id);
-                if (op.status === 'pending') {
-                    const conflictData = conflictMap.get(op.id);
-                    const baseOp = op as any;
-                    
-                    if (conflictData) {
-                        op.conflict = conflictData;
-                        op.errorMessage = failReason;
-                        this.statusCallback(op.id, 'conflict', {
-                            conflict: conflictData,
-                            resolvedResiliently: baseOp.resolvedResiliently,
-                            originalPath: baseOp.originalPath,
-                            path: baseOp.path
-                        });
-                    } else {
-                        op.errorMessage = 'Transaction aborted due to conflict in other files of this batch.';
-                        this.statusCallback(op.id, 'conflict', { // Fixed: Changed from 'error' to 'conflict'
-                            resolvedResiliently: baseOp.resolvedResiliently,
-                            originalPath: baseOp.originalPath,
-                            path: baseOp.path
-                        });
-                    }
-                }
-            }
-            return;
-        }
+        return { success: true, failReason: '', conflictMap, opCandidatesMap };
+    }
 
-        // Step 4: Execute workspace modifications safely since pre-flight passed
+    private async executeModifications(
+        operations: AnyOperation[], 
+        rootUri: vscode.Uri, 
+        rootName: string,
+        opCandidatesMap: Map<string, string[]>
+    ): Promise<void> {
+        const edit = new vscode.WorkspaceEdit();
+        const filesToOpen: vscode.Uri[] = [];
+        const pendingDecorations = new Map<string, { uri: vscode.Uri; ranges: vscode.Range[] }>();
+        const localCreatedDirs: vscode.Uri[] = [];
+        const opAntiActionsMap = new Map<string, AntiAction[]>();
+
         try {
-            // Scaffold directories first
+            // Структурування директорій безпосередньо перед записом
             for (const op of operations) {
                 if (op.status !== 'pending') continue;
-                const baseOp = op as any;
                 
-                if (op.type === 'create_file' || op.type === 'move_path') {
-                    const targetPath = op.type === 'create_file' ? baseOp.path : baseOp.destinationPath;
+                const antiActions: AntiAction[] = [];
+                
+                if (isCreateFileOperation(op) || isMovePathOperation(op) || isCreateDirOperation(op)) {
+                    const targetPath = isMovePathOperation(op) ? op.destinationPath : op.path;
                     const normalized = PathNormalizer.normalize(targetPath, rootName);
                     const targetUri = PathSandbox.validate(normalized);
-                    const parentDir = vscode.Uri.joinPath(targetUri, '..');
+                    const parentDir = isCreateDirOperation(op) ? targetUri : vscode.Uri.joinPath(targetUri, '..');
                     
-                    const antiActions: AntiAction[] = [];
                     await this.trackAndCreateDirectory(rootUri, parentDir, antiActions);
-                    if (antiActions.length > 0) {
-                        opAntiActionsMap.set(op.id, antiActions);
-                        for (const act of antiActions) {
-                            if (act.type === 'delete_dir_if_empty') {
-                                localCreatedDirs.push(act.uri);
-                            }
+                    
+                    for (const act of antiActions) {
+                        if (act.type === 'delete_dir_if_empty') {
+                            localCreatedDirs.push(act.uri);
                         }
                     }
                 }
+                opAntiActionsMap.set(op.id, antiActions);
             }
 
-            // Populate workspace edits and track potential empty candidate directories
+            // Наповнення WorkspaceEdit
             for (const op of operations) {
                 if (op.status !== 'pending') continue;
 
-                const baseOp = op as any;
-                const normalizedPath = PathNormalizer.normalize(baseOp.path, rootName);
+                const normalizedPath = PathNormalizer.normalize(op.path, rootName);
                 const targetUri = PathSandbox.validate(normalizedPath);
-                const antiActions: AntiAction[] = opAntiActionsMap.get(op.id) || [];
+                const antiActions = opAntiActionsMap.get(op.id) || [];
 
-                // Record parent path candidate segments for deletion/movement operations
-                if (op.type === 'delete_path' || op.type === 'move_path') {
-                    const opCandidates: string[] = [];
-                    let currentDir = normalizedPath.split('/').slice(0, -1).join('/');
-                    while (currentDir) {
-                        opCandidates.push(currentDir);
-                        currentDir = currentDir.split('/').slice(0, -1).join('/');
-                    }
-                    if (opCandidates.length > 0) {
-                        opCandidatesMap.set(op.id, opCandidates);
-                    }
-                }
-
-                if (op.type === 'create_file') {
+                if (isCreateFileOperation(op)) {
                     edit.createFile(targetUri, { ignoreIfExists: true });
                     edit.insert(targetUri, new vscode.Position(0, 0), op.content);
                     antiActions.push({ type: 'delete_created', uri: targetUri });
                     filesToOpen.push(targetUri);
 
                     const lineCount = op.content.split(/\r?\n/).length;
-                    const createdRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(lineCount, 999));
-                    pendingDecorations.set(op.id, { uri: targetUri, ranges: [createdRange] });
+                    pendingDecorations.set(op.id, { 
+                        uri: targetUri, 
+                        ranges: [new vscode.Range(new vscode.Position(0, 0), new vscode.Position(lineCount, 999))] 
+                    });
                 } 
-                else if (op.type === 'delete_path') {
+                else if (isDeletePathOperation(op)) {
                     try {
                         await vscode.workspace.fs.stat(targetUri);
                         await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
-                        
                         edit.deleteFile(targetUri, { ignoreIfNotExists: true, recursive: true });
                         antiActions.push({ type: 'restore_file', uri: targetUri, relativePath: normalizedPath });
                     } catch {
-                        OutputLogger.log(`File to delete not found: ${normalizedPath}, skipping.`, 'WARN');
+                        // Файл вже відсутній
                     }
                 }
-                else if (op.type === 'move_path') {
-                    const normalizedDest = PathNormalizer.normalize(baseOp.destinationPath, rootName);
+                else if (isMovePathOperation(op)) {
+                    const normalizedDest = PathNormalizer.normalize(op.destinationPath, rootName);
                     const destUri = PathSandbox.validate(normalizedDest);
-
                     await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
-
                     edit.renameFile(targetUri, destUri, { overwrite: true });
-                    antiActions.push({ 
-                        type: 'restore_move', 
-                        sourceUri: targetUri, 
-                        destinationUri: destUri, 
-                        relativeSourcePath: normalizedPath 
-                    });
+                    antiActions.push({ type: 'restore_move', sourceUri: targetUri, destinationUri: destUri, relativeSourcePath: normalizedPath });
                     filesToOpen.push(destUri);
                 }
-                else if (op.type === 'update_file') {
+                else if (isUpdateFileOperation(op)) {
                     const document = await vscode.workspace.openTextDocument(targetUri);
                     const domainDoc = new VsCodeDocument(document);
-                    const matchedBlocks: { range: vscode.Range; replace: string; originalText: string }[] = [];
+                    const matchedBlocks: { range: vscode.Range; replace: string }[] = [];
 
                     for (const change of op.changes) {
                         const match = this.searchEngine.findMatch(domainDoc, change.search);
                         if (match.status === 'MATCHED') {
-                            const vsRange = new vscode.Range(
-                                new vscode.Position(match.range.start.line, match.range.start.character),
-                                new vscode.Position(match.range.end.line, match.range.end.character)
-                            );
-                            matchedBlocks.push({ range: vsRange, replace: change.replace, originalText: change.search });
+                            matchedBlocks.push({ 
+                                range: new vscode.Range(match.range.start.line, match.range.start.character, match.range.end.line, match.range.end.character),
+                                replace: change.replace 
+                            });
                         }
                     }
 
                     await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
-
                     matchedBlocks.sort((a, b) => b.range.start.compareTo(a.range.start));
                     const appliedRanges: vscode.Range[] = [];
 
                     for (const match of matchedBlocks) {
                         edit.replace(targetUri, match.range, match.replace);
                         const lineDelta = match.replace.split(/\r?\n/).length;
-                        const endLine = match.range.start.line + lineDelta - 1;
-                        const appliedRange = new vscode.Range(
-                            new vscode.Position(match.range.start.line, 0),
-                            new vscode.Position(endLine, 999)
-                        );
-                        appliedRanges.push(appliedRange);
+                        appliedRanges.push(new vscode.Range(match.range.start.line, 0, match.range.start.line + lineDelta - 1, 999));
                     }
 
                     pendingDecorations.set(op.id, { uri: targetUri, ranges: appliedRanges });
                     antiActions.push({ type: 'restore_file', uri: targetUri, relativePath: normalizedPath });
                     filesToOpen.push(targetUri);
                 }
-                else if (op.type === 'create_dir') {
-                    const parentDir = targetUri;
-                    await this.trackAndCreateDirectory(rootUri, parentDir, antiActions);
-                    for (const act of antiActions) {
-                        if (act.type === 'delete_dir_if_empty' && !localCreatedDirs.some(d => d.fsPath === act.uri.fsPath)) {
-                            localCreatedDirs.push(act.uri);
-                        }
-                    }
-                }
-
-                if (antiActions.length > 0) {
-                    opAntiActionsMap.set(op.id, antiActions);
-                }
             }
 
-            // Commit workspace edit
             const success = await vscode.workspace.applyEdit(edit);
-            if (success) {
-                // Execute resilient directory cleanup on empty parent folder segments (Phase 2 integration)
-                const allCandidates = Array.from(opCandidatesMap.values()).flat();
-                const cleanedDirs = await this.directoryCleanupService.cleanupEmptyDirectories(allCandidates, rootUri);
-
-                // Map actually cleaned directory segments to their causing operations for safe rollback re-creations
-                for (const dirUri of cleanedDirs) {
-                    const relativeDir = PathNormalizer.normalize(dirUri.fsPath, rootName);
-                    for (const [opId, candidates] of opCandidatesMap.entries()) {
-                        if (candidates.includes(relativeDir)) {
-                            const antiActions = opAntiActionsMap.get(opId) || [];
-                            antiActions.push({ type: 'restore_dir', uri: dirUri });
-                            opAntiActionsMap.set(opId, antiActions);
-                            break; // Map to the first matched operation context
-                        }
-                    }
-                }
-
-                for (const op of operations) {
-                    if (op.status !== 'pending') continue;
-                    
-                    const baseOp = op as any;
-                    const antiActions = opAntiActionsMap.get(op.id);
-                    if (antiActions && antiActions.length > 0) {
-                        this.store.addTransaction({ operationId: op.id, antiActions });
-                        
-                        this.statusCallback(op.id, 'applied_dirty', {
-                            resolvedResiliently: baseOp.resolvedResiliently,
-                            originalPath: baseOp.originalPath,
-                            path: baseOp.path
-                        });
-                        
-                        const pending = pendingDecorations.get(op.id);
-                        if (pending) {
-                            this.decorationService.addDecorations(pending.uri, op.id, pending.ranges);
-                        }
-                    } else {
-                        this.statusCallback(op.id, 'saved', {
-                            resolvedResiliently: baseOp.resolvedResiliently,
-                            originalPath: baseOp.originalPath,
-                            path: baseOp.path
-                        });
-                        this.transactionLock.release(op.id);
-                    }
-                }
-                await this.editorService.focusFiles(filesToOpen);
-                OutputLogger.log('Transaction applied globally.');
-            } else {
+            if (!success) {
                 throw new Error('Workspace applyEdit failed globally.');
             }
+
+            const allCandidates = Array.from(opCandidatesMap.values()).flat();
+            const cleanedDirs = await this.directoryCleanupService.cleanupEmptyDirectories(allCandidates, rootUri);
+
+            for (const dirUri of cleanedDirs) {
+                const relativeDir = PathNormalizer.normalize(dirUri.fsPath, rootName);
+                for (const [opId, candidates] of opCandidatesMap.entries()) {
+                    if (candidates.includes(relativeDir)) {
+                        opAntiActionsMap.get(opId)?.push({ type: 'restore_dir', uri: dirUri });
+                        break;
+                    }
+                }
+            }
+
+            for (const op of operations) {
+                if (op.status !== 'pending') continue;
+                
+                const antiActions = opAntiActionsMap.get(op.id) || [];
+                const resProps = (op as any).resolvedResiliently ? {
+                    resolvedResiliently: true,
+                    originalPath: (op as any).originalPath,
+                    path: op.path
+                } : {};
+
+                if (antiActions.length > 0) {
+                    this.store.addTransaction({ operationId: op.id, antiActions });
+                    this.statusCallback(op.id, 'applied_dirty', resProps);
+                    
+                    const pending = pendingDecorations.get(op.id);
+                    if (pending) {
+                        this.decorationService.addDecorations(pending.uri, op.id, pending.ranges);
+                    }
+                } else {
+                    this.statusCallback(op.id, 'saved', resProps);
+                    this.transactionLock.release(op.id);
+                }
+            }
+
+            await this.editorService.focusFiles(filesToOpen);
+            OutputLogger.log('Transaction applied globally.');
+
         } catch (err) {
             OutputLogger.log(`Failed to execute workspace modifications: ${err}`, 'ERROR');
             
-            // Clean up scaffolded directories
+            // Відкат порожніх директорій
             localCreatedDirs.sort((a, b) => b.fsPath.length - a.fsPath.length);
             for (const dirUri of localCreatedDirs) {
                 try {
                     await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
                 } catch {
-                    // Fail-safe ignore
+                    // Ігноруємо помилки очищення
                 }
             }
 
             for (const op of operations) {
                 await this.snapshotService.purgeSnapshotForOp(rootUri, op.id);
                 this.transactionLock.release(op.id);
-                const baseOp = op as any;
                 if (op.status === 'pending') {
                     op.errorMessage = err instanceof Error ? err.message : 'Unknown write/edit error';
-                    this.statusCallback(op.id, 'error', {
-                        errorMessage: op.errorMessage,
-                        resolvedResiliently: baseOp.resolvedResiliently,
-                        originalPath: baseOp.originalPath,
-                        path: baseOp.path
-                    });
+                    this.statusCallback(op.id, 'error', { errorMessage: op.errorMessage });
                 }
             }
         }
     }
 
-    /**
-     * Commits all staged edits.
-     */
+    private abortBatch(operations: AnyOperation[], failReason: string, conflictMap: Map<string, ConflictDetails>): void {
+        for (const op of operations) {
+            this.transactionLock.release(op.id);
+            if (op.status === 'pending') {
+                const conflictData = conflictMap.get(op.id);
+                op.errorMessage = conflictData ? failReason : 'Transaction aborted due to conflict in other files.';
+                
+                const meta: Partial<DiffOperation> = { conflict: conflictData };
+                if ((op as any).resolvedResiliently) {
+                    meta.resolvedResiliently = true;
+                    meta.originalPath = (op as any).originalPath;
+                    meta.path = op.path;
+                }
+                this.statusCallback(op.id, 'conflict', meta);
+            }
+        }
+    }
+
+    private buildConflict(reason: ConflictReason, op: AnyOperation, candidates?: string[]): ConflictDetails {
+        return {
+            reason,
+            blockIndex: 0,
+            totalBlocks: isUpdateFileOperation(op) ? op.changes.length : 0,
+            searchExcerpt: 'N/A',
+            originalSearchBlock: '',
+            candidatePaths: candidates
+        };
+    }
+
     public async saveBatch(): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
-        const rootUri = workspaceFolders[0].uri;
         
         const txIds = this.store.getAllIds();
 
@@ -473,30 +380,23 @@ export class TransactionManager {
             for (const act of tx.antiActions) {
                 const targetUri = (act as any).uri || (act as any).destinationUri;
                 if (!targetUri) continue;
-
                 try {
                     const doc = await vscode.workspace.openTextDocument(targetUri);
-                    if (doc.isDirty) {
-                        await doc.save();
-                    }
+                    if (doc.isDirty) await doc.save();
                 } catch {
-                    // Safe ignore for deleted or non-text assets
+                    // Safe ignore
                 }
             }
             this.statusCallback(id, 'saved');
             this.store.clearTransaction(id);
             this.transactionLock.release(id);
-            
-            await this.snapshotService.purgeSnapshotForOp(rootUri, id);
+            await this.snapshotService.purgeSnapshotForOp(workspaceFolders[0].uri, id);
         }
 
         this.decorationService.clearAllDecorations();
         OutputLogger.log('Batch saved successfully.');
     }
 
-    /**
-     * Reverts all active transactions, restoring files from snapshots.
-     */
     public async revertBatch(): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
@@ -505,8 +405,6 @@ export class TransactionManager {
         const txIds = this.store.getAllIds();
         const edit = new vscode.WorkspaceEdit();
         const directoriesToDelete: vscode.Uri[] = [];
-        
-        // Track directory restorations to execute top-down safely (shallowest first)
         const directoriesToRestore: vscode.Uri[] = [];
 
         for (const id of txIds) {
@@ -515,61 +413,40 @@ export class TransactionManager {
 
             for (let i = tx.antiActions.length - 1; i >= 0; i--) {
                 const act = tx.antiActions[i];
-                if (act.type === 'delete_created') {
-                    edit.deleteFile(act.uri, { ignoreIfNotExists: true });
-                } else if (act.type === 'restore_move') {
-                    edit.deleteFile(act.destinationUri, { ignoreIfNotExists: true });
-                } else if (act.type === 'delete_dir_if_empty') {
-                    directoriesToDelete.push(act.uri);
-                } else if (act.type === 'restore_dir') {
-                    directoriesToRestore.push(act.uri);
-                }
+                if (act.type === 'delete_created') edit.deleteFile(act.uri, { ignoreIfNotExists: true });
+                else if (act.type === 'restore_move') edit.deleteFile(act.destinationUri, { ignoreIfNotExists: true });
+                else if (act.type === 'delete_dir_if_empty') directoriesToDelete.push(act.uri);
+                else if (act.type === 'restore_dir') directoriesToRestore.push(act.uri);
             }
         }
 
-        // Apply file deletions
         await vscode.workspace.applyEdit(edit);
 
-        // Safe bottom-up empty directory removal to prevent recursion overflows
         directoriesToDelete.sort((a, b) => b.fsPath.length - a.fsPath.length);
         for (const dirUri of directoriesToDelete) {
             try {
                 const contents = await vscode.workspace.fs.readDirectory(dirUri);
                 if (contents.length === 0) {
                     await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
-                    OutputLogger.log(`Cleaned empty scaffolded directory: ${dirUri.fsPath}`);
                 }
-            } catch {
-                // Directory missing or already cleared, ignore
-            }
+            } catch { /* Ignore */ }
         }
 
-        // Restore emptied directory segments Top-Down (shallowest first) prior to writing files (Phase 3 integration)
         directoriesToRestore.sort((a, b) => a.fsPath.length - b.fsPath.length);
         for (const dirUri of directoriesToRestore) {
-            try {
-                await vscode.workspace.fs.createDirectory(dirUri);
-                OutputLogger.log(`Restored empty directory segment during rollback: ${dirUri.fsPath}`);
-            } catch (e) {
-                OutputLogger.log(`Failed to restore empty directory ${dirUri.fsPath}: ${e}`, 'WARN');
-            }
+            try { await vscode.workspace.fs.createDirectory(dirUri); } catch { /* Ignore */ }
         }
 
-        // Restore file contents from isolated snapshots
         for (const id of txIds) {
             const tx = this.store.getTransaction(id);
             if (!tx) continue;
 
             for (const act of tx.antiActions) {
-                if (act.type === 'restore_file') {
-                    await this.snapshotService.restoreSnapshot(rootUri, id, act.relativePath, act.uri);
-                } else if (act.type === 'restore_move') {
-                    await this.snapshotService.restoreSnapshot(rootUri, id, act.relativeSourcePath, act.sourceUri);
-                }
+                if (act.type === 'restore_file') await this.snapshotService.restoreSnapshot(rootUri, id, act.relativePath, act.uri);
+                else if (act.type === 'restore_move') await this.snapshotService.restoreSnapshot(rootUri, id, act.relativeSourcePath, act.sourceUri);
             }
         }
 
-        // Complete transactions, release locks, and clean snapshots
         for (const id of txIds) {
             this.statusCallback(id, 'reverted');
             this.store.clearTransaction(id);
@@ -581,36 +458,27 @@ export class TransactionManager {
         OutputLogger.log('Batch reverted successfully.');
     }
 
-    /**
-     * Traverses upwards to the workspace root to track and create missing directory paths.
-     */
     private async trackAndCreateDirectory(rootUri: vscode.Uri, targetDir: vscode.Uri, antiActions: AntiAction[]): Promise<void> {
         const rootFsPath = rootUri.fsPath;
-
         let currentDir = targetDir;
         const missingDirs: vscode.Uri[] = [];
 
-        // Traverse upwards to find non-existent parent directories
         while (currentDir.fsPath.length > rootFsPath.length) {
             try {
                 await vscode.workspace.fs.stat(currentDir);
-                break; // Directory exists, stop traversal
+                break;
             } catch {
                 missingDirs.push(currentDir);
                 currentDir = vscode.Uri.joinPath(currentDir, '..');
             }
         }
 
-        // Create missing directories bottom-to-top (shallowest first)
         for (let i = missingDirs.length - 1; i >= 0; i--) {
             const dirUri = missingDirs[i];
             try {
                 await vscode.workspace.fs.createDirectory(dirUri);
                 antiActions.push({ type: 'delete_dir_if_empty', uri: dirUri });
-                OutputLogger.log(`Created and registered empty parent directory segment: ${dirUri.fsPath}`);
-            } catch (e) {
-                OutputLogger.log(`Failed to create directory ${dirUri.fsPath}: ${e}`, 'WARN');
-            }
+            } catch { /* Ignore */ }
         }
     }
 }

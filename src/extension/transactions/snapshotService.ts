@@ -9,17 +9,15 @@ import { LiveDocumentRegistry } from './liveDocumentRegistry';
  */
 export class SnapshotService {
     private readonly liveRegistry = new LiveDocumentRegistry();
+    private readonly backupFolder = SYSTEM_CONSTANTS.BACKUP_FOLDER_NAME;
 
     /**
      * Generates an isolated, safe URI for a snapshot within the transaction scope directory.
      * Uses base64 path encoding to avoid deep nested hierarchy limit errors.
      */
     private getBackupUri(workspaceRoot: vscode.Uri, opId: string, relativePath: string): vscode.Uri {
-        const safeName = Buffer.from(relativePath).toString('base64')
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_')
-            .replace(/=+$/, '');
-        return vscode.Uri.joinPath(workspaceRoot, SYSTEM_CONSTANTS.BACKUP_FOLDER_NAME, opId, safeName);
+        const safeName = encodeURIComponent(relativePath).replace(/%/g, '_');
+        return vscode.Uri.joinPath(workspaceRoot, this.backupFolder, opId, safeName);
     }
 
     /**

@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
-import { IDocument } from '../../core/matcher/documentPort';
-import { Position } from '../../shared/contracts';
+import type { IDocument } from '../../core/matcher/documentPort';
+import type { Position } from '../../shared/contracts';
 
 /**
  * Adapter implementing the decoupled IDocument port.
  * Translates VS Code TextDocument calls to pure Typescript domain entities.
  */
 export class VsCodeDocument implements IDocument {
+    private readonly MAX_SUPPORTED_LINES = 30000;
+
     constructor(private readonly document: vscode.TextDocument) {}
 
     public get path(): string {
@@ -14,6 +16,9 @@ export class VsCodeDocument implements IDocument {
     }
 
     public getText(): string {
+        if (this.document.lineCount > this.MAX_SUPPORTED_LINES) {
+            throw new Error(`File exceeds maximum supported size for AST parsing (${this.MAX_SUPPORTED_LINES} lines).`);
+        }
         return this.document.getText();
     }
 
