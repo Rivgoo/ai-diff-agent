@@ -29,5 +29,11 @@
     "node_modules",
     ".vscode-test",
     "tests"
-  ]
+  ],
+  "ts-node": {
+    "compilerOptions": {
+      "module": "CommonJS",
+      "verbatimModuleSyntax": false
+    }
+  }
 }
