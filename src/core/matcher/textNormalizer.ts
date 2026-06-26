@@ -1,5 +1,6 @@
 /**
  * String clean utilities to secure exact comparison between environments.
+ * Mitigates matching offset skew caused by line break formatting or BOM codes.
  */
 export class TextNormalizer {
     /**
@@ -14,6 +15,7 @@ export class TextNormalizer {
 
     /**
      * Normalizes line breaks to unix standard to guarantee equivalence.
+     * Operates linearly and avoids costly regex backtracking.
      */
     public static normalizeLineEndings(text: string): string {
         return text.replace(/\r\n/g, '\n');

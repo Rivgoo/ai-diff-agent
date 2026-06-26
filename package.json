@@ -86,7 +86,7 @@
     "watch:webview": "vite build --watch",
     "watch:extension": "npx esbuild src/extension/extension.ts --bundle --platform=node --target=node16 --external:vscode --outfile=out/extension/extension.js --sourcemap --watch",
     "lint": "eslint src --ext ts,tsx",
-    "test": "mocha -r ts-node/register tests/**/*.spec.ts"
+    "test": "mocha -r ts-node/register -r tests/setup.ts tests/**/*.spec.ts"
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",

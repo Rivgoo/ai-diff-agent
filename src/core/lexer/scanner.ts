@@ -15,9 +15,9 @@ export interface Token {
 }
 
 /**
- * Deterministic linear Lexer. 
- * Avoids dangerous regular expressions, parsing tag structures character by character.
- * Perfectly ignores code structures containing '<' or '>' if they are not in the valid schema.
+ * Deterministic linear Lexer.
+ * Avoids regular expression backtracking entirely by parsing tag structures character by character.
+ * Prevents ReDoS vulnerabilities and ignores non-schema tags (like code-level HTML/XML blocks).
  */
 export class StreamScanner {
     private static readonly VALID_TAGS = new Set([
@@ -32,6 +32,9 @@ export class StreamScanner {
         'create_dir'
     ]);
 
+    /**
+     * Tokenizes a raw string input into a flat sequence of matched tokens.
+     */
     public tokenize(input: string): Token[] {
         const tokens: Token[] = [];
         let index = 0;
@@ -41,7 +44,6 @@ export class StreamScanner {
             const char = input[index];
 
             if (char === '<') {
-                // Peek ahead to see if it's a tag boundary we care about
                 const tagToken = this.tryParseTag(input, index);
                 if (tagToken) {
                     tokens.push(tagToken.token);
@@ -50,7 +52,6 @@ export class StreamScanner {
                 }
             }
 
-            // Otherwise, consume as text content until the next valid tag
             const textToken = this.consumeText(input, index);
             if (textToken.token.content.length > 0) {
                 tokens.push(textToken.token);
@@ -61,6 +62,9 @@ export class StreamScanner {
         return tokens;
     }
 
+    /**
+     * Attempts to parse a schema-conforming tag block starting at the '<' character.
+     */
     private tryParseTag(input: string, start: number): { token: Token; nextIndex: number } | null {
         let index = start;
         const length = input.length;
@@ -70,7 +74,7 @@ export class StreamScanner {
         const isClosing = input[index + 1] === '/';
         const offset = isClosing ? 2 : 1;
         
-        // Extract tag name candidate
+        // Extract candidate tag name
         let nameEnd = index + offset;
         while (nameEnd < length && /[a-zA-Z0-9_-]/.test(input[nameEnd])) {
             nameEnd++;
@@ -81,7 +85,7 @@ export class StreamScanner {
             return null; // Not a schema-matching tag, treat as plain text
         }
 
-        // Find the boundary of the tag closing bracket
+        // Locate tag closing boundaries
         let tagEnd = nameEnd;
         let isSelfClosing = false;
         while (tagEnd < length && input[tagEnd] !== '>') {
@@ -93,7 +97,7 @@ export class StreamScanner {
         }
 
         if (tagEnd >= length) {
-            return null; // Unterminated bracket, fallback
+            return null; // Unterminated tag, fallback to plain text
         }
 
         const tagBody = input.substring(nameEnd, tagEnd).trim();
@@ -113,6 +117,9 @@ export class StreamScanner {
         };
     }
 
+    /**
+     * Consumes text content until hitting the next schema-valid tag boundary.
+     */
     private consumeText(input: string, start: number): { token: Token; nextIndex: number } {
         let index = start;
         const length = input.length;
@@ -121,10 +128,9 @@ export class StreamScanner {
         while (index < length) {
             const char = input[index];
             if (char === '<') {
-                // If we hit '<', verify if it initiates a valid known tag
                 const peek = this.tryParseTag(input, index);
                 if (peek) {
-                    break; // Stop text consumption immediately
+                    break; // Stop immediately to preserve tag tokens
                 }
             }
             builder.push(char);
@@ -142,13 +148,71 @@ export class StreamScanner {
         };
     }
 
+    /**
+     * Linear token-based parser for HTML-like attributes.
+     * Prevents regular expression backtracking and properly handles single/double/unquoted attributes.
+     */
     private parseAttributes(attrString: string): Record<string, string> {
         const attributes: Record<string, string> = {};
-        const regex = /([a-zA-Z0-9_-]+)\s*=\s*(["'])(.*?)\2/g;
-        let match;
+        let i = 0;
+        const len = attrString.length;
 
-        while ((match = regex.exec(attrString)) !== null) {
-            attributes[match[1]] = match[3];
+        while (i < len) {
+            // Skip whitespaces
+            while (i < len && /\s/.test(attrString[i])) {
+                i++;
+            }
+            if (i >= len) break;
+
+            // Extract attribute name
+            const nameStart = i;
+            while (i < len && /[a-zA-Z0-9_-]/.test(attrString[i])) {
+                i++;
+            }
+            const name = attrString.substring(nameStart, i);
+            if (!name) {
+                i++; // Skip invalid character to prevent infinite loops
+                continue;
+            }
+
+            // Skip whitespaces surrounding '='
+            while (i < len && /\s/.test(attrString[i])) {
+                i++;
+            }
+
+            if (i < len && attrString[i] === '=') {
+                i++; // Consume '='
+                
+                // Skip whitespaces after '='
+                while (i < len && /\s/.test(attrString[i])) {
+                    i++;
+                }
+
+                if (i < len && (attrString[i] === '"' || attrString[i] === "'")) {
+                    const quote = attrString[i];
+                    i++; // Consume opening quote
+                    const valStart = i;
+                    while (i < len && attrString[i] !== quote) {
+                        i++;
+                    }
+                    const val = attrString.substring(valStart, i);
+                    if (i < len) {
+                        i++; // Consume closing quote
+                    }
+                    attributes[name] = val;
+                } else {
+                    // Extract unquoted attribute value
+                    const valStart = i;
+                    while (i < len && !/\s/.test(attrString[i]) && attrString[i] !== '>') {
+                        i++;
+                    }
+                    const val = attrString.substring(valStart, i);
+                    attributes[name] = val;
+                }
+            } else {
+                // Handle implicit boolean attributes
+                attributes[name] = 'true';
+            }
         }
 
         return attributes;

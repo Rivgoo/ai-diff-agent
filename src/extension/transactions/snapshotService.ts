@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { OutputLogger } from '@/infrastructure/logging/outputLogger';
-import { SYSTEM_CONSTANTS } from '@/shared/constants';
-import { LiveDocumentRegistry } from '@/extension/transactions/liveDocumentRegistry';
+import { OutputLogger } from '../../infrastructure/logging/outputLogger';
+import { SYSTEM_CONSTANTS } from '../../shared/constants';
+import { LiveDocumentRegistry } from './liveDocumentRegistry';
 
 /**
  * Handles transaction-scoped, isolated backups of files undergoing AI operations.
@@ -12,6 +12,7 @@ export class SnapshotService {
 
     /**
      * Generates an isolated, safe URI for a snapshot within the transaction scope directory.
+     * Uses base64 path encoding to avoid deep nested hierarchy limit errors.
      */
     private getBackupUri(workspaceRoot: vscode.Uri, opId: string, relativePath: string): vscode.Uri {
         const safeName = Buffer.from(relativePath).toString('base64')
@@ -33,7 +34,7 @@ export class SnapshotService {
                 vscode.Uri.joinPath(workspaceRoot, SYSTEM_CONSTANTS.BACKUP_FOLDER_NAME, opId)
             );
 
-            // Fetch live editor buffer state to preserve pre-existing dirty changes (Resolves Deviation 1)
+            // Fetch live editor buffer state to preserve pre-existing dirty changes
             const docMetadata = await this.liveRegistry.getDocumentState(fileUri);
             const contentBytes = new TextEncoder().encode(docMetadata.liveContent);
             
@@ -60,7 +61,7 @@ export class SnapshotService {
 
     /**
      * Safely deletes snapshots associated only with a completed or reverted operation.
-     * Prevents multi-transaction race-conditions (Resolves Deviation 3).
+     * Prevents multi-transaction race-conditions.
      */
     public async purgeSnapshotForOp(workspaceRoot: vscode.Uri, opId: string): Promise<void> {
         const backupDir = vscode.Uri.joinPath(workspaceRoot, SYSTEM_CONSTANTS.BACKUP_FOLDER_NAME, opId);
@@ -79,7 +80,7 @@ export class SnapshotService {
         const backupDir = vscode.Uri.joinPath(workspaceRoot, SYSTEM_CONSTANTS.BACKUP_FOLDER_NAME);
         try {
             await vscode.workspace.fs.delete(backupDir, { recursive: true, useTrash: false });
-            OutputLogger.log(`Flushed all transactional file snapshots.`);
+            OutputLogger.log('Flushed all transactional file snapshots.');
         } catch {
             // Directory missing, ignore purge
         }
@@ -87,10 +88,9 @@ export class SnapshotService {
 
     /**
      * Sweeps stale backups. Avoids sweeping parallel operations by ignoring generic directories.
-     * (Sweeps are scoped and executed transactionally via purgeSnapshotForOp).
      */
-    public async cleanStaleBackups(workspaceRoot: vscode.Uri): Promise<void> {
+    public async cleanStaleBackups(_workspaceRoot: vscode.Uri): Promise<void> {
         // Multi-tenant backups are preserved. Only obsolete sweeps are allowed.
-        OutputLogger.log(`Stale backups sweep skipped to preserve parallel transactional snapshots.`);
+        OutputLogger.log('Stale backups sweep skipped to preserve parallel transactional snapshots.');
     }
 }

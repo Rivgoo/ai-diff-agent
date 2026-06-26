@@ -1,18 +1,19 @@
-import { DSLParser } from '@/core/parser/dslParser';
-import { DomainValidator } from '@/core/parser/validator';
-import type { ChatMessage, DiffOperation } from '@/shared/models';
-import type { ChatSessionManager } from '@/extension/chat/sessionManager';
-import type { TransactionManager } from '@/extension/transactions/transactionManager';
-import type { AnyOperation } from '@/core/models/operations';
-import type { ExtensionEvent } from '@/shared/ipc';
+import { DSLParser } from '../../core/parser/dslParser';
+import { DomainValidator } from '../../core/parser/validator';
+import type { ChatMessage, DiffOperation } from '../../shared/models';
+import type { ChatSessionManager } from '../chat/sessionManager';
+import type { TransactionManager } from '../transactions/transactionManager';
+import type { AnyOperation } from '../../core/models/operations';
+import type { ExtensionEvent } from '../../shared/ipc';
 
 /**
- * UseCase encapsulating the parsing and execution flow of AI generated payloads.
- * Implements Command Pattern logic decoupled from the generic event router.
+ * Orchestrates the full, asynchronous processing pipeline of LLM payloads.
+ * Decouples message ingestion from direct workspace modifications, advancing the progress
+ * pipeline state sequentially and managing error limits gracefully.
  */
 export class ProcessPayloadUseCase {
-    private parser: DSLParser;
-    private validator: DomainValidator;
+    private readonly parser = new DSLParser();
+    private readonly validator = new DomainValidator();
 
     constructor(
         private readonly sessionManager: ChatSessionManager,
@@ -20,12 +21,13 @@ export class ProcessPayloadUseCase {
         private readonly pendingOperations: Map<string, AnyOperation>,
         private readonly postMessage: (event: ExtensionEvent) => void,
         private readonly syncState: () => void
-    ) {
-        this.parser = new DSLParser();
-        this.validator = new DomainValidator();
-    }
+    ) {}
 
+    /**
+     * Executes the parsing, validation, snapshotting, and transaction staging sequence.
+     */
     public async execute(payload: string): Promise<void> {
+        // Track the user submit payload action
         const userMsg: ChatMessage = { 
             id: Date.now().toString(), 
             role: 'user', 
@@ -40,15 +42,18 @@ export class ProcessPayloadUseCase {
         this.postMessage({ type: 'PIPELINE_STATE', stage: 'parsing', current: 0, total: 0 });
 
         try {
+            // Step 1: Lexical & AST parsing
             const parseResult = this.parser.parse(payload);
             if (!parseResult.success) {
-                throw new Error(`Parsing failed: ${parseResult.error.message}`);
+                throw new Error(`DSL Parsing failed: ${parseResult.error.message}`);
             }
             
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'validating', current: 0, total: parseResult.value.length });
+            
+            // Step 2: Domain validations and collision checks
             const validationResult = this.validator.validate(parseResult.value);
             if (!validationResult.success) {
-                throw new Error(`Validation failed: ${validationResult.error.message}`);
+                throw new Error(`DSL Validation failed: ${validationResult.error.message}`);
             }
 
             const operations = validationResult.value;
@@ -67,10 +72,11 @@ export class ProcessPayloadUseCase {
                 };
             });
 
+            // Post initial pending state to the user chat panel
             const agentMsg: ChatMessage = {
                 id: (Date.now() + 1).toString(),
                 role: 'agent',
-                text: `Applying ${diffOps.length} operation(s) immediately to the workspace. Please review and Save/Revert.`,
+                text: `Staging ${diffOps.length} operation(s) immediately into editor memory. Please review and Accept/Reject.`,
                 operations: diffOps,
                 timestamp: Date.now()
             };
@@ -78,14 +84,18 @@ export class ProcessPayloadUseCase {
             this.syncState();
 
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'applying', current: 0, total: operations.length });
+            
+            // Step 3: Run the Transaction batch
             await this.transactionManager.applyBatch(operations);
 
         } catch (error) {
-            const msg = error instanceof Error ? error.message : 'Unknown error';
+            const errorMsg = error instanceof Error ? error.message : 'Unknown compilation or parsing failure';
+            
+            // Log the parsing/validation breakdown into the user sidebar output
             this.sessionManager.addMessage({ 
                 id: Date.now().toString(), 
                 role: 'system', 
-                text: msg, 
+                text: errorMsg, 
                 timestamp: Date.now() 
             });
         } finally {

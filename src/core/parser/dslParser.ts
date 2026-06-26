@@ -1,10 +1,18 @@
-import { Result } from '@/shared/contracts';
-import type { AnyOperation, ChangeBlock } from '@/core/models/operations';
-import { StreamScanner, type Token } from '@/core/lexer/scanner';
+import { Result } from '../../shared/contracts';
+import type { AnyOperation, ChangeBlock } from '../models/operations';
+import { StreamScanner, type Token } from '../lexer/scanner';
 
+/**
+ * Main AST DSL Parser.
+ * Orchestrates the flat token stream into structured executable Domain operations.
+ * Implements loose-recovery mechanics to strip redundant markdown wraps.
+ */
 export class DSLParser {
     private readonly scanner = new StreamScanner();
 
+    /**
+     * Parses raw input instructions and generates executable file operations.
+     */
     public parse(rawInput: string): Result<AnyOperation[]> {
         try {
             const cleanedInput = this.stripMarkdownFences(rawInput);
@@ -25,6 +33,7 @@ export class DSLParser {
                 index++;
             }
 
+            // Fallback: Parse operation blocks loosely if workspace_edit root is missing
             const looseResult = this.parseOperationsList(tokens, 0, tokens.length);
             return Result.ok(looseResult.operations);
 
@@ -33,6 +42,9 @@ export class DSLParser {
         }
     }
 
+    /**
+     * Processes a bounded workspace edit block.
+     */
     private parseWorkspaceEdit(tokens: Token[], startIdx: number): Result<{ operations: AnyOperation[]; nextIndex: number }> {
         let index = startIdx + 1;
         const operations: AnyOperation[] = [];
@@ -56,6 +68,9 @@ export class DSLParser {
         return Result.ok({ operations, nextIndex: index }); 
     }
 
+    /**
+     * Extracts a continuous flat list of operations loosely.
+     */
     private parseOperationsList(tokens: Token[], start: number, end: number): { operations: AnyOperation[] } {
         const operations: AnyOperation[] = [];
         let index = start;
@@ -73,6 +88,9 @@ export class DSLParser {
         return { operations };
     }
 
+    /**
+     * Evaluates a single operation block (create, update, delete, move, create_dir).
+     */
     private tryParseOperation(tokens: Token[], startIdx: number): { operation: AnyOperation; nextIndex: number } | null {
         const token = tokens[startIdx];
 
@@ -145,6 +163,9 @@ export class DSLParser {
         return null;
     }
 
+    /**
+     * Parses nested change blocks inside an update_file operation.
+     */
     private parseChangeBlocks(tokens: Token[], startIdx: number): { changes: ChangeBlock[]; nextIndex: number } {
         let index = startIdx + 1;
         const changes: ChangeBlock[] = [];
@@ -170,6 +191,9 @@ export class DSLParser {
         return { changes, nextIndex: index };
     }
 
+    /**
+     * Parses search/replace tag sequences inside an active change block.
+     */
     private parseSingleChange(tokens: Token[], startIdx: number): { change: ChangeBlock | null; nextIndex: number } {
         let index = startIdx + 1;
         let search: string | null = null;
@@ -204,6 +228,9 @@ export class DSLParser {
         return { change: null, nextIndex: index };
     }
 
+    /**
+     * Aggregates textual block segments, reconstructing literal embedded code blocks.
+     */
     private consumeContentUntilClose(tokens: Token[], startIdx: number, tagName: string): { content: string; nextIndex: number } {
         let index = startIdx + 1;
         const builder: string[] = [];
@@ -218,6 +245,7 @@ export class DSLParser {
             if (token.type === 'TEXT_CONTENT') {
                 builder.push(token.content);
             } else {
+                // Reconstruct literal code structures that look like non-schema XML tags
                 builder.push(this.reconstructTagLiteral(token));
             }
             index++;
@@ -226,6 +254,9 @@ export class DSLParser {
         return { content: builder.join(''), nextIndex: index };
     }
 
+    /**
+     * Safely reconstructs raw structural formatting of non-schema HTML tag tokens.
+     */
     private reconstructTagLiteral(token: Token): string {
         const attributes = Object.entries(token.attributes)
             .map(([k, v]) => ` ${k}="${v}"`)
@@ -240,13 +271,19 @@ export class DSLParser {
         return `<${token.name}${attributes} />`;
     }
 
+    /**
+     * Recursively and safely strips markdown block wrappers surrounding raw text nodes.
+     */
     private stripMarkdownFences(content: string): string {
-        return content
-            .replace(/^```[\w]*\r?\n/gm, '')
-            .replace(/```\s*$/gm, '')
-            .trim();
+        let cleaned = content.trim();
+        cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\r?\n/g, '');
+        cleaned = cleaned.replace(/\r?\n```$/g, '');
+        return cleaned.trim();
     }
 
+    /**
+     * Generates a lightweight unique execution identifier.
+     */
     private generateId(): string {
         return Math.random().toString(36).substring(2, 9);
     }

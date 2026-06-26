@@ -1,25 +1,29 @@
 import * as vscode from 'vscode';
-import type { WebviewEvent, ExtensionEvent } from '@/shared/ipc';
-import type { OperationStatus } from '@/shared/models';
-import { ChatSessionManager } from '@/extension/chat/sessionManager';
-import { SettingsManager } from '@/extension/settings/settingsManager';
-import { OutputLogger } from '@/infrastructure/logging/outputLogger';
-import type { AnyOperation } from '@/core/models/operations';
-import { TransactionManager } from '@/extension/transactions/transactionManager';
-import { CompensationStore } from '@/extension/transactions/compensationStore';
-import type { DecorationService } from '@/extension/transactions/decorationService';
-import { PathSandbox } from '@/vscode/workspace/pathSandbox';
-import { PathNormalizer } from '@/core/workspace/pathNormalizer';
-import { ProcessPayloadUseCase } from '@/extension/use-cases/processPayloadUseCase';
-import { SYSTEM_CONSTANTS } from '@/shared/constants';
+import type { WebviewEvent, ExtensionEvent } from '../../shared/ipc';
+import type { OperationStatus } from '../../shared/models';
+import { ChatSessionManager } from './sessionManager';
+import { SettingsManager } from '../settings/settingsManager';
+import { OutputLogger } from '../../infrastructure/logging/outputLogger';
+import type { AnyOperation } from '../../core/models/operations';
+import { TransactionManager } from '../transactions/transactionManager';
+import { CompensationStore } from '../transactions/compensationStore';
+import type { DecorationService } from '../transactions/decorationService';
+import { PathSandbox } from '../../vscode/workspace/pathSandbox';
+import { PathNormalizer } from '../../core/workspace/pathNormalizer';
+import { ProcessPayloadUseCase } from '../use-cases/processPayloadUseCase';
+import { SYSTEM_CONSTANTS } from '../../shared/constants';
 
+/**
+ * MessageRouter acts as the central command dispatcher for the extension.
+ * Translates incoming Webview user requests into transactional operations and syncs settings.
+ */
 export class MessageRouter {
-    private sessionManager: ChatSessionManager;
-    private settingsManager: SettingsManager;
-    public transactionManager: TransactionManager;
-    private store: CompensationStore;
-    private pendingOperations = new Map<string, AnyOperation>();
-    private processPayloadUseCase: ProcessPayloadUseCase;
+    private readonly sessionManager: ChatSessionManager;
+    private readonly settingsManager: SettingsManager;
+    public readonly transactionManager: TransactionManager;
+    private readonly store: CompensationStore;
+    private readonly pendingOperations = new Map<string, AnyOperation>();
+    private readonly processPayloadUseCase: ProcessPayloadUseCase;
 
     constructor(
         private readonly context: vscode.ExtensionContext,
@@ -43,6 +47,7 @@ export class MessageRouter {
             () => this.syncState()
         );
 
+        // Listen for configuration adjustments in real time
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION)) {
                 this.syncSettings();
@@ -50,6 +55,9 @@ export class MessageRouter {
         });
     }
 
+    /**
+     * Entry-point message dispatcher. Matches event identifiers with execute procedures.
+     */
     public handleMessage(event: WebviewEvent): void {
         switch (event.type) {
             case 'REQUEST_STATE_SYNC':
@@ -95,6 +103,9 @@ export class MessageRouter {
         this.postMessageCallback({ type: 'SETTINGS_HYDRATE', settings: this.settingsManager.getSettings() });
     }
 
+    /**
+     * Resolves file URI location safely, checking sandboxes, and reveals the file in active editor columns.
+     */
     private async handleOpenFile(operationId: string): Promise<void> {
         const rawOp = this.pendingOperations.get(operationId);
         if (!rawOp) return;
@@ -108,6 +119,7 @@ export class MessageRouter {
                     .flatMap(m => m.operations || [])
                     .find(o => o.id === operationId);
 
+                // If the move operation is already staged/applied, reveal the destination file instead
                 if (sessionOp && (sessionOp.status === 'applied_dirty' || sessionOp.status === 'saved')) {
                     targetPath = baseOp.destinationPath;
                 }
@@ -123,7 +135,7 @@ export class MessageRouter {
             const doc = await vscode.workspace.openTextDocument(uri);
             await vscode.window.showTextDocument(doc, { preview: false });
         } catch (e) {
-            OutputLogger.log(`Failed to open file: ${e}`, 'ERROR');
+            OutputLogger.log(`Failed to open workspace target: ${e}`, 'ERROR');
         }
     }
 
@@ -134,7 +146,7 @@ export class MessageRouter {
             await vscode.env.clipboard.writeText(new TextDecoder().decode(fileBytes));
             this.postMessageCallback({ type: 'PROMPT_COPIED' });
         } catch (e) {
-            OutputLogger.log(`Copy prompt failed: ${e}`, 'ERROR');
+            OutputLogger.log(`Copy prompt operation failed: ${e}`, 'ERROR');
         }
     }
 
@@ -146,6 +158,8 @@ export class MessageRouter {
             if (dst) {
                 await vscode.workspace.fs.writeFile(dst, data);
             }
-        } catch (e) {}
+        } catch (e) {
+            // Ignore cancel download dialog actions
+        }
     }
 }

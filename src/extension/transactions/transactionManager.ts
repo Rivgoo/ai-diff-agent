@@ -1,20 +1,22 @@
 import * as vscode from 'vscode';
-import type { AnyOperation } from '@/core/models/operations';
-import { PathSandbox } from '@/vscode/workspace/pathSandbox';
-import { SearchEngine } from '@/core/matcher/searchEngine';
-import { VsCodeDocument } from '@/infrastructure/adapters/vsCodeDocument';
-import { OutputLogger } from '@/infrastructure/logging/outputLogger';
-import { PathNormalizer } from '@/core/workspace/pathNormalizer';
-import type { CompensationStore, AntiAction } from '@/extension/transactions/compensationStore';
-import { SnapshotService } from '@/extension/transactions/snapshotService';
-import { EditorService } from '@/extension/transactions/editorService';
-import type { DecorationService } from '@/extension/transactions/decorationService';
-import type { OperationStatus } from '@/shared/models';
-import { TransactionLock } from '@/extension/transactions/transactionLock';
+import type { AnyOperation } from '../../core/models/operations';
+import { PathSandbox } from '../../vscode/workspace/pathSandbox';
+import { SearchEngine } from '../../core/matcher/searchEngine';
+import { VsCodeDocument } from '../../infrastructure/adapters/vsCodeDocument';
+import { OutputLogger } from '../../infrastructure/logging/outputLogger';
+import { PathNormalizer } from '../../core/workspace/pathNormalizer';
+import type { CompensationStore, AntiAction } from './compensationStore';
+import { SnapshotService } from './snapshotService';
+import { EditorService } from './editorService';
+import type { DecorationService } from './decorationService';
+import type { OperationStatus } from '../../shared/models';
+import { TransactionLock } from './transactionLock';
 
 /**
  * Orchestrates atomic transactions using the Saga Pattern.
- * Manages locks, directories bottom-up cleanups, and secure buffer saves.
+ * Manages locks, directory bottom-up cleanups, and secure buffer saves.
+ * Ensures absolute atomicity: if one operation in a batch fails to prepare,
+ * the entire batch is rolled back and discarded before modifying files.
  */
 export class TransactionManager {
     private searchEngine = new SearchEngine();
@@ -42,204 +44,252 @@ export class TransactionManager {
         const edit = new vscode.WorkspaceEdit();
         const filesToOpen: vscode.Uri[] = [];
         const pendingDecorations = new Map<string, { uri: vscode.Uri; ranges: vscode.Range[] }>();
+        const localCreatedDirs: vscode.Uri[] = [];
 
-        // Step 1: Secure concurrency locks (Resolves Deviation 3)
-        for (const op of operations) {
-            if (op.status !== 'pending') continue;
-            if (!this.transactionLock.acquire(op.id)) {
-                OutputLogger.log(`Transaction rejected. Lock held by: ${this.transactionLock.getActiveId()}`, 'WARN');
-                this.statusCallback(op.id, 'conflict');
-                return;
+        // Step 1: Secure concurrency locks (Batch scale lock coordination)
+        const opIds = operations.filter(op => op.status === 'pending').map(op => op.id);
+        if (!this.transactionLock.acquireBatch(opIds)) {
+            OutputLogger.log('Transaction rejected. Lock held by other operations.', 'WARN');
+            for (const op of operations) {
+                if (op.status === 'pending') {
+                    this.statusCallback(op.id, 'conflict');
+                }
             }
+            return;
         }
 
-        // Step 2: Prepare scaffold directories and pre-register them
-        for (const op of operations) {
-            if (op.status !== 'pending') continue;
-            const baseOp = op as any;
-            
-            if (op.type === 'create_file' || op.type === 'move_path') {
-                const targetPath = op.type === 'create_file' ? baseOp.path : baseOp.destinationPath;
-                const normalized = PathNormalizer.normalize(targetPath, rootName);
-                const targetUri = PathSandbox.validate(normalized);
-                const parentDir = vscode.Uri.joinPath(targetUri, '..');
+        let batchFailed = false;
+        let failReason = '';
+        const opAntiActionsMap = new Map<string, AntiAction[]>();
+
+        try {
+            // Step 2: Prepare scaffold directories and pre-register them
+            for (const op of operations) {
+                if (op.status !== 'pending') continue;
+                const baseOp = op as any;
                 
-                const antiActions: AntiAction[] = [];
-                await this.trackAndCreateDirectory(rootUri, parentDir, op.id, antiActions);
-                if (antiActions.length > 0) {
-                    this.store.addTransaction({ operationId: op.id, antiActions });
-                }
-            }
-        }
-
-        // Step 3: Stage changes and capture live state backups
-        for (const op of operations) {
-            if (op.status !== 'pending') continue;
-
-            const baseOp = op as any;
-            const normalizedPath = PathNormalizer.normalize(baseOp.path, rootName);
-            let targetUri: vscode.Uri;
-            
-            try {
-                targetUri = PathSandbox.validate(normalizedPath);
-            } catch (e) {
-                OutputLogger.log(`Path validation failed for ${baseOp.path}`, 'ERROR');
-                this.statusCallback(op.id, 'error');
-                this.transactionLock.release(op.id);
-                continue;
-            }
-
-            const antiActions: AntiAction[] = [];
-            let isStaged = false;
-
-            if (op.type === 'create_file') {
-                edit.createFile(targetUri, { ignoreIfExists: true });
-                edit.insert(targetUri, new vscode.Position(0, 0), op.content);
-                antiActions.push({ type: 'delete_created', uri: targetUri });
-                filesToOpen.push(targetUri);
-                isStaged = true;
-
-                const lineCount = op.content.split(/\r?\n/).length;
-                const createdRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(lineCount, 999));
-                pendingDecorations.set(op.id, { uri: targetUri, ranges: [createdRange] });
-            } 
-            else if (op.type === 'delete_path') {
-                try {
-                    await vscode.workspace.fs.stat(targetUri);
-                    // Isolated live-state snapshot backup (Resolves Deviation 1)
-                    await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
+                if (op.type === 'create_file' || op.type === 'move_path') {
+                    const targetPath = op.type === 'create_file' ? baseOp.path : baseOp.destinationPath;
+                    const normalized = PathNormalizer.normalize(targetPath, rootName);
+                    const targetUri = PathSandbox.validate(normalized);
+                    const parentDir = vscode.Uri.joinPath(targetUri, '..');
                     
-                    edit.deleteFile(targetUri, { ignoreIfNotExists: true, recursive: true });
-                    antiActions.push({ type: 'restore_file', uri: targetUri, relativePath: normalizedPath });
-                    isStaged = true;
-                } catch {
-                    OutputLogger.log(`File to delete not found: ${normalizedPath}, skipping.`, 'WARN');
-                    this.statusCallback(op.id, 'saved');
-                    this.transactionLock.release(op.id);
+                    const antiActions: AntiAction[] = [];
+                    await this.trackAndCreateDirectory(rootUri, parentDir, antiActions);
+                    if (antiActions.length > 0) {
+                        opAntiActionsMap.set(op.id, antiActions);
+                        for (const act of antiActions) {
+                            if (act.type === 'delete_dir_if_empty') {
+                                localCreatedDirs.push(act.uri);
+                            }
+                        }
+                    }
                 }
             }
-            else if (op.type === 'move_path') {
-                const normalizedDest = PathNormalizer.normalize(baseOp.destinationPath, rootName);
-                const destUri = PathSandbox.validate(normalizedDest);
 
-                try {
-                    await vscode.workspace.fs.stat(targetUri);
-                    // Isolated live-state snapshot backup (Resolves Deviation 1)
-                    await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
+            // Step 3: Stage changes and capture live state backups
+            for (const op of operations) {
+                if (op.status !== 'pending') continue;
 
-                    edit.renameFile(targetUri, destUri, { overwrite: true });
-                    antiActions.push({ 
-                        type: 'restore_move', 
-                        sourceUri: targetUri, 
-                        destinationUri: destUri, 
-                        relativeSourcePath: normalizedPath 
-                    });
-                    filesToOpen.push(destUri);
-                    isStaged = true;
-                } catch {
-                    OutputLogger.log(`Source file for move not found: ${normalizedPath}, aborting.`, 'ERROR');
-                    this.statusCallback(op.id, 'conflict');
-                    this.transactionLock.release(op.id);
-                }
-            }
-            else if (op.type === 'update_file') {
-                let document: vscode.TextDocument;
+                const baseOp = op as any;
+                const normalizedPath = PathNormalizer.normalize(baseOp.path, rootName);
+                let targetUri: vscode.Uri;
+                
                 try {
-                    document = await vscode.workspace.openTextDocument(targetUri);
+                    targetUri = PathSandbox.validate(normalizedPath);
                 } catch (e) {
-                    OutputLogger.log(`Failed to open document: ${normalizedPath}`, 'ERROR');
-                    this.statusCallback(op.id, 'conflict');
-                    this.transactionLock.release(op.id);
-                    continue;
+                    batchFailed = true;
+                    failReason = `Path validation failed for ${baseOp.path}`;
+                    break;
                 }
 
-                const domainDoc = new VsCodeDocument(document);
-                const matchedBlocks: { range: vscode.Range; replace: string; originalText: string }[] = [];
-                let matchFailed = false;
+                const antiActions: AntiAction[] = opAntiActionsMap.get(op.id) || [];
 
-                for (const change of op.changes) {
-                    const match = this.searchEngine.findMatch(domainDoc, change.search);
-                    if (match.status !== 'MATCHED') {
-                        OutputLogger.log(`Match failed in ${normalizedPath}. Reason: ${match.status === 'FAILED' ? match.reason : 'unknown'}`, 'ERROR');
-                        this.statusCallback(op.id, 'conflict');
-                        this.transactionLock.release(op.id);
-                        matchFailed = true;
+                if (op.type === 'create_file') {
+                    edit.createFile(targetUri, { ignoreIfExists: true });
+                    edit.insert(targetUri, new vscode.Position(0, 0), op.content);
+                    antiActions.push({ type: 'delete_created', uri: targetUri });
+                    filesToOpen.push(targetUri);
+
+                    const lineCount = op.content.split(/\r?\n/).length;
+                    const createdRange = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(lineCount, 999));
+                    pendingDecorations.set(op.id, { uri: targetUri, ranges: [createdRange] });
+                } 
+                else if (op.type === 'delete_path') {
+                    try {
+                        await vscode.workspace.fs.stat(targetUri);
+                        await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
+                        
+                        edit.deleteFile(targetUri, { ignoreIfNotExists: true, recursive: true });
+                        antiActions.push({ type: 'restore_file', uri: targetUri, relativePath: normalizedPath });
+                    } catch {
+                        OutputLogger.log(`File to delete not found: ${normalizedPath}, skipping.`, 'WARN');
+                    }
+                }
+                else if (op.type === 'move_path') {
+                    const normalizedDest = PathNormalizer.normalize(baseOp.destinationPath, rootName);
+                    const destUri = PathSandbox.validate(normalizedDest);
+
+                    try {
+                        await vscode.workspace.fs.stat(targetUri);
+                        await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
+
+                        edit.renameFile(targetUri, destUri, { overwrite: true });
+                        antiActions.push({ 
+                            type: 'restore_move', 
+                            sourceUri: targetUri, 
+                            destinationUri: destUri, 
+                            relativeSourcePath: normalizedPath 
+                        });
+                        filesToOpen.push(destUri);
+                    } catch {
+                        batchFailed = true;
+                        failReason = `Source file for move not found: ${normalizedPath}`;
                         break;
                     }
-                    const vsRange = new vscode.Range(
-                        new vscode.Position(match.range.start.line, match.range.start.character),
-                        new vscode.Position(match.range.end.line, match.range.end.character)
-                    );
-                    matchedBlocks.push({ range: vsRange, replace: change.replace, originalText: change.search });
+                }
+                else if (op.type === 'update_file') {
+                    let document: vscode.TextDocument;
+                    try {
+                        document = await vscode.workspace.openTextDocument(targetUri);
+                    } catch (e) {
+                        batchFailed = true;
+                        failReason = `Failed to open document: ${normalizedPath}`;
+                        break;
+                    }
+
+                    const domainDoc = new VsCodeDocument(document);
+                    const matchedBlocks: { range: vscode.Range; replace: string; originalText: string }[] = [];
+
+                    for (const change of op.changes) {
+                        const match = this.searchEngine.findMatch(domainDoc, change.search);
+                        if (match.status !== 'MATCHED') {
+                            batchFailed = true;
+                            const reasonText = match.status === 'FAILED' ? match.reason : 'unknown';
+                            failReason = `Search match failed in ${normalizedPath}. Reason: ${reasonText}`;
+                            break;
+                        }
+                        const vsRange = new vscode.Range(
+                            new vscode.Position(match.range.start.line, match.range.start.character),
+                            new vscode.Position(match.range.end.line, match.range.end.character)
+                        );
+                        matchedBlocks.push({ range: vsRange, replace: change.replace, originalText: change.search });
+                    }
+
+                    if (batchFailed) break;
+
+                    await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
+
+                    matchedBlocks.sort((a, b) => b.range.start.compareTo(a.range.start));
+                    const appliedRanges: vscode.Range[] = [];
+
+                    for (const match of matchedBlocks) {
+                        edit.replace(targetUri, match.range, match.replace);
+                        const lineDelta = match.replace.split(/\r?\n/).length;
+                        const endLine = match.range.start.line + lineDelta - 1;
+                        const appliedRange = new vscode.Range(
+                            new vscode.Position(match.range.start.line, 0),
+                            new vscode.Position(endLine, 999)
+                        );
+                        appliedRanges.push(appliedRange);
+                    }
+
+                    pendingDecorations.set(op.id, { uri: targetUri, ranges: appliedRanges });
+                    antiActions.push({ type: 'restore_file', uri: targetUri, relativePath: normalizedPath });
+                    filesToOpen.push(targetUri);
+                }
+                else if (op.type === 'create_dir') {
+                    const parentDir = targetUri;
+                    await this.trackAndCreateDirectory(rootUri, parentDir, antiActions);
+                    for (const act of antiActions) {
+                        if (act.type === 'delete_dir_if_empty' && !localCreatedDirs.some(d => d.fsPath === act.uri.fsPath)) {
+                            localCreatedDirs.push(act.uri);
+                        }
+                    }
                 }
 
-                if (matchFailed) continue;
-
-                // Isolated live-state snapshot backup (Resolves Deviation 1)
-                await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
-
-                matchedBlocks.sort((a, b) => b.range.start.compareTo(a.range.start));
-                const appliedRanges: vscode.Range[] = [];
-
-                for (const match of matchedBlocks) {
-                    edit.replace(targetUri, match.range, match.replace);
-                    const lineDelta = match.replace.split(/\r?\n/).length;
-                    const endLine = match.range.start.line + lineDelta - 1;
-                    const appliedRange = new vscode.Range(
-                        new vscode.Position(match.range.start.line, 0),
-                        new vscode.Position(endLine, 999)
-                    );
-                    appliedRanges.push(appliedRange);
+                if (antiActions.length > 0) {
+                    opAntiActionsMap.set(op.id, antiActions);
                 }
-
-                pendingDecorations.set(op.id, { uri: targetUri, ranges: appliedRanges });
-                antiActions.push({ type: 'restore_file', uri: targetUri, relativePath: normalizedPath });
-                filesToOpen.push(targetUri);
-                isStaged = true;
             }
-            else if (op.type === 'create_dir') {
-                const parentDir = targetUri;
-                await this.trackAndCreateDirectory(rootUri, parentDir, op.id, antiActions);
-                isStaged = antiActions.length > 0;
-                this.statusCallback(op.id, 'applied_dirty');
-            }
-
-            if (isStaged && antiActions.length > 0) {
-                // Merge new compensations with pre-scaffolded directory actions
-                const existingRecord = this.store.getTransaction(op.id);
-                const mergedActions = existingRecord 
-                    ? [...existingRecord.antiActions, ...antiActions] 
-                    : antiActions;
-                
-                this.store.addTransaction({ operationId: op.id, antiActions: mergedActions });
-            }
+        } catch (err) {
+            batchFailed = true;
+            failReason = err instanceof Error ? err.message : 'Unknown core/system failure';
         }
 
+        // Step 4: Handle failure or commit workspace edit
+        if (batchFailed) {
+            OutputLogger.log(`Batch preparation aborted: ${failReason}`, 'ERROR');
+            
+            // Cleanup pre-created scaffold directories bottom-up
+            localCreatedDirs.sort((a, b) => b.fsPath.length - a.fsPath.length);
+            for (const dirUri of localCreatedDirs) {
+                try {
+                    await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
+                } catch {
+                    // Safe ignore
+                }
+            }
+
+            // Cleanup any snapshots created during this failed attempt
+            for (const op of operations) {
+                await this.snapshotService.purgeSnapshotForOp(rootUri, op.id);
+                this.transactionLock.release(op.id);
+                if (op.status === 'pending') {
+                    this.statusCallback(op.id, 'conflict');
+                }
+            }
+            return;
+        }
+
+        // Apply edits atomically
         const success = await vscode.workspace.applyEdit(edit);
         if (success) {
             for (const op of operations) {
-                if (this.store.getTransaction(op.id)) {
+                if (op.status !== 'pending') continue;
+                
+                const antiActions = opAntiActionsMap.get(op.id);
+                if (antiActions && antiActions.length > 0) {
+                    this.store.addTransaction({ operationId: op.id, antiActions });
                     this.statusCallback(op.id, 'applied_dirty');
                     
                     const pending = pendingDecorations.get(op.id);
                     if (pending) {
                         this.decorationService.addDecorations(pending.uri, op.id, pending.ranges);
                     }
+                } else {
+                    this.statusCallback(op.id, 'saved');
+                    this.transactionLock.release(op.id);
                 }
             }
             await this.editorService.focusFiles(filesToOpen);
-            OutputLogger.log(`Transaction applied globally.`);
+            OutputLogger.log('Transaction applied globally.');
         } else {
-            OutputLogger.log(`applyEdit failed globally. Transaction rejected.`, 'ERROR');
+            OutputLogger.log('applyEdit failed globally. Transaction rejected.', 'ERROR');
+            
+            // Clean up directories on workspace edit failure
+            localCreatedDirs.sort((a, b) => b.fsPath.length - a.fsPath.length);
+            for (const dirUri of localCreatedDirs) {
+                try {
+                    await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
+                } catch {
+                    // Safe ignore
+                }
+            }
+
             for (const op of operations) {
+                await this.snapshotService.purgeSnapshotForOp(rootUri, op.id);
                 this.transactionLock.release(op.id);
+                if (op.status === 'pending') {
+                    this.statusCallback(op.id, 'error');
+                }
             }
         }
     }
 
     /**
-     * Commits all staged edits. Resolves Deviation 2 by loading background, closed tabs
-     * to guarantee all modifications are cleanly flushed to disk.
+     * Commits all staged edits. Loads files into document cache to guarantee saves
+     * trigger even on closed, out-of-focus editor tabs.
      */
     public async saveBatch(): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -257,7 +307,6 @@ export class TransactionManager {
                 if (!targetUri) continue;
 
                 try {
-                    // Load into document cache to guarantee save triggers even on closed tabs (Resolves Deviation 2)
                     const doc = await vscode.workspace.openTextDocument(targetUri);
                     if (doc.isDirty) {
                         await doc.save();
@@ -270,17 +319,16 @@ export class TransactionManager {
             this.store.clearTransaction(id);
             this.transactionLock.release(id);
             
-            // Clean specific transaction snapshots while preserving parallel ones (Resolves Deviation 3)
             await this.snapshotService.purgeSnapshotForOp(rootUri, id);
         }
 
         this.decorationService.clearAllDecorations();
-        OutputLogger.log(`Batch saved successfully.`);
+        OutputLogger.log('Batch saved successfully.');
     }
 
     /**
      * Reverts all active transactions, restoring files from snapshots and recursively
-     * deleting created empty directories bottom-up (Resolves Deviation 4).
+     * deleting created empty directories bottom-up.
      */
     public async revertBatch(): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -324,7 +372,7 @@ export class TransactionManager {
             }
         }
 
-        // Safe bottom-up empty directory removal (Resolves Deviation 4)
+        // Safe bottom-up empty directory removal to prevent recursion overflows
         directoriesToDelete.sort((a, b) => b.fsPath.length - a.fsPath.length);
         for (const dirUri of directoriesToDelete) {
             try {
@@ -347,20 +395,15 @@ export class TransactionManager {
         }
 
         this.decorationService.clearAllDecorations();
-        OutputLogger.log(`Batch reverted successfully.`);
+        OutputLogger.log('Batch reverted successfully.');
     }
-
-    // ==========================================================================
-    // PRIVATE HELPER UTILITIES
-    // ==========================================================================
 
     /**
      * Traverses upwards to the workspace root to track and create missing directory paths.
      * Registers directory segments to anti-actions for bottom-up revert cleanup.
      */
-    private async trackAndCreateDirectory(rootUri: vscode.Uri, targetDir: vscode.Uri, opId: string, antiActions: AntiAction[]): Promise<void> {
+    private async trackAndCreateDirectory(rootUri: vscode.Uri, targetDir: vscode.Uri, antiActions: AntiAction[]): Promise<void> {
         const rootFsPath = rootUri.fsPath;
-        const targetFsPath = targetDir.fsPath;
 
         let currentDir = targetDir;
         const missingDirs: vscode.Uri[] = [];
