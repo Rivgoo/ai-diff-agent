@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { ComposerContext } from './composerContext';
 import { useAgentStore } from '@/webview/store/agentStore';
@@ -18,12 +18,22 @@ export const ComposerProvider = ({ children }: ComposerProviderProps) => {
     const toggleSettings = useAgentStore((state) => state.toggleSettings);
     const messages = useAgentStore((state) => state.messages);
     const { stage } = useAgentStore((state) => state.pipelineProgress);
+    const composerDraft = useAgentStore((state) => state.composerDraft);
+    const setComposerDraft = useAgentStore((state) => state.setComposerDraft);
 
     const activeStages = ['parsing', 'validating', 'resolving', 'staging'];
     const isProcessing = activeStages.includes(stage);
     const isClearDisabled = messages.length === 0;
 
     useAutoResize(inputRef, value);
+
+    useEffect(() => {
+        if (composerDraft !== '') {
+            setValue(composerDraft);
+            setComposerDraft('');
+            inputRef.current?.focus();
+        }
+    }, [composerDraft, setComposerDraft]);
 
     const submit = () => {
         if (!value.trim() || isProcessing) return;

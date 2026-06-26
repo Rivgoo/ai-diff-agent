@@ -1,6 +1,8 @@
 import type { ChatMessage, DiffOperation } from '@/shared/models';
 import { ErrorAlert } from './ErrorAlert';
 import { DiffReviewCard } from '@/webview/features/review/DiffReviewCard';
+import { UserMessage } from './UserMessage/UserMessage';
+import { useAgentStore } from '@/webview/store/agentStore';
 import { IconAlertTriangle } from '@tabler/icons-react';
 import styles from './MessageBubble.module.css';
 
@@ -11,8 +13,21 @@ interface MessageBubbleProps {
 export const MessageBubble = ({ message }: MessageBubbleProps) => {
     const isUser = message.role === 'user';
     const isSystem = message.role === 'system';
+    const setComposerDraft = useAgentStore((state) => state.setComposerDraft);
 
-    const containerClass = `${styles.wrapper} ${isUser ? styles.user : isSystem ? styles.system : styles.agent}`;
+    if (isUser) {
+        return (
+            <UserMessage.Provider message={message} onRetry={setComposerDraft}>
+                <UserMessage.Frame>
+                    <UserMessage.Header />
+                    <UserMessage.StatsBar />
+                    <UserMessage.CodeAccordion />
+                </UserMessage.Frame>
+            </UserMessage.Provider>
+        );
+    }
+
+    const containerClass = `${styles.wrapper} ${isSystem ? styles.system : styles.agent}`;
     const textClass = `${styles.text} ${isSystem ? styles.textSystem : ''}`;
 
     return (

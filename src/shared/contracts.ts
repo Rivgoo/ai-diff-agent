@@ -67,3 +67,24 @@ export const Result = {
         return { success: false, error };
     }
 };
+
+/**
+ * Quantifies line changes calculated strictly from parsed search/replace streams.
+ */
+export interface CodeImpactMetrics {
+    readonly additions: number; // Sum of lines generated inside replace blocks or new files
+    readonly deletions: number; // Sum of lines captured inside search blocks or deleted paths
+}
+
+/**
+ * Metadata summarizing structural changes inside a submitted DSL payload.
+ */
+export interface PayloadSummary {
+    readonly rawInput: string;
+    readonly totalCreatedFiles: number;
+    readonly totalUpdatedFiles: number;
+    readonly totalDeletedPaths: number;
+    readonly totalMovedPaths: number;
+    readonly totalCreatedDirs: number;
+    readonly codeImpact: CodeImpactMetrics;
+}

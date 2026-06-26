@@ -16,6 +16,7 @@ interface AgentState {
     isSettingsOpen: boolean;
     isPromptCopied: boolean;
     pipelineProgress: PipelineProgress;
+    composerDraft: string;
 
     hydrateSession: (session: ChatSession) => void;
     hydrateSettings: (settings: AgentSettings) => void;
@@ -24,11 +25,7 @@ interface AgentState {
     clearSession: () => void;
     toggleSettings: () => void;
     setPipelineProgress: (progress: PipelineProgress) => void;
-    
-    /**
-     * Updates an operation with full metadata synchronization.
-     * Prevents UI desync for resiliently resolved paths and global conflict candidate lists.
-     */
+    setComposerDraft: (draft: string) => void;
     updateOperationStatus: (
         operationId: string, 
         status: OperationStatus,
@@ -46,6 +43,7 @@ export const useAgentStore = create<AgentState>((set) => ({
     isSettingsOpen: false,
     isPromptCopied: false,
     pipelineProgress: { stage: 'idle', current: 0, total: 0 },
+    composerDraft: '',
 
     hydrateSession: (session: ChatSession) => set({ messages: session.messages }),
     hydrateSettings: (settings: AgentSettings) => set({ settings }),
@@ -54,6 +52,7 @@ export const useAgentStore = create<AgentState>((set) => ({
     clearSession: () => set({ messages: [] }),
     toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
     setPipelineProgress: (progress: PipelineProgress) => set({ pipelineProgress: progress }),
+    setComposerDraft: (draft: string) => set({ composerDraft: draft }),
 
     updateOperationStatus: (
         operationId: string, 

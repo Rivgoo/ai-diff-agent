@@ -1,4 +1,4 @@
-import type { ConflictDetails, Position, Range, ConflictReason } from './contracts';
+import type { ConflictDetails, Position, Range, ConflictReason, PayloadSummary } from './contracts';
 
 // Correctly re-exporting type system definitions to ensure TransactionManager compilation
 export type { ConflictDetails, ConflictReason, Position, Range };
@@ -45,6 +45,8 @@ export interface ChatMessage {
     timestamp: number;
     operations?: DiffOperation[];
     errorDetails?: string;
+    payloadSummary?: PayloadSummary;
+    isOptimisticPending?: boolean;
 }
 
 export interface ChatSession {
