@@ -1,0 +1,58 @@
+name: Generate Production VSIX Package
+
+on:
+  workflow_dispatch:
+    description: "Manual trigger to compile and package the production-ready VSIX artifact"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository with Complete History
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Pull all history and tags for accurate commit offsets
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Project Dependencies
+        run: npm ci
+
+      - name: Dynamic Version Synthesis
+        id: calculate-version
+        run: node scripts/ci/calculate-version.js
+
+      - name: Mutate package.json Manifest
+        run: node scripts/ci/prepare-manifest.js
+
+      - name: Compile Extension and Webview Assets
+        run: npm run build
+
+      - name: Pack Extension into VSIX
+        run: |
+          npx @vscode/vsce package --no-dependencies --out "ai-diff-agent-${{ env.DYNAMIC_VERSION }}.vsix"
+
+      - name: Verify Package Integrity (SHA-256)
+        run: |
+          echo "=== Packaging Complete ==="
+          ls -lh *.vsix
+          echo "=== Generating Checksum ==="
+          sha256sum "ai-diff-agent-${{ env.DYNAMIC_VERSION }}.vsix" > "ai-diff-agent-${{ env.DYNAMIC_VERSION }}.vsix.sha256"
+          cat "ai-diff-agent-${{ env.DYNAMIC_VERSION }}.vsix.sha256"
+
+      - name: Publish VSIX Package as Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "ai-diff-agent-${{ env.DYNAMIC_VERSION }}"
+          path: |
+            ai-diff-agent-${{ env.DYNAMIC_VERSION }}.vsix
+            ai-diff-agent-${{ env.DYNAMIC_VERSION }}.vsix.sha256
+          retention-days: 14
+          if-no-files-found: error
