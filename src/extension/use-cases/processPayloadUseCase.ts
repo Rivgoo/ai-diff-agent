@@ -88,6 +88,17 @@ export class ProcessPayloadUseCase {
             // Step 3: Run the Transaction batch
             await this.transactionManager.applyBatch(operations);
 
+            // Step 4: Verify Transaction Batch Result for Atomic Fallback Notifications
+            const hasConflicts = operations.some(op => op.status === 'conflict');
+            if (hasConflicts) {
+                this.sessionManager.addMessage({
+                    id: Date.now().toString(),
+                    role: 'system',
+                    text: 'Could not apply changes. The transaction was automatically rolled back to prevent incomplete code modifications. Please resolve the search pattern conflicts listed below.',
+                    timestamp: Date.now()
+                });
+            }
+
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Unknown compilation or parsing failure';
             

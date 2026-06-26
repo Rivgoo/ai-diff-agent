@@ -1,3 +1,5 @@
+import type { ConflictDetails, Position, Range } from '@/shared/contracts';
+
 export interface ChangeStats {
     readonly additions: number;
     readonly deletions: number;
@@ -10,16 +12,6 @@ export type OperationType = 'create_file' | 'update_file' | 'delete_path' | 'mov
 export interface AgentSettings {
     autoScroll: boolean;
     strictParsing: boolean;
-}
-
-export interface Position {
-    readonly line: number;
-    readonly character: number;
-}
-
-export interface Range {
-    readonly start: Position;
-    readonly end: Position;
 }
 
 export interface ChangeBlock {
@@ -38,6 +30,7 @@ export interface DiffOperation {
     destinationPath?: string;
     errorMessage?: string;
     stats?: ChangeStats;
+    conflict?: ConflictDetails;
 }
 
 export interface ChatMessage {

@@ -1,3 +1,10 @@
+.cardContainer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-bottom: 6px;
+}
+
 .card {
     display: flex;
     flex-direction: column;
@@ -5,9 +12,8 @@
     background-color: var(--vscode-editor-background);
     border: 1px solid var(--vscode-panel-border);
     border-radius: 4px;
-    margin-bottom: 4px;
     cursor: pointer;
-    transition: background-color 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
     user-select: none;
     text-align: left;
     width: 100%;
@@ -18,7 +24,19 @@
 }
 
 .cardConflict {
-    border-color: var(--vscode-testing-iconFailed);
+    border-color: var(--vscode-inputValidation-errorBorder);
+    background-color: var(--vscode-inputValidation-errorBackground);
+    opacity: 0.95;
+}
+
+.cardConflict:hover {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    filter: brightness(1.05);
+}
+
+.cardConflict:focus-within {
+    border-color: var(--vscode-editorError-foreground);
+    box-shadow: 0 0 0 1px var(--vscode-editorError-foreground);
 }
 
 .headerRow {
@@ -123,14 +141,4 @@
     color: var(--vscode-gitDecoration-deletedResourceForeground);
     display: flex;
     align-items: center;
-}
-
-.errorBox {
-    margin-top: 4px;
-    font-size: 10.5px;
-    color: var(--vscode-editorError-foreground);
-    background-color: var(--vscode-inputValidation-errorBackground);
-    border: 1px solid var(--vscode-inputValidation-errorBorder);
-    padding: 3px 6px;
-    border-radius: 3px;
 }

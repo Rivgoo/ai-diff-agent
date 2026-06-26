@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { DiffOperation } from '@/shared/models';
 import { useIPC } from '@/webview/hooks/useIPC';
 import { Badge } from '@/webview/shared/ui/Badge/Badge';
+import { ConflictDetailsPanel } from '@/webview/features/review/ConflictDetailsPanel';
 import { 
     IconCheck, IconPlus, IconMinus, IconAlertCircle, IconFile, 
     IconFolder, IconFolderPlus, IconEdit, IconExternalLink, 
@@ -42,51 +43,53 @@ export const DiffReviewCard = ({ operation }: { readonly operation: DiffOperatio
     };
 
     return (
-        <button 
-            type="button"
-            onClick={() => sendEvent({ type: 'OPEN_FILE', operationId: operation.id })}
-            className={`${styles.card} ${isConflict ? styles.cardConflict : ''}`}
-            style={{ borderLeft: `3px solid ${badge ? badge.bg : 'var(--vscode-badge-background)'}` }}
-            aria-label={`Review ${operation.type} on ${fileName}`}
-        >
-            <div className={styles.headerRow}>
-                <div className={styles.metaGroup}>
-                    <div className={styles.iconBox}><TypeIcon size={15} aria-hidden="true" /></div>
-                    <div className={styles.textStack}>
-                        <div className={styles.titleRow}>
-                            <span className={styles.fileName} title={operation.path}>{fileName}</span>
-                            {badge && (
-                                <Badge backgroundColor={badge.bg} color={badge.color}>
-                                    {badge.icon}{badge.label}
-                                </Badge>
+        <div className={styles.cardContainer}>
+            <button 
+                type="button"
+                onClick={() => sendEvent({ type: 'OPEN_FILE', operationId: operation.id })}
+                className={`${styles.card} ${isConflict ? styles.cardConflict : ''}`}
+                style={{ borderLeft: `3px solid ${badge ? badge.bg : 'var(--vscode-badge-background)'}` }}
+                aria-label={`Review ${operation.type} on ${fileName}`}
+            >
+                <div className={styles.headerRow}>
+                    <div className={styles.metaGroup}>
+                        <div className={styles.iconBox}><TypeIcon size={15} aria-hidden="true" /></div>
+                        <div className={styles.textStack}>
+                            <div className={styles.titleRow}>
+                                <span className={styles.fileName} title={operation.path}>{fileName}</span>
+                                {badge && (
+                                    <Badge backgroundColor={badge.bg} color={badge.color}>
+                                        {badge.icon}{badge.label}
+                                    </Badge>
+                                )}
+                            </div>
+
+                            {operation.type === 'move_path' && operation.sourcePath && operation.destinationPath ? (
+                                <div className={styles.movePathBlock}>
+                                    <span className={styles.moveSrc}>{operation.sourcePath}</span>
+                                    <span className={styles.moveDest}><IconArrowRight size={10} aria-hidden="true" /> {operation.destinationPath}</span>
+                                </div>
+                            ) : (
+                                parentPath && <span className={styles.pathInfo} title={parentPath}>{parentPath}</span>
                             )}
                         </div>
+                    </div>
 
-                        {operation.type === 'move_path' && operation.sourcePath && operation.destinationPath ? (
-                            <div className={styles.movePathBlock}>
-                                <span className={styles.moveSrc}>{operation.sourcePath}</span>
-                                <span className={styles.moveDest}><IconArrowRight size={10} aria-hidden="true" /> {operation.destinationPath}</span>
+                    <div className={styles.statsGroup}>
+                        {operation.stats && (
+                            <div className={styles.statPills}>
+                                {operation.stats.additions > 0 && <span className={styles.addStat}><IconPlus size={10} strokeWidth={3} />{operation.stats.additions}</span>}
+                                {operation.stats.deletions > 0 && <span className={styles.delStat}><IconMinus size={10} strokeWidth={3} />{operation.stats.deletions}</span>}
                             </div>
-                        ) : (
-                            parentPath && <span className={styles.pathInfo} title={parentPath}>{parentPath}</span>
                         )}
+                        {renderStatusIcon()}
                     </div>
                 </div>
+            </button>
 
-                <div className={styles.statsGroup}>
-                    {operation.stats && (
-                        <div className={styles.statPills}>
-                            {operation.stats.additions > 0 && <span className={styles.addStat}><IconPlus size={10} strokeWidth={3} />{operation.stats.additions}</span>}
-                            {operation.stats.deletions > 0 && <span className={styles.delStat}><IconMinus size={10} strokeWidth={3} />{operation.stats.deletions}</span>}
-                        </div>
-                    )}
-                    {renderStatusIcon()}
-                </div>
-            </div>
-
-            {isConflict && operation.errorMessage && (
-                <div className={styles.errorBox}>{operation.errorMessage}</div>
+            {isConflict && operation.conflict && (
+                <ConflictDetailsPanel conflict={operation.conflict} />
             )}
-        </button>
+        </div>
     );
 };

@@ -9,11 +9,20 @@ export const StickyBatchBar = () => {
     const { sendEvent } = useIPC();
     const messages = useAgentStore((state) => state.messages);
     
-    // Derived state calculated during render (Rule 02)
-    const dirtyOps = messages.flatMap(msg => msg.operations || [])
-        .filter(op => op.status === 'applied_dirty' || op.status === 'conflict');
+    // Flat-map all diff operations in the active chat session context
+    const allOps = messages.flatMap(msg => msg.operations || []);
 
-    if (dirtyOps.length === 0) return null;
+    // Safety check: Abort rendering entirely if any operation resolved to a conflict state
+    const hasConflicts = allOps.some(op => op.status === 'conflict' || op.status === 'error');
+    if (hasConflicts) {
+        return null;
+    }
+
+    // Capture pending and staging modifications for the summary metrics
+    const dirtyOps = allOps.filter(op => op.status === 'applied_dirty');
+    if (dirtyOps.length === 0) {
+        return null;
+    }
 
     let addedFiles = 0, addedFolders = 0, deletedFiles = 0, deletedFolders = 0, updatedFiles = 0, movedPaths = 0;
     let totalAdditions = 0, totalDeletions = 0;

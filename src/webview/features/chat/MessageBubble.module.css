@@ -36,6 +36,25 @@
     color: var(--vscode-editorError-foreground);
 }
 
+.contentLayout {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+}
+
+.systemIconBox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+    flex-shrink: 0;
+}
+
+.systemIcon {
+    color: var(--vscode-editorError-foreground);
+}
+
 .operationsList {
     margin-top: 4px;
     display: flex;

@@ -11,12 +11,31 @@ export interface Range {
     readonly end: Position;
 }
 
+/**
+ * Diagnostic categorization of transactional conflict triggers.
+ */
+export type ConflictReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'PATH_TRAVERSAL' | 'FILE_NOT_FOUND' | 'UNKNOWN';
+
+/**
+ * Encapsulates matching failure telemetry used by presentation components
+ * to describe conflict resolution strategies to the user.
+ */
+export interface ConflictDetails {
+    readonly reason: ConflictReason;
+    readonly blockIndex: number;
+    readonly totalBlocks: number;
+    readonly searchExcerpt: string;
+    readonly originalSearchBlock: string;
+    readonly matchesFound?: number;
+}
+
 export interface BaseOperation {
     readonly id: string;
     readonly type: OperationType;
     readonly path: string;
     status: OperationStatus;
     errorMessage?: string;
+    conflict?: ConflictDetails;
 }
 
 export type MatchFailureReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'EMPTY_SEARCH_BLOCK';

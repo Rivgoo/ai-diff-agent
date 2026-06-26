@@ -1,6 +1,7 @@
 import type { ChatMessage, DiffOperation } from '@/shared/models';
 import { ErrorAlert } from './ErrorAlert';
 import { DiffReviewCard } from '@/webview/features/review/DiffReviewCard';
+import { IconAlertTriangle } from '@tabler/icons-react';
 import styles from './MessageBubble.module.css';
 
 interface MessageBubbleProps {
@@ -16,8 +17,15 @@ export const MessageBubble = ({ message }: MessageBubbleProps) => {
 
     return (
         <div className={containerClass}>
-            <div className={textClass}>
-                {message.text}
+            <div className={styles.contentLayout}>
+                {isSystem && (
+                    <div className={styles.systemIconBox}>
+                        <IconAlertTriangle size={15} className={styles.systemIcon} aria-hidden="true" />
+                    </div>
+                )}
+                <div className={textClass}>
+                    {message.text}
+                </div>
             </div>
 
             {message.errorDetails && <ErrorAlert details={message.errorDetails} />}
