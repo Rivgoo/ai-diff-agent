@@ -1,6 +1,7 @@
 import { Result } from '../../shared/contracts';
 import type { AnyOperation, ChangeBlock } from '../models/operations';
 import { StreamScanner, type Token } from '../lexer/scanner';
+import { PathSanitizer } from '../workspace/pathSanitizer';
 
 /**
  * Main AST DSL Parser.
@@ -90,6 +91,7 @@ export class DSLParser {
 
     /**
      * Evaluates a single operation block (create, update, delete, move, create_dir).
+     * Integrates Ingestion Path Sanitization to eliminate control characters and whitespace immediately.
      */
     private tryParseOperation(tokens: Token[], startIdx: number): { operation: AnyOperation; nextIndex: number } | null {
         const token = tokens[startIdx];
@@ -98,7 +100,8 @@ export class DSLParser {
             return null;
         }
 
-        const path = token.attributes.path;
+        const rawPath = token.attributes.path;
+        const path = rawPath ? PathSanitizer.sanitize(rawPath) : undefined;
         const id = this.generateId();
 
         if (token.name === 'create_file' && path) {
@@ -137,8 +140,10 @@ export class DSLParser {
         }
 
         if (token.name === 'move_path') {
-            const src = token.attributes.src;
-            const dest = token.attributes.dest;
+            const rawSrc = token.attributes.src;
+            const rawDest = token.attributes.dest;
+            const src = rawSrc ? PathSanitizer.sanitize(rawSrc) : undefined;
+            const dest = rawDest ? PathSanitizer.sanitize(rawDest) : undefined;
             if (src && dest) {
                 return {
                     operation: {
