@@ -6,7 +6,7 @@ import { ConflictDetailsPanel } from './ConflictDetailsPanel';
 import { 
     IconCheck, IconPlus, IconMinus, IconAlertCircle, IconFile, 
     IconFolder, IconFolderPlus, IconEdit, IconExternalLink, 
-    IconArrowBackUp, IconArrowRight, IconAlertTriangle 
+    IconArrowBackUp, IconArrowRight, IconAlertTriangle, IconX 
 } from '@tabler/icons-react';
 import styles from './DiffReviewCard.module.css';
 
@@ -32,8 +32,10 @@ export const DiffReviewCard = ({ operation }: { readonly operation: DiffOperatio
     const TypeIcon = isDirectory ? IconFolder : IconFile;
 
     const badge = BADGE_CONFIG[operation.type];
-    const isConflict = operation.status === 'conflict';
     const isResilient = operation.resolvedResiliently === true;
+
+    // A card is only visually highlighted as an active error/conflict if it contains real mismatch details
+    const isConflict = operation.status === 'conflict' && operation.conflict !== undefined;
 
     const pathParts = operation.path.split('/');
     const fileName = pathParts.pop() ?? operation.path;
@@ -52,6 +54,10 @@ export const DiffReviewCard = ({ operation }: { readonly operation: DiffOperatio
         }
         if (isConflict) {
             return <IconAlertCircle size={size} color="var(--vscode-testing-iconFailed)" title="Conflict" />;
+        }
+        // Neutral indicator for valid operations cancelled because of another faulty file in the batch
+        if (operation.status === 'conflict') {
+            return <IconX size={size} color="var(--vscode-descriptionForeground)" title="Aborted due to other errors in this batch" />;
         }
         return null;
     };
