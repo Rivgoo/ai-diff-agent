@@ -39,9 +39,6 @@ export class DecorationService {
         this.triggerUpdateDecorations();
     }
 
-    /**
-     * Frees memory and clears decoration cache for a specific closed document.
-     */
     public clearDecorationsForDocument(uri: vscode.Uri): void {
         const key = uri.toString();
         if (this.activeDecorations.has(key)) {
@@ -52,6 +49,22 @@ export class DecorationService {
     public clearAllDecorations(): void {
         this.activeDecorations.clear();
         this.triggerUpdateDecorations();
+    }
+
+    /**
+     * Повертає список координат (Ranges) для конкретної операції.
+     * Використовується для автоматичного фокусування та прокрутки екрана.
+     */
+    public getRangesForOp(opId: string): vscode.Range[] {
+        const result: vscode.Range[] = [];
+        for (const decs of this.activeDecorations.values()) {
+            for (const d of decs) {
+                if (d.opId === opId) {
+                    result.push(d.range);
+                }
+            }
+        }
+        return result;
     }
 
     public updateDecorationsForEditor(editor: vscode.TextEditor): void {

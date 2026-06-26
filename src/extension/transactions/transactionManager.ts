@@ -97,11 +97,9 @@ export class TransactionManager {
                 }
 
                 if (resolution.status === 'RESOLVED_RESILIENTLY') {
-                    // Мутація DTO дозволена тут, оскільки це нормалізація шляху перед застосуванням
                     (op as any).resolvedResiliently = true;
                     (op as any).originalPath = op.path;
                     (op as any).path = resolution.resolvedPath;
-                    OutputLogger.log(`Resolved path mapping: ${normalizedPath} -> ${resolution.resolvedPath}`, 'WARN');
                 }
 
                 const finalPath = PathNormalizer.normalize(op.path, rootName);
@@ -177,7 +175,6 @@ export class TransactionManager {
         const opAntiActionsMap = new Map<string, AntiAction[]>();
 
         try {
-            // Структурування директорій безпосередньо перед записом
             for (const op of operations) {
                 if (op.status !== 'pending') continue;
                 
@@ -200,13 +197,18 @@ export class TransactionManager {
                 opAntiActionsMap.set(op.id, antiActions);
             }
 
-            // Наповнення WorkspaceEdit
             for (const op of operations) {
                 if (op.status !== 'pending') continue;
 
                 const normalizedPath = PathNormalizer.normalize(op.path, rootName);
                 const targetUri = PathSandbox.validate(normalizedPath);
-                const antiActions = opAntiActionsMap.get(op.id) || [];
+                
+                // ВИПРАВЛЕННЯ: Безпечно отримуємо масив бекапів зі словника, або створюємо новий і ЗБЕРІГАЄМО його
+                let antiActions = opAntiActionsMap.get(op.id);
+                if (!antiActions) {
+                    antiActions = [];
+                    opAntiActionsMap.set(op.id, antiActions);
+                }
 
                 if (isCreateFileOperation(op)) {
                     edit.createFile(targetUri, { ignoreIfExists: true });
@@ -226,9 +228,7 @@ export class TransactionManager {
                         await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
                         edit.deleteFile(targetUri, { ignoreIfNotExists: true, recursive: true });
                         antiActions.push({ type: 'restore_file', uri: targetUri, relativePath: normalizedPath });
-                    } catch {
-                        // Файл вже відсутній
-                    }
+                    } catch { /* ignore */ }
                 }
                 else if (isMovePathOperation(op)) {
                     const normalizedDest = PathNormalizer.normalize(op.destinationPath, rootName);
@@ -317,14 +317,11 @@ export class TransactionManager {
         } catch (err) {
             OutputLogger.log(`Failed to execute workspace modifications: ${err}`, 'ERROR');
             
-            // Відкат порожніх директорій
             localCreatedDirs.sort((a, b) => b.fsPath.length - a.fsPath.length);
             for (const dirUri of localCreatedDirs) {
                 try {
                     await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
-                } catch {
-                    // Ігноруємо помилки очищення
-                }
+                } catch { /* ignore */ }
             }
 
             for (const op of operations) {
@@ -368,56 +365,62 @@ export class TransactionManager {
     }
 
     public async saveBatch(): Promise<void> {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) return;
-        
         const txIds = this.store.getAllIds();
-
         for (const id of txIds) {
-            const tx = this.store.getTransaction(id);
-            if (!tx) continue;
-
-            for (const act of tx.antiActions) {
-                const targetUri = (act as any).uri || (act as any).destinationUri;
-                if (!targetUri) continue;
-                try {
-                    const doc = await vscode.workspace.openTextDocument(targetUri);
-                    if (doc.isDirty) await doc.save();
-                } catch {
-                    // Safe ignore
-                }
-            }
-            this.statusCallback(id, 'saved');
-            this.store.clearTransaction(id);
-            this.transactionLock.release(id);
-            await this.snapshotService.purgeSnapshotForOp(workspaceFolders[0].uri, id);
+            await this.saveOperation(id);
         }
-
-        this.decorationService.clearAllDecorations();
         OutputLogger.log('Batch saved successfully.');
     }
 
     public async revertBatch(): Promise<void> {
+        const txIds = this.store.getAllIds();
+        for (const id of txIds) {
+            await this.revertOperation(id);
+        }
+        OutputLogger.log('Batch reverted successfully.');
+    }
+
+    public async saveOperation(opId: string): Promise<void> {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders) return;
+        
+        const tx = this.store.getTransaction(opId);
+        if (!tx) return;
+
+        for (const act of tx.antiActions) {
+            const targetUri = (act as any).uri || (act as any).destinationUri;
+            if (!targetUri) continue;
+            try {
+                const doc = await vscode.workspace.openTextDocument(targetUri);
+                if (doc.isDirty) await doc.save();
+            } catch { /* ignore */ }
+        }
+
+        this.statusCallback(opId, 'saved');
+        this.store.clearTransaction(opId);
+        this.transactionLock.release(opId);
+        this.decorationService.clearDecorationsForOp(opId);
+        await this.snapshotService.purgeSnapshotForOp(workspaceFolders[0].uri, opId);
+    }
+
+    public async revertOperation(opId: string): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
         const rootUri = workspaceFolders[0].uri;
 
-        const txIds = this.store.getAllIds();
+        const tx = this.store.getTransaction(opId);
+        if (!tx) return;
+
         const edit = new vscode.WorkspaceEdit();
         const directoriesToDelete: vscode.Uri[] = [];
         const directoriesToRestore: vscode.Uri[] = [];
 
-        for (const id of txIds) {
-            const tx = this.store.getTransaction(id);
-            if (!tx) continue;
-
-            for (let i = tx.antiActions.length - 1; i >= 0; i--) {
-                const act = tx.antiActions[i];
-                if (act.type === 'delete_created') edit.deleteFile(act.uri, { ignoreIfNotExists: true });
-                else if (act.type === 'restore_move') edit.deleteFile(act.destinationUri, { ignoreIfNotExists: true });
-                else if (act.type === 'delete_dir_if_empty') directoriesToDelete.push(act.uri);
-                else if (act.type === 'restore_dir') directoriesToRestore.push(act.uri);
-            }
+        for (let i = tx.antiActions.length - 1; i >= 0; i--) {
+            const act = tx.antiActions[i];
+            if (act.type === 'delete_created') edit.deleteFile(act.uri, { ignoreIfNotExists: true });
+            else if (act.type === 'restore_move') edit.deleteFile(act.destinationUri, { ignoreIfNotExists: true });
+            else if (act.type === 'delete_dir_if_empty') directoriesToDelete.push(act.uri);
+            else if (act.type === 'restore_dir') directoriesToRestore.push(act.uri);
         }
 
         await vscode.workspace.applyEdit(edit);
@@ -426,36 +429,25 @@ export class TransactionManager {
         for (const dirUri of directoriesToDelete) {
             try {
                 const contents = await vscode.workspace.fs.readDirectory(dirUri);
-                if (contents.length === 0) {
-                    await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
-                }
-            } catch { /* Ignore */ }
+                if (contents.length === 0) await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
+            } catch { /* ignore */ }
         }
 
         directoriesToRestore.sort((a, b) => a.fsPath.length - b.fsPath.length);
         for (const dirUri of directoriesToRestore) {
-            try { await vscode.workspace.fs.createDirectory(dirUri); } catch { /* Ignore */ }
+            try { await vscode.workspace.fs.createDirectory(dirUri); } catch { /* ignore */ }
         }
 
-        for (const id of txIds) {
-            const tx = this.store.getTransaction(id);
-            if (!tx) continue;
-
-            for (const act of tx.antiActions) {
-                if (act.type === 'restore_file') await this.snapshotService.restoreSnapshot(rootUri, id, act.relativePath, act.uri);
-                else if (act.type === 'restore_move') await this.snapshotService.restoreSnapshot(rootUri, id, act.relativeSourcePath, act.sourceUri);
-            }
+        for (const act of tx.antiActions) {
+            if (act.type === 'restore_file') await this.snapshotService.restoreSnapshot(rootUri, opId, act.relativePath, act.uri);
+            else if (act.type === 'restore_move') await this.snapshotService.restoreSnapshot(rootUri, opId, act.relativeSourcePath, act.sourceUri);
         }
 
-        for (const id of txIds) {
-            this.statusCallback(id, 'reverted');
-            this.store.clearTransaction(id);
-            this.transactionLock.release(id);
-            await this.snapshotService.purgeSnapshotForOp(rootUri, id);
-        }
-
-        this.decorationService.clearAllDecorations();
-        OutputLogger.log('Batch reverted successfully.');
+        this.statusCallback(opId, 'reverted');
+        this.store.clearTransaction(opId);
+        this.transactionLock.release(opId);
+        this.decorationService.clearDecorationsForOp(opId);
+        await this.snapshotService.purgeSnapshotForOp(rootUri, opId);
     }
 
     private async trackAndCreateDirectory(rootUri: vscode.Uri, targetDir: vscode.Uri, antiActions: AntiAction[]): Promise<void> {

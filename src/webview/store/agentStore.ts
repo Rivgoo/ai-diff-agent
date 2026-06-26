@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChatMessage, ChatSession, AgentSettings, OperationStatus } from '../../shared/models';
+import type { ChatSession, AgentSettings, OperationStatus } from '../../shared/models';
 import type { PipelineStage } from '../../shared/ipc';
 import type { ConflictDetails } from '../../shared/contracts';
 
@@ -10,7 +10,8 @@ interface PipelineProgress {
 }
 
 interface AgentState {
-    messages: ChatMessage[];
+    sessions: Record<string, ChatSession>;
+    activeSessionId: string;
     isAgentTyping: boolean;
     settings: AgentSettings;
     isSettingsOpen: boolean;
@@ -18,14 +19,14 @@ interface AgentState {
     pipelineProgress: PipelineProgress;
     composerDraft: string;
 
-    hydrateSession: (session: ChatSession) => void;
+    hydrateSession: (sessions: Record<string, ChatSession>, activeId: string) => void;
     hydrateSettings: (settings: AgentSettings) => void;
     setAgentTyping: (isTyping: boolean) => void;
     setPromptCopied: (copied: boolean) => void;
-    clearSession: () => void;
     toggleSettings: () => void;
     setPipelineProgress: (progress: PipelineProgress) => void;
     setComposerDraft: (draft: string) => void;
+    
     updateOperationStatus: (
         operationId: string, 
         status: OperationStatus,
@@ -37,7 +38,8 @@ interface AgentState {
 }
 
 export const useAgentStore = create<AgentState>((set) => ({
-    messages: [],
+    sessions: {},
+    activeSessionId: '',
     isAgentTyping: false,
     settings: { autoScroll: true, strictParsing: false },
     isSettingsOpen: false,
@@ -45,30 +47,25 @@ export const useAgentStore = create<AgentState>((set) => ({
     pipelineProgress: { stage: 'idle', current: 0, total: 0 },
     composerDraft: '',
 
-    hydrateSession: (session: ChatSession) => set({ messages: session.messages }),
-    hydrateSettings: (settings: AgentSettings) => set({ settings }),
-    setAgentTyping: (isTyping: boolean) => set({ isAgentTyping: isTyping }),
-    setPromptCopied: (copied: boolean) => set({ isPromptCopied: copied }),
-    clearSession: () => set({ messages: [] }),
+    hydrateSession: (sessions, activeId) => set({ sessions, activeSessionId: activeId }),
+    hydrateSettings: (settings) => set({ settings }),
+    setAgentTyping: (isTyping) => set({ isAgentTyping: isTyping }),
+    setPromptCopied: (copied) => set({ isPromptCopied: copied }),
     toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
-    setPipelineProgress: (progress: PipelineProgress) => set({ pipelineProgress: progress }),
-    setComposerDraft: (draft: string) => set({ composerDraft: draft }),
+    setPipelineProgress: (progress) => set({ pipelineProgress: progress }),
+    setComposerDraft: (draft) => set({ composerDraft: draft }),
 
-    updateOperationStatus: (
-        operationId: string, 
-        status: OperationStatus,
-        resolvedResiliently?: boolean,
-        originalPath?: string,
-        path?: string,
-        conflict?: ConflictDetails
-    ) =>
-        set((state) => ({
-            messages: state.messages.map((msg) => {
+    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict) =>
+        set((state) => {
+            const activeSession = state.sessions[state.activeSessionId];
+            if (!activeSession) return state;
+
+            const updatedMessages = activeSession.messages.map((msg) => {
                 if (!msg.operations) return msg;
                 const opIndex = msg.operations.findIndex((o) => o.id === operationId);
                 if (opIndex === -1) return msg;
-                const updatedOps = [...msg.operations];
                 
+                const updatedOps = [...msg.operations];
                 updatedOps[opIndex] = { 
                     ...updatedOps[opIndex], 
                     status,
@@ -78,6 +75,16 @@ export const useAgentStore = create<AgentState>((set) => ({
                     conflict: conflict ?? updatedOps[opIndex].conflict
                 };
                 return { ...msg, operations: updatedOps };
-            })
-        }))
+            });
+
+            return {
+                sessions: {
+                    ...state.sessions,
+                    [state.activeSessionId]: {
+                        ...activeSession,
+                        messages: updatedMessages
+                    }
+                }
+            };
+        })
 }));

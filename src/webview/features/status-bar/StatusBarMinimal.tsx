@@ -16,9 +16,11 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
 export const StatusBarMinimal = () => {
     const { sendEvent } = useIPC();
     const { stage } = useAgentStore((state) => state.pipelineProgress);
-    const messages = useAgentStore((state) => state.messages);
+    
+    // БЕЗПЕЧНЕ ОТРИМАННЯ ПОВІДОМЛЕНЬ
+    const activeSessionId = useAgentStore((state) => state.activeSessionId);
+    const messages = useAgentStore((state) => state.sessions[activeSessionId]?.messages) || [];
 
-    // Find the latest message that contains operations to isolate from historical timeline
     const latestMsgWithOps = [...messages].reverse().find(msg => msg.operations && msg.operations.length > 0);
     const activeOps = latestMsgWithOps ? (latestMsgWithOps.operations || []) : [];
 
@@ -26,18 +28,12 @@ export const StatusBarMinimal = () => {
     const hasConflicts = activeOps.some(op => op.status === 'conflict' || op.status === 'error');
 
     const isProcessing = stage !== 'idle' && stage !== 'error';
-
-    // Conditional Collapsing Guard: 
-    // If the pipeline is completely idle, and there are no active dirty files, 
-    // or if the latest batch was aborted due to conflicts/failures, collapse the component entirely.
-    // This removes the 30px offset padding and border and brings the composer flush with the messages container.
     const hasActiveContent = isProcessing || (dirtyOps.length > 0 && !hasConflicts);
 
     if (!hasActiveContent) {
         return null; 
     }
 
-    // Calculate granular stats dynamically across the active uncommitted batch
     let added = 0;
     let modified = 0;
     let deleted = 0;
@@ -45,13 +41,9 @@ export const StatusBarMinimal = () => {
     let totalDeletions = 0;
 
     dirtyOps.forEach(op => {
-        if (op.type === 'create_file' || op.type === 'create_dir') {
-            added++;
-        } else if (op.type === 'update_file' || op.type === 'move_path') {
-            modified++;
-        } else if (op.type === 'delete_path') {
-            deleted++;
-        }
+        if (op.type === 'create_file' || op.type === 'create_dir') added++;
+        else if (op.type === 'update_file' || op.type === 'move_path') modified++;
+        else if (op.type === 'delete_path') deleted++;
 
         if (op.stats) {
             totalAdditions += op.stats.additions;
@@ -75,30 +67,11 @@ export const StatusBarMinimal = () => {
                 ) : (
                     dirtyOps.length > 0 && (
                         <div className={styles.metricsList}>
-                            {added > 0 && (
-                                <span>
-                                    <span className={styles.metricAdd}>+A</span> <span className={styles.metricValue}>{added}</span>
-                                </span>
-                            )}
-                            {modified > 0 && (
-                                <span>
-                                    {added > 0 && <span className={styles.separator}>·</span>}
-                                    <span className={styles.metricMod}>~M</span> <span className={styles.metricValue}>{modified}</span>
-                                </span>
-                            )}
-                            {deleted > 0 && (
-                                <span>
-                                    {(added > 0 || modified > 0) && <span className={styles.separator}>·</span>}
-                                    <span className={styles.metricDel}>-D</span> <span className={styles.metricValue}>{deleted}</span>
-                                </span>
-                            )}
-                            
+                            {added > 0 && <span><span className={styles.metricAdd}>+A</span> <span className={styles.metricValue}>{added}</span></span>}
+                            {modified > 0 && <span>{added > 0 && <span className={styles.separator}>·</span>}<span className={styles.metricMod}>~M</span> <span className={styles.metricValue}>{modified}</span></span>}
+                            {deleted > 0 && <span>{(added > 0 || modified > 0) && <span className={styles.separator}>·</span>}<span className={styles.metricDel}>-D</span> <span className={styles.metricValue}>{deleted}</span></span>}
                             {(totalAdditions > 0 || totalDeletions > 0) && (
-                                <span className={styles.impactDiff}>
-                                    (<span className={styles.metricAdd}>+{totalAdditions}</span>
-                                    {'/'}
-                                    <span className={styles.metricDel}>-{totalDeletions}</span>)
-                                </span>
+                                <span className={styles.impactDiff}>(<span className={styles.metricAdd}>+{totalAdditions}</span>{'/'}<span className={styles.metricDel}>-{totalDeletions}</span>)</span>
                             )}
                         </div>
                     )

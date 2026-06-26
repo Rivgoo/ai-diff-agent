@@ -16,12 +16,16 @@ export const ComposerProvider = ({ children }: ComposerProviderProps) => {
     const [value, setValue] = useState('');
 
     const toggleSettings = useAgentStore((state) => state.toggleSettings);
-    const messages = useAgentStore((state) => state.messages);
+    
+    // БЕЗПЕЧНЕ ОТРИМАННЯ ПОВІДОМЛЕНЬ
+    const activeSessionId = useAgentStore((state) => state.activeSessionId);
+    const messages = useAgentStore((state) => state.sessions[activeSessionId]?.messages) || [];
+    
     const { stage } = useAgentStore((state) => state.pipelineProgress);
     const composerDraft = useAgentStore((state) => state.composerDraft);
     const setComposerDraft = useAgentStore((state) => state.setComposerDraft);
 
-    const activeStages = ['parsing', 'validating', 'resolving', 'staging'];
+    const activeStages = ['parsing', 'validating', 'resolving', 'applying'];
     const isProcessing = activeStages.includes(stage);
     const isClearDisabled = messages.length === 0;
 
