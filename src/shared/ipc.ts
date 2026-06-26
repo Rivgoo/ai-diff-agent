@@ -1,4 +1,4 @@
-import { ChatSession, OperationStatus, AgentSettings } from './models';
+import type { ChatSession, OperationStatus, AgentSettings } from '@/shared/models';
 
 export type PipelineStage = 'idle' | 'parsing' | 'validating' | 'resolving' | 'applying' | 'error';
 

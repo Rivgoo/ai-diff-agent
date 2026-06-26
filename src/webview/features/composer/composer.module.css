@@ -1,0 +1,73 @@
+.frame {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 6px;
+    margin: 4px;
+    overflow: visible;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    flex-shrink: 0;
+}
+
+.frame:focus-within {
+    border-color: var(--vscode-focusBorder);
+    box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.textarea {
+    width: 100%;
+    min-height: 40px;
+    max-height: 300px;
+    padding: 10px 12px;
+    background-color: transparent;
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-editor-font-family);
+    font-size: 13px;
+    line-height: 1.5;
+    border: none;
+    outline: none;
+    resize: none;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.actionBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    position: relative;
+    top: -5px;
+}
+
+.leftGroup {
+    display: flex;
+    gap: 4px;
+}
+
+.rightGroup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.hints {
+    display: flex;
+    gap: 12px;
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    user-select: none;
+}
+
+.hints span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.hints kbd {
+    font-family: var(--vscode-editor-font-family);
+}

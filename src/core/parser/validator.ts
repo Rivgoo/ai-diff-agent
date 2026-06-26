@@ -1,9 +1,6 @@
-import { Result } from '../../shared/contracts';
-import { AnyOperation } from '../models/operations';
+import { Result } from '@/shared/contracts';
+import type { AnyOperation } from '@/core/models/operations';
 
-/**
- * Strict validator designed to parse schema bounds.
- */
 export class DomainValidator {
     
     public validate(operations: AnyOperation[]): Result<AnyOperation[]> {
@@ -12,7 +9,7 @@ export class DomainValidator {
         }
 
         for (const op of operations) {
-            const baseOp = op as any; // Cast safely for common base parameters
+            const baseOp = op as any; 
             
             if (!baseOp.path || baseOp.path.trim() === '') {
                 return Result.fail(new Error(`Operation of type '${baseOp.type}' has an empty or invalid path.`));

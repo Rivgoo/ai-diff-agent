@@ -1,15 +1,11 @@
-import { ISearchStrategy } from './searchPhase';
-import { IDocument } from './documentPort';
-import { MatchResult } from '../../shared/contracts';
+import type { ISearchStrategy } from '@/core/matcher/searchPhase';
+import type { IDocument } from '@/core/matcher/documentPort';
+import type { MatchResult } from '@/shared/contracts';
 
 function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/**
- * Exact Match Strategy.
- * Matches code block line-by-line verbatim, while remaining resilient to CRLF vs LF line endings.
- */
 export class ExactMatchStrategy implements ISearchStrategy {
     public readonly name = 'EXACT';
 

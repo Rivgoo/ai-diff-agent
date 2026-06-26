@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { ChatMessage, ChatSession, AgentSettings, OperationStatus } from '../../shared/models';
-import { PipelineStage } from '../../shared/ipc';
+import type { ChatMessage, ChatSession, AgentSettings, OperationStatus } from '@/shared/models';
+import type { PipelineStage } from '@/shared/ipc';
 
 interface PipelineProgress {
     stage: PipelineStage;

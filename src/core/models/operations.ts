@@ -1,4 +1,4 @@
-import { BaseOperation, Range } from '../../shared/contracts';
+import type { BaseOperation, Range } from '@/shared/contracts';
 
 export interface CreateFileOperation extends BaseOperation {
     readonly type: 'create_file';

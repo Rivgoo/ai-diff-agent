@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { SYSTEM_CONSTANTS } from '@/shared/constants';
 
 export type AntiAction = 
     | { type: 'delete_created'; uri: vscode.Uri }
@@ -10,11 +11,7 @@ export interface TransactionRecord {
     antiActions: AntiAction[];
 }
 
-/**
- * Memento-backed transaction record store.
- */
 export class CompensationStore {
-    private static readonly KEY = 'ai-diff-agent.transactions';
     private memoryStore = new Map<string, TransactionRecord>();
 
     constructor(private readonly storage: vscode.Memento) {
@@ -40,7 +37,7 @@ export class CompensationStore {
     }
 
     private load(): void {
-        const data = this.storage.get<TransactionRecord[]>(CompensationStore.KEY, []);
+        const data = this.storage.get<TransactionRecord[]>(SYSTEM_CONSTANTS.STORAGE_KEY_TRANSACTIONS, []);
         for (const record of data) {
             const hydratedActions = record.antiActions.map(action => {
                 const rawAct = action as any;
@@ -73,6 +70,6 @@ export class CompensationStore {
     }
 
     private persist(): void {
-        this.storage.update(CompensationStore.KEY, Array.from(this.memoryStore.values()));
+        this.storage.update(SYSTEM_CONSTANTS.STORAGE_KEY_TRANSACTIONS, Array.from(this.memoryStore.values()));
     }
 }

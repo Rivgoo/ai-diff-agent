@@ -1,11 +1,7 @@
-import { Result } from '../../shared/contracts';
-import { AnyOperation, ChangeBlock } from '../models/operations';
-import { StreamScanner, Token } from '../lexer/scanner';
+import { Result } from '@/shared/contracts';
+import type { AnyOperation, ChangeBlock } from '@/core/models/operations';
+import { StreamScanner, type Token } from '@/core/lexer/scanner';
 
-/**
- * Main parser responsible for translating the XML-like Token stream 
- * into fully validated domain operations.
- */
 export class DSLParser {
     private readonly scanner = new StreamScanner();
 
@@ -29,7 +25,6 @@ export class DSLParser {
                 index++;
             }
 
-            // Fallback: If no <workspace_edit> is found, attempt loose parsing of isolated tool blocks
             const looseResult = this.parseOperationsList(tokens, 0, tokens.length);
             return Result.ok(looseResult.operations);
 
@@ -58,7 +53,7 @@ export class DSLParser {
             }
         }
 
-        return Result.ok({ operations, nextIndex: index }); // Loose termination protection
+        return Result.ok({ operations, nextIndex: index }); 
     }
 
     private parseOperationsList(tokens: Token[], start: number, end: number): { operations: AnyOperation[] } {

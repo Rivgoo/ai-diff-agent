@@ -1,12 +1,9 @@
-import { IDocument } from './documentPort';
-import { MatchResult } from '../../shared/contracts';
-import { TextNormalizer } from './textNormalizer';
-import { ExactMatchStrategy } from './searchPhaseExact';
-import { FuzzyMatchStrategy } from './searchPhaseFuzzy';
+import type { IDocument } from '@/core/matcher/documentPort';
+import type { MatchResult } from '@/shared/contracts';
+import { TextNormalizer } from '@/core/matcher/textNormalizer';
+import { ExactMatchStrategy } from '@/core/matcher/searchPhaseExact';
+import { FuzzyMatchStrategy } from '@/core/matcher/searchPhaseFuzzy';
 
-/**
- * Coordinating Search Engine employing sequentially degrading strategies.
- */
 export class SearchEngine {
     private readonly strategies = [
         new ExactMatchStrategy(),

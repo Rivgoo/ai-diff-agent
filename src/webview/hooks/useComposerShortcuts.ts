@@ -1,4 +1,5 @@
-import { RefObject, useEffect } from 'react';
+import { useEffect } from 'react';
+import type { RefObject } from 'react';
 
 interface ShortcutHandlers {
     onSubmit: () => void;
@@ -6,11 +7,8 @@ interface ShortcutHandlers {
     onClear: () => void;
 }
 
-/**
- * Attaches standard IDE-like keyboard shortcuts to the composer input.
- */
 export const useComposerShortcuts = (
-    ref: RefObject<HTMLTextAreaElement>,
+    ref: RefObject<HTMLTextAreaElement | null>,
     handlers: ShortcutHandlers,
     isProcessing: boolean
 ) => {
@@ -19,17 +17,11 @@ export const useComposerShortcuts = (
         if (!el) return;
 
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Enter to submit (Shift+Enter allows standard newlines)
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (isProcessing) {
-                    handlers.onCancel();
-                } else {
-                    handlers.onSubmit();
-                }
+                if (isProcessing) handlers.onCancel();
+                else handlers.onSubmit();
             }
-            
-            // Escape to clear or cancel
             if (e.key === 'Escape') {
                 e.preventDefault();
                 handlers.onClear();

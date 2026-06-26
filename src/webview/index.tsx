@@ -1,6 +1,7 @@
-import React from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from './App';
+import { App } from '@/webview/app/App';
+import '@/webview/app/global.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -9,7 +10,7 @@ if (!rootElement) {
 
 const root = createRoot(rootElement);
 root.render(
-    <React.StrictMode>
+    <StrictMode>
         <App />
-    </React.StrictMode>
+    </StrictMode>
 );

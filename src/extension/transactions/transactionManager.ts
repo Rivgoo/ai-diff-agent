@@ -1,20 +1,16 @@
 import * as vscode from 'vscode';
-import { AnyOperation } from '../../core/models/operations';
-import { PathSandbox } from '../../vscode/workspace/pathSandbox';
-import { SearchEngine } from '../../core/matcher/searchEngine';
-import { VsCodeDocument } from '../../infrastructure/adapters/vsCodeDocument';
-import { OutputLogger } from '../../infrastructure/logging/outputLogger';
-import { PathNormalizer } from '../../core/workspace/pathNormalizer';
-import { CompensationStore, AntiAction } from './compensationStore';
-import { SnapshotService } from './snapshotService';
-import { EditorService } from './editorService';
-import { DecorationService } from './decorationService';
-import { OperationStatus } from '../../shared/models';
+import type { AnyOperation } from '@/core/models/operations';
+import { PathSandbox } from '@/vscode/workspace/pathSandbox';
+import { SearchEngine } from '@/core/matcher/searchEngine';
+import { VsCodeDocument } from '@/infrastructure/adapters/vsCodeDocument';
+import { OutputLogger } from '@/infrastructure/logging/outputLogger';
+import { PathNormalizer } from '@/core/workspace/pathNormalizer';
+import type { CompensationStore, AntiAction } from '@/extension/transactions/compensationStore';
+import { SnapshotService } from '@/extension/transactions/snapshotService';
+import { EditorService } from '@/extension/transactions/editorService';
+import type { DecorationService } from '@/extension/transactions/decorationService';
+import type { OperationStatus } from '@/shared/models';
 
-/**
- * Handles Workspace edits by applying updates directly.
- * Backs up all states using SnapshotService, guaranteeing 100% rollback accuracy.
- */
 export class TransactionManager {
     private searchEngine = new SearchEngine();
     private snapshotService = new SnapshotService();
@@ -33,14 +29,12 @@ export class TransactionManager {
         const rootName = workspaceFolders[0].name;
         const rootUri = workspaceFolders[0].uri;
         
-        // Ensure stale legacy backup directories are purged before transaction starts
         await this.snapshotService.cleanStaleBackups(rootUri);
         
         const edit = new vscode.WorkspaceEdit();
         const filesToOpen: vscode.Uri[] = [];
         const pendingDecorations = new Map<string, { uri: vscode.Uri; ranges: vscode.Range[] }>();
 
-        // Pre-create missing directories for any moves or file creations to prevent atomic VS Code errors
         for (const op of operations) {
             if (op.status !== 'pending') continue;
             const baseOp = op as any;
@@ -90,7 +84,6 @@ export class TransactionManager {
             } 
             else if (op.type === 'delete_path') {
                 try {
-                    // Pre-verify file existence before taking snapshots or staging deletions
                     await vscode.workspace.fs.stat(targetUri);
                     await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
                     
@@ -99,7 +92,7 @@ export class TransactionManager {
                     isStaged = true;
                 } catch {
                     OutputLogger.log(`File to delete not found: ${normalizedPath}, skipping deletion.`, 'WARN');
-                    this.statusCallback(op.id, 'saved'); // Mark already missing as successfully cleared
+                    this.statusCallback(op.id, 'saved');
                 }
             }
             else if (op.type === 'move_path') {
@@ -107,7 +100,6 @@ export class TransactionManager {
                 const destUri = PathSandbox.validate(normalizedDest);
 
                 try {
-                    // Pre-verify source presence before renaming
                     await vscode.workspace.fs.stat(targetUri);
                     await this.snapshotService.createSnapshot(rootUri, op.id, normalizedPath, targetUri);
 

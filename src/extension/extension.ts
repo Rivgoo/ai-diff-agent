@@ -1,15 +1,14 @@
 import * as vscode from 'vscode';
-import { SidebarWebviewProvider } from './vscode/webviewHost';
-import { OutputLogger } from '../infrastructure/logging/outputLogger';
-import { DecorationService } from './transactions/decorationService';
+import { SidebarWebviewProvider } from '@/extension/vscode/webviewHost';
+import { OutputLogger } from '@/infrastructure/logging/outputLogger';
+import { DecorationService } from '@/extension/transactions/decorationService';
 
 export function activate(context: vscode.ExtensionContext): void {
     OutputLogger.initialize();
-    OutputLogger.log('AI Diff Agent (v2.1 Transactional Highlights) activating...', 'INFO');
+    OutputLogger.log('AI Diff Agent (v2.2 Architecture Refactored) activating...', 'INFO');
 
     const decorationService = new DecorationService();
 
-    // Re-apply highlight layers upon active document swaps JIT
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(editor => {
             if (editor) {

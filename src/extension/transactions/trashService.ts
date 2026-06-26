@@ -1,14 +1,10 @@
 import * as vscode from 'vscode';
-import { OutputLogger } from '../../infrastructure/logging/outputLogger';
+import { OutputLogger } from '@/infrastructure/logging/outputLogger';
+import { SYSTEM_CONSTANTS } from '@/shared/constants';
 
-/**
- * Handles safe file deletion via moving targets to a temporary VS Code trash boundary.
- */
 export class TrashService {
-    private readonly trashFolderName = '.vscode/.ai-diff-trash';
-
     public async moveToTrash(originalUri: vscode.Uri, workspaceRoot: vscode.Uri): Promise<vscode.Uri> {
-        const trashDir = vscode.Uri.joinPath(workspaceRoot, this.trashFolderName);
+        const trashDir = vscode.Uri.joinPath(workspaceRoot, SYSTEM_CONSTANTS.TRASH_FOLDER_NAME);
         await vscode.workspace.fs.createDirectory(trashDir);
         
         const timestamp = Date.now().toString();
@@ -24,7 +20,7 @@ export class TrashService {
     }
 
     public async emptyTrash(workspaceRoot: vscode.Uri): Promise<void> {
-        const trashDir = vscode.Uri.joinPath(workspaceRoot, this.trashFolderName);
+        const trashDir = vscode.Uri.joinPath(workspaceRoot, SYSTEM_CONSTANTS.TRASH_FOLDER_NAME);
         try {
             await vscode.workspace.fs.delete(trashDir, { recursive: true, useTrash: false });
             OutputLogger.log(`Trash emptied.`);

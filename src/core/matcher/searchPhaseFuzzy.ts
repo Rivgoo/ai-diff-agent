@@ -1,16 +1,11 @@
-import { ISearchStrategy } from './searchPhase';
-import { IDocument } from './documentPort';
-import { MatchResult } from '../../shared/contracts';
+import type { ISearchStrategy } from '@/core/matcher/searchPhase';
+import type { IDocument } from '@/core/matcher/documentPort';
+import type { MatchResult } from '@/shared/contracts';
 
 function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/**
- * Indentation and Whitespace Resilient Strategy.
- * Ignores varying indentation levels, allowing matching even if the LLM output 
- * has broken spacing or tab levels.
- */
 export class FuzzyMatchStrategy implements ISearchStrategy {
     public readonly name = 'FUZZY';
 
@@ -36,12 +31,11 @@ export class FuzzyMatchStrategy implements ISearchStrategy {
         const escapedLines = targetLines.map(line => {
             const trimmed = line.trim();
             if (trimmed === '') {
-                return '[ \\t]*'; // Match optional horizontal space for empty internal lines
+                return '[ \\t]*';
             }
             return escapeRegExp(trimmed);
         });
 
-        // Match horizontal spacing boundaries securely
         const fuzzyPattern = '[ \\t]*' + escapedLines.join('[ \\t]*\\r?\\n[ \\t]*') + '[ \\t]*';
         const regex = new RegExp(fuzzyPattern, 'g');
 

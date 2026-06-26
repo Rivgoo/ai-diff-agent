@@ -1,12 +1,8 @@
-import * as vscode from 'vscode';
-import { ChatSession, ChatMessage, OperationStatus } from '../../shared/models';
+import type * as vscode from 'vscode';
+import type { ChatSession, ChatMessage, OperationStatus } from '@/shared/models';
+import { SYSTEM_CONSTANTS } from '@/shared/constants';
 
-/**
- * Manages the persistence of the chat session across VS Code reloads.
- * Uses workspaceState to keep the session bound to the current project.
- */
 export class ChatSessionManager {
-    private static readonly STORAGE_KEY = 'ai-diff-agent.chatSession';
     private session: ChatSession = { messages: [] };
 
     constructor(private readonly storage: vscode.Memento) {
@@ -41,13 +37,13 @@ export class ChatSessionManager {
     }
 
     private loadSession(): void {
-        const stored = this.storage.get<ChatSession>(ChatSessionManager.STORAGE_KEY);
+        const stored = this.storage.get<ChatSession>(SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION);
         if (stored && Array.isArray(stored.messages)) {
             this.session = stored;
         }
     }
 
     private saveSession(): void {
-        this.storage.update(ChatSessionManager.STORAGE_KEY, this.session);
+        this.storage.update(SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION, this.session);
     }
 }

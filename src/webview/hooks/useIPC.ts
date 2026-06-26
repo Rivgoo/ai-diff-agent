@@ -1,13 +1,18 @@
 import { useEffect, useRef } from 'react';
-import { WebviewEvent, ExtensionEvent } from '../../shared/ipc';
-import { useAgentStore } from '../store/agentStore';
+import type { WebviewEvent, ExtensionEvent } from '@/shared/ipc';
+import { useAgentStore } from '@/webview/store/agentStore';
 
 class VSCodeAPIWrapper {
     private static instance: any;
     static acquire() {
         if (!VSCodeAPIWrapper.instance) {
-            // @ts-ignore
-            VSCodeAPIWrapper.instance = acquireVsCodeApi();
+            try {
+                // @ts-ignore
+                VSCodeAPIWrapper.instance = acquireVsCodeApi();
+            } catch {
+                // Fallback for isolated browser testing
+                VSCodeAPIWrapper.instance = { postMessage: () => {} };
+            }
         }
         return VSCodeAPIWrapper.instance;
     }
@@ -44,6 +49,7 @@ export const useIPC = () => {
         sendEvent({ type: 'REQUEST_SETTINGS_SYNC' });
 
         return () => window.removeEventListener('message', handleMessage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const sendEvent = (event: WebviewEvent) => vscode.current.postMessage(event);
