@@ -14,7 +14,8 @@ export type WebviewEvent =
     | { type: 'OPEN_FILE'; operationId: string }
     | { type: 'CLEAR_SESSION' }
     | { type: 'COPY_PROMPT' }
-    | { type: 'DOWNLOAD_INSTRUCTIONS' };
+    | { type: 'DOWNLOAD_INSTRUCTIONS' }
+    | { type: 'SHOW_OUTPUT_LOG' }; // New direct route to VS Code Output Channel
 
 export type ExtensionEvent =
     | { type: 'STATE_HYDRATE'; session: ChatSession }

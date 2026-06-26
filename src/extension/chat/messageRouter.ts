@@ -126,6 +126,9 @@ export class MessageRouter {
             case 'DOWNLOAD_INSTRUCTIONS':
                 this.handleDownloadInstructions();
                 break;
+            case 'SHOW_OUTPUT_LOG':
+                vscode.commands.executeCommand('ai-diff-agent.showLog');
+                break;
         }
     }
 
