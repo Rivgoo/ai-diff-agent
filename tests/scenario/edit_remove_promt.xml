@@ -1,42 +1,60 @@
 <workspace_edit>
-    <!-- Тестування оновлення існуючого файлу з точним пошуком фрагменту -->
-    <update_file path="src/components/button/Button.tsx">
+    <!-- 
+      1. Update AppLogger with heavy noise in path declaration to test resilient resolving.
+         Path contains: leading slashes, project root duplicate name, mixed case (UTILS), 
+         redundant double slashes, wrong filename casing (Logger.ts vs logger.ts), 
+         and a trailing whitespace with carriage return (\r).
+         This rigorously tests PathNormalizer, ResilientPathResolver, and FuzzyMatcher at once.
+    -->
+    <update_file path="/ai-diff-agent/src//modules/core/UTILS/logging/Logger.ts \r">
         <change>
             <search>
-interface ButtonProps {
-    label: string;
-    onClick: () => void;
-}
+export type LogLevel = 'info' | 'warn' | 'error';
 
-export const Button = ({ label, onClick }: ButtonProps) => {
-    return (
-        <button className="custom-btn" onClick={onClick}>
-            {label}
-        </button>
-    );
-};
+export class AppLogger {
+    public static log(message: string, level: LogLevel = 'info'): void {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
+    }
+}
             </search>
             <replace>
-interface ButtonProps {
-    label: string;
-    onClick: () => void;
-    disabled?: boolean;
-}
+export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
-export const Button = ({ label, onClick, disabled = false }: ButtonProps) => {
-    return (
-        <button className="custom-btn" onClick={onClick} disabled={disabled}>
-            {label}
-        </button>
-    );
-};
+export class AppLogger {
+    public static log(message: string, level: LogLevel = 'info'): void {
+        const timestamp = new Date().toISOString();
+        if (level === 'debug') {
+            console.debug(`[${timestamp}] [DEBUG] ${message}`);
+        } else {
+            console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
+        }
+    }
+}
             </replace>
         </change>
     </update_file>
 
-    <!-- Тестування перенесення та перейменування файлу -->
-    <move_path src="src/utils/mathHelper.ts" dest="src/helpers/math.ts" />
+    <!-- 
+      2. Move the Menu.tsx component out of its deep directory structure.
+         Moving the file from "src/components/layout/sidebar/navigation/Menu.tsx" 
+         to "src/navigation/Menu.tsx" should completely empty the nested directories:
+         - src/components/layout/sidebar/navigation
+         - src/components/layout/sidebar
+         - src/components/layout
+         - src/components
+         This rigorously verifies that DirectoryCleanupService successfully detects 
+         and cleans up empty folders recursively bottom-up, leaving no garbage behind.
+    -->
+    <move_path src="src/components/layout/sidebar/navigation/Menu.tsx" dest="src/navigation/Menu.tsx" />
 
-    <!-- Тестування безпечного видалення файлу (буде збережено компенсаційний бекап) -->
-    <delete_path path="src/components/button/Button.css" />
+    <!-- 
+      3. Delete variables.css inside src/assets/styles/themes/
+         Deleting this file will completely empty:
+         - src/assets/styles/themes
+         - src/assets/styles
+         - src/assets
+         This tests recursive bottom-up empty directory removal cascading up to the workspace root limit.
+    -->
+    <delete_path path="src/assets/styles/themes/variables.css" />
 </workspace_edit>

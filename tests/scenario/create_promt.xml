@@ -1,63 +1,56 @@
 <workspace_edit>
-    <!-- Тестування явного створення директорій -->
-    <create_dir path="src/components/button" />
-    <create_dir path="src/utils" />
+    <!-- Define deep nested directory structures to test cascading scaffoldings on apply -->
+    <create_dir path="src/modules/core/utils/logging" />
+    <create_dir path="src//components/layout/sidebar/navigation" />
+    <create_dir path="///ai-diff-agent/src/assets/styles/themes" />
 
-    <!-- Тестування створення файлу стилів -->
-    <create_file path="src/components/button/Button.css">
-.custom-btn {
-    padding: 8px 16px;
-    background-color: #007acc;
-    color: #ffffff;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s ease;
-}
+    <!-- Create a modular core AppLogger TS utility -->
+    <create_file path="src/modules/core/utils/logging/logger.ts">
+export type LogLevel = 'info' | 'warn' | 'error';
 
-.custom-btn:hover {
-    background-color: #0062a3;
-}
-
-.custom-btn:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
+export class AppLogger {
+    public static log(message: string, level: LogLevel = 'info'): void {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
+    }
 }
     </create_file>
 
-    <!-- Тестування створення React компонента -->
-    <create_file path="src/components/button/Button.tsx">
+    <!-- Create a deep nested navigation React menu component with redundant slashes/mismatched styles -->
+    <create_file path="ai-diff-agent/src//components/layout/sidebar/navigation\\Menu.tsx">
 import React from 'react';
-import './Button.css';
 
-interface ButtonProps {
-    label: string;
-    onClick: () => void;
+export interface MenuItem {
+    readonly label: string;
+    readonly path: string;
 }
 
-export const Button = ({ label, onClick }: ButtonProps) => {
+interface MenuProps {
+    readonly items: MenuItem[];
+}
+
+export const NavigationMenu = ({ items }: MenuProps) => {
     return (
-        <button className="custom-btn" onClick={onClick}>
-            {label}
-        </button>
+        <nav className="nav-menu">
+            <ul>
+                {items.map((item) => (
+                    <li key={item.path}>
+                        <a href={item.path}>{item.label}</a>
+                    </li>
+                ))}
+            </ul>
+        </nav>
     );
 };
     </create_file>
 
-    <!-- Тестування очищення брудного шляху через PathNormalizer -->
-    <!-- Навіть якщо AI помилково додасть префікс проєкту, система нормалізує шлях -->
-    <create_file path="ai-diff-agent/src/utils/mathHelper.ts">
-export const add = (a: number, b: number): number => {
-    return a + b;
-};
-
-export const subtract = (a: number, b: number): number => {
-    return a - b;
-};
-
-export const multiply = (a: number, b: number): number => {
-    return a * b;
-};
+    <!-- Create global styles inside a dedicated nested directory segment -->
+    <create_file path="///src/assets/styles/themes/variables.css">
+:root {
+    --primary-color: #007acc;
+    --secondary-color: #1e1e1e;
+    --border-color: #3c3c3c;
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
     </create_file>
 </workspace_edit>

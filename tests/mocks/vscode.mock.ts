@@ -2,11 +2,28 @@ import * as path from 'path';
 
 /**
  * Stateful Centralized VS Code API Mock Engine.
- * Provides runtime implementations of VS Code types, classes, services and enums.
- * Upgraded in Phase 4 with full workspace.findFiles virtual scanning support.
+ * Upgraded in Phase 4 to subclass Map and parse advanced case-insensitive bracket glob queries.
  */
 
-export const mockFilesystem = new Map<string, string>();
+class MockFilesystemMap extends Map<string, string> {
+    public override set(key: string, value: string): this {
+        super.set(key, value);
+        
+        // Auto-register parent directory segments to mimic physical OS folder structures
+        if (!key.endsWith('/')) {
+            const parts = key.split('/');
+            for (let i = 4; i < parts.length; i++) {
+                const parentDir = parts.slice(0, i).join('/') + '/';
+                if (!super.has(parentDir)) {
+                    super.set(parentDir, 'DIRECTORY_MARKER');
+                }
+            }
+        }
+        return this;
+    }
+}
+
+export const mockFilesystem = new MockFilesystemMap();
 export const mockLiveDocuments: any[] = [];
 export const mockAppliedEdits: any[] = [];
 export let mockApplyEditCallCount = 0;
@@ -156,6 +173,13 @@ export enum ConfigurationTarget {
     WorkspaceFolder = 3
 }
 
+export enum FileType {
+    Unknown = 0,
+    File = 1,
+    Directory = 2,
+    SymbolicLink = 64
+}
+
 export class WorkspaceEdit {
     public createFile(uri: Uri): void {
         mockAppliedEdits.push({ type: 'create_file', uri });
@@ -185,16 +209,28 @@ export const workspace = {
 
     /**
      * Executes indexing scans on virtual mockFilesystem matching globs (Phase 4).
+     * Parses advanced case-insensitive bracket patterns securely using Regex translation.
      */
     findFiles: async (include: any, exclude?: any): Promise<Uri[]> => {
         const results: Uri[] = [];
         const globPattern = typeof include === 'string' ? include : (include && typeof include.pattern === 'string' ? include.pattern : String(include));
-        const filenamePart = globPattern.replace('**/', '').replace(/^\//, '');
+        
+        // Safely translate Glob Pattern to RegExp
+        let regexStr = globPattern
+            .replace(/\./g, '\\.')
+            .replace(/\*\*/g, '.*')
+            .replace(/\*/g, '[^/]*');
+        if (!regexStr.startsWith('.*')) {
+            regexStr = '^' + regexStr;
+        }
+        regexStr = regexStr + '$';
+        
+        const regex = new RegExp(regexStr, 'i'); // Case-insensitive matching
 
         for (const key of mockFilesystem.keys()) {
             const normalized = key.replace(/\\/g, '/');
             
-            // Apply mock exclusions matching globs roughly
+            // Apply mock exclusions
             if (exclude) {
                 const excludeStr = typeof exclude === 'string' ? exclude : (exclude.pattern || String(exclude));
                 const isExcluded = excludeStr.split(',').some((ex: string) => {
@@ -204,7 +240,7 @@ export const workspace = {
                 if (isExcluded) continue;
             }
 
-            if (normalized.endsWith('/' + filenamePart) || normalized === filenamePart) {
+            if (regex.test(normalized)) {
                 results.push(Uri.parse(key));
             }
         }
@@ -294,7 +330,8 @@ export const workspace = {
         },
 
         writeFile: async (uri: Uri, bytes: Uint8Array): Promise<void> => {
-            mockFilesystem.set(uri.toString(), new TextDecoder().decode(bytes));
+            const uriStr = uri.toString();
+            mockFilesystem.set(uriStr, new TextDecoder().decode(bytes));
         },
 
         readFile: async (uri: Uri): Promise<Uint8Array> => {
@@ -303,6 +340,24 @@ export const workspace = {
                 throw new Error(`File not found: ${uri.toString()}`);
             }
             return new TextEncoder().encode(content);
+        },
+
+        readDirectory: async (uri: Uri): Promise<[string, FileType][]> => {
+            const uriStr = uri.toString();
+            const dirPrefix = uriStr.endsWith('/') ? uriStr : uriStr + '/';
+            const entries = new Map<string, FileType>();
+
+            for (const key of mockFilesystem.keys()) {
+                if (key.startsWith(dirPrefix) && key !== dirPrefix) {
+                    const relativePart = key.substring(dirPrefix.length);
+                    const firstSegment = relativePart.split('/')[0];
+                    if (firstSegment) {
+                        const isSubDir = relativePart.includes('/') || mockFilesystem.get(key) === 'DIRECTORY_MARKER';
+                        entries.set(firstSegment, isSubDir ? FileType.Directory : FileType.File);
+                    }
+                }
+            }
+            return Array.from(entries.entries());
         },
 
         delete: async (uri: Uri, options?: { recursive?: boolean }): Promise<void> => {

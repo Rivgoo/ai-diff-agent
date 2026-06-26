@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { SYSTEM_CONSTANTS } from '@/shared/constants';
-import type { TransactionSaga, CompensationAction } from '@/core/models/saga';
+import { SYSTEM_CONSTANTS } from '../../shared/constants';
+import type { TransactionSaga, CompensationAction } from '../../core/models/saga';
 
 /**
  * LEGACY TYPE DEFINITIONS
@@ -11,7 +11,8 @@ export type AntiAction =
     | { type: 'delete_created'; uri: vscode.Uri }
     | { type: 'restore_file'; uri: vscode.Uri; relativePath: string }
     | { type: 'restore_move'; sourceUri: vscode.Uri; destinationUri: vscode.Uri; relativeSourcePath: string }
-    | { type: 'delete_dir_if_empty'; uri: vscode.Uri };
+    | { type: 'delete_dir_if_empty'; uri: vscode.Uri }
+    | { type: 'restore_dir'; uri: vscode.Uri }; // Added for resilient empty directory cleanup restoration
 
 export interface TransactionRecord {
     operationId: string;
@@ -86,6 +87,12 @@ export class CompensationStore {
                     uri: act.uri.toString()
                 };
             }
+            if (act.type === 'restore_dir') {
+                return {
+                    type: 'RESTORE_DIRECTORY',
+                    uri: act.uri.toString()
+                };
+            }
             return {
                 type: 'RESTORE_MOVE',
                 sourceUri: act.sourceUri.toString(),
@@ -128,6 +135,12 @@ export class CompensationStore {
             if (comp.type === 'DELETE_DIRECTORY_IF_EMPTY') {
                 return {
                     type: 'delete_dir_if_empty',
+                    uri: vscode.Uri.parse(comp.uri)
+                };
+            }
+            if (comp.type === 'RESTORE_DIRECTORY') {
+                return {
+                    type: 'restore_dir',
                     uri: vscode.Uri.parse(comp.uri)
                 };
             }

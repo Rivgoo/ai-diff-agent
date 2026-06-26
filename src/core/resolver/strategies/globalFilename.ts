@@ -4,6 +4,19 @@ import type { IFileSystemPort, IWorkspaceSearchPort } from '../ports';
 import { RESOLVER_CONSTANTS } from '../constants';
 
 /**
+ * Generates a case-insensitive glob pattern by wrapping each alphabetic character in a bracket class.
+ * e.g., "Logger.ts" -> "**\/[Ll][Oo][Gg][Gg][Ee][Rr].[Tt][Ss]"
+ */
+function makeCaseInsensitiveGlob(filename: string): string {
+    return '**/' + filename.split('').map(char => {
+        if (/[a-zA-Z]/.test(char)) {
+            return `[${char.toLowerCase()}${char.toUpperCase()}]`;
+        }
+        return char;
+    }).join('');
+}
+
+/**
  * Strategy level 3: Global Unique Filename Search.
  * Cascades to search strictly by the trailing filename globally across the workspace.
  * Resolves to the file only if exactly one match exists project-wide, preventing arbitrary overrides.
@@ -22,9 +35,10 @@ export class GlobalFilenameStrategy implements IPathResolutionStrategy {
         }
 
         const filename = segments[segments.length - 1];
+        const caseInsensitivePattern = makeCaseInsensitiveGlob(filename);
         
         const candidates = await search.findFiles(
-            `**/${filename}`,
+            caseInsensitivePattern,
             RESOLVER_CONSTANTS.DEFAULT_EXCLUSIONS
         );
 

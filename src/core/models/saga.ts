@@ -5,7 +5,8 @@ export type CompensationActionType =
     | 'DELETE_FILE'
     | 'RESTORE_FILE_CONTENT'
     | 'DELETE_DIRECTORY_IF_EMPTY'
-    | 'RESTORE_MOVE';
+    | 'RESTORE_MOVE'
+    | 'RESTORE_DIRECTORY'; // Added for Phase 2 directory restoration on empty folder rollbacks
 
 /**
  * Compensation command payload to remove a file created during the transaction.
@@ -45,13 +46,22 @@ export interface RestoreMoveAction {
 }
 
 /**
+ * Compensation command payload to restore a deleted empty directory back to its original state during rollback.
+ */
+export interface RestoreDirectoryAction {
+    readonly type: 'RESTORE_DIRECTORY';
+    readonly uri: string; // Serialized VS Code Uri string
+}
+
+/**
  * Union type representing any actionable compensation step in the transaction lifecycle.
  */
 export type CompensationAction =
     | DeleteFileAction
     | RestoreFileContentAction
     | DeleteDirectoryIfEmptyAction
-    | RestoreMoveAction;
+    | RestoreMoveAction
+    | RestoreDirectoryAction;
 
 /**
  * Defines a structural contract of a transaction saga containing compensating actions.

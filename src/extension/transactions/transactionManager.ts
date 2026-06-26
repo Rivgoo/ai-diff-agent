@@ -17,6 +17,9 @@ import { ResilientPathResolver } from '../../core/resolver/resilientPathResolver
 import { VsCodeFileSystemAdapter } from '../../infrastructure/adapters/fsTargetAdapter';
 import { VsCodeWorkspaceSearchAdapter } from '../../infrastructure/adapters/workspaceSearchAdapter';
 
+// New Directory Cleanup Service
+import { DirectoryCleanupService } from './directoryCleanupService';
+
 /**
  * Orchestrates atomic transactions using the Saga Pattern.
  * Integrates cascading fallback path resolutions seamlessly.
@@ -26,6 +29,7 @@ export class TransactionManager {
     private snapshotService = new SnapshotService();
     private editorService = new EditorService();
     private transactionLock = new TransactionLock();
+    private directoryCleanupService = new DirectoryCleanupService();
     
     // Instantiating the resilient path resolver with physical vscode infrastructure adapters
     private readonly pathResolver = new ResilientPathResolver(
@@ -71,6 +75,9 @@ export class TransactionManager {
         let failReason = '';
         const opAntiActionsMap = new Map<string, AntiAction[]>();
         const conflictMap = new Map<string, ConflictDetails>();
+        
+        // Track candidate directory parents to inspect for empty post-transaction cleanups
+        const opCandidatesMap = new Map<string, string[]>();
 
         // Step 2: Pre-flight Verification Pass with Resilient Path Resolution
         for (const op of operations) {
@@ -258,7 +265,7 @@ export class TransactionManager {
                 }
             }
 
-            // Populate workspace edits
+            // Populate workspace edits and track potential empty candidate directories
             for (const op of operations) {
                 if (op.status !== 'pending') continue;
 
@@ -266,6 +273,19 @@ export class TransactionManager {
                 const normalizedPath = PathNormalizer.normalize(baseOp.path, rootName);
                 const targetUri = PathSandbox.validate(normalizedPath);
                 const antiActions: AntiAction[] = opAntiActionsMap.get(op.id) || [];
+
+                // Record parent path candidate segments for deletion/movement operations
+                if (op.type === 'delete_path' || op.type === 'move_path') {
+                    const opCandidates: string[] = [];
+                    let currentDir = normalizedPath.split('/').slice(0, -1).join('/');
+                    while (currentDir) {
+                        opCandidates.push(currentDir);
+                        currentDir = currentDir.split('/').slice(0, -1).join('/');
+                    }
+                    if (opCandidates.length > 0) {
+                        opCandidatesMap.set(op.id, opCandidates);
+                    }
+                }
 
                 if (op.type === 'create_file') {
                     edit.createFile(targetUri, { ignoreIfExists: true });
@@ -354,9 +374,26 @@ export class TransactionManager {
                 }
             }
 
-            // Step 5: Commit workspace edit
+            // Commit workspace edit
             const success = await vscode.workspace.applyEdit(edit);
             if (success) {
+                // Execute resilient directory cleanup on empty parent folder segments (Phase 2 integration)
+                const allCandidates = Array.from(opCandidatesMap.values()).flat();
+                const cleanedDirs = await this.directoryCleanupService.cleanupEmptyDirectories(allCandidates, rootUri);
+
+                // Map actually cleaned directory segments to their causing operations for safe rollback re-creations
+                for (const dirUri of cleanedDirs) {
+                    const relativeDir = PathNormalizer.normalize(dirUri.fsPath, rootName);
+                    for (const [opId, candidates] of opCandidatesMap.entries()) {
+                        if (candidates.includes(relativeDir)) {
+                            const antiActions = opAntiActionsMap.get(opId) || [];
+                            antiActions.push({ type: 'restore_dir', uri: dirUri });
+                            opAntiActionsMap.set(opId, antiActions);
+                            break; // Map to the first matched operation context
+                        }
+                    }
+                }
+
                 for (const op of operations) {
                     if (op.status !== 'pending') continue;
                     
@@ -468,6 +505,9 @@ export class TransactionManager {
         const txIds = this.store.getAllIds();
         const edit = new vscode.WorkspaceEdit();
         const directoriesToDelete: vscode.Uri[] = [];
+        
+        // Track directory restorations to execute top-down safely (shallowest first)
+        const directoriesToRestore: vscode.Uri[] = [];
 
         for (const id of txIds) {
             const tx = this.store.getTransaction(id);
@@ -481,26 +521,14 @@ export class TransactionManager {
                     edit.deleteFile(act.destinationUri, { ignoreIfNotExists: true });
                 } else if (act.type === 'delete_dir_if_empty') {
                     directoriesToDelete.push(act.uri);
+                } else if (act.type === 'restore_dir') {
+                    directoriesToRestore.push(act.uri);
                 }
             }
         }
 
         // Apply file deletions
         await vscode.workspace.applyEdit(edit);
-
-        // Restore file contents from isolated snapshots
-        for (const id of txIds) {
-            const tx = this.store.getTransaction(id);
-            if (!tx) continue;
-
-            for (const act of tx.antiActions) {
-                if (act.type === 'restore_file') {
-                    await this.snapshotService.restoreSnapshot(rootUri, id, act.relativePath, act.uri);
-                } else if (act.type === 'restore_move') {
-                    await this.snapshotService.restoreSnapshot(rootUri, id, act.relativeSourcePath, act.sourceUri);
-                }
-            }
-        }
 
         // Safe bottom-up empty directory removal to prevent recursion overflows
         directoriesToDelete.sort((a, b) => b.fsPath.length - a.fsPath.length);
@@ -513,6 +541,31 @@ export class TransactionManager {
                 }
             } catch {
                 // Directory missing or already cleared, ignore
+            }
+        }
+
+        // Restore emptied directory segments Top-Down (shallowest first) prior to writing files (Phase 3 integration)
+        directoriesToRestore.sort((a, b) => a.fsPath.length - b.fsPath.length);
+        for (const dirUri of directoriesToRestore) {
+            try {
+                await vscode.workspace.fs.createDirectory(dirUri);
+                OutputLogger.log(`Restored empty directory segment during rollback: ${dirUri.fsPath}`);
+            } catch (e) {
+                OutputLogger.log(`Failed to restore empty directory ${dirUri.fsPath}: ${e}`, 'WARN');
+            }
+        }
+
+        // Restore file contents from isolated snapshots
+        for (const id of txIds) {
+            const tx = this.store.getTransaction(id);
+            if (!tx) continue;
+
+            for (const act of tx.antiActions) {
+                if (act.type === 'restore_file') {
+                    await this.snapshotService.restoreSnapshot(rootUri, id, act.relativePath, act.uri);
+                } else if (act.type === 'restore_move') {
+                    await this.snapshotService.restoreSnapshot(rootUri, id, act.relativeSourcePath, act.sourceUri);
+                }
             }
         }
 

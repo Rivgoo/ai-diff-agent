@@ -4,6 +4,19 @@ import type { IFileSystemPort, IWorkspaceSearchPort } from '../ports';
 import { RESOLVER_CONSTANTS } from '../constants';
 
 /**
+ * Generates a case-insensitive glob pattern by wrapping each alphabetic character in a bracket class.
+ * e.g., "Logger.ts" -> "**\/[Ll][Oo][Gg][Gg][Ee][Rr].[Tt][Ss]"
+ */
+function makeCaseInsensitiveGlob(filename: string): string {
+    return '**/' + filename.split('').map(char => {
+        if (/[a-zA-Z]/.test(char)) {
+            return `[${char.toLowerCase()}${char.toUpperCase()}]`;
+        }
+        return char;
+    }).join('');
+}
+
+/**
  * Strategy level 2: Trailing Segment Matching.
  * Leverages structured sliding-window segment evaluations to resolve relocated modules
  * (e.g., matching 'src/components/button/Button.tsx' to 'src/features/ui/button/Button.tsx').
@@ -22,10 +35,11 @@ export class SegmentHeuristicStrategy implements IPathResolutionStrategy {
         }
 
         const filename = requestedSegments[requestedSegments.length - 1];
+        const caseInsensitivePattern = makeCaseInsensitiveGlob(filename);
         
-        // Locate all files matching the target filename globally
+        // Locate all files matching the target filename globally using a case-insensitive glob class
         const candidates = await search.findFiles(
-            `**/${filename}`,
+            caseInsensitivePattern,
             RESOLVER_CONSTANTS.DEFAULT_EXCLUSIONS
         );
 
