@@ -35,3 +35,25 @@ export type AnyOperation =
     | DeletePathOperation 
     | MovePathOperation 
     | CreateDirOperation;
+
+// --- Type Guards ---
+
+export function isCreateFileOperation(op: AnyOperation): op is CreateFileOperation {
+    return op.type === 'create_file';
+}
+
+export function isUpdateFileOperation(op: AnyOperation): op is UpdateFileOperation {
+    return op.type === 'update_file';
+}
+
+export function isDeletePathOperation(op: AnyOperation): op is DeletePathOperation {
+    return op.type === 'delete_path';
+}
+
+export function isMovePathOperation(op: AnyOperation): op is MovePathOperation {
+    return op.type === 'move_path';
+}
+
+export function isCreateDirOperation(op: AnyOperation): op is CreateDirOperation {
+    return op.type === 'create_dir';
+}

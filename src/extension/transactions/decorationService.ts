@@ -39,6 +39,16 @@ export class DecorationService {
         this.triggerUpdateDecorations();
     }
 
+    /**
+     * Frees memory and clears decoration cache for a specific closed document.
+     */
+    public clearDecorationsForDocument(uri: vscode.Uri): void {
+        const key = uri.toString();
+        if (this.activeDecorations.has(key)) {
+            this.activeDecorations.delete(key);
+        }
+    }
+
     public clearAllDecorations(): void {
         this.activeDecorations.clear();
         this.triggerUpdateDecorations();

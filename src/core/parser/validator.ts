@@ -1,5 +1,10 @@
 import { Result } from '../../shared/contracts';
 import type { AnyOperation } from '../models/operations';
+import { 
+    isCreateFileOperation, 
+    isUpdateFileOperation, 
+    isMovePathOperation 
+} from '../models/operations';
 
 /**
  * Domain AST Validator.
@@ -20,14 +25,12 @@ export class DomainValidator {
         const pathActivityMap = new Map<string, string[]>();
 
         for (const op of operations) {
-            const baseOp = op as any; 
-            
             // Validate absolute presence of file workspace target paths
-            if (!baseOp.path || baseOp.path.trim() === '') {
-                return Result.fail(new Error(`Operation of type '${baseOp.type}' contains an invalid or empty path.`));
+            if (!op.path || op.path.trim() === '') {
+                return Result.fail(new Error(`Operation of type '${op.type}' contains an invalid or empty path.`));
             }
 
-            const normalizedPath = baseOp.path.replace(/\\/g, '/').trim();
+            const normalizedPath = op.path.replace(/\\/g, '/').trim();
 
             // Track same-batch operations collision
             if (!pathActivityMap.has(normalizedPath)) {
@@ -36,31 +39,31 @@ export class DomainValidator {
             pathActivityMap.get(normalizedPath)!.push(op.type);
 
             // Verify specific constraints per operation type
-            if (baseOp.type === 'create_file') {
-                if (baseOp.content === undefined) {
-                    return Result.fail(new Error(`Create file operation on '${baseOp.path}' contains undefined content.`));
+            if (isCreateFileOperation(op)) {
+                if (op.content === undefined) {
+                    return Result.fail(new Error(`Create file operation on '${op.path}' contains undefined content.`));
                 }
             }
 
-            if (baseOp.type === 'update_file') {
-                if (!baseOp.changes || baseOp.changes.length === 0) {
-                    return Result.fail(new Error(`Update file operation on '${baseOp.path}' is missing structural change blocks.`));
+            if (isUpdateFileOperation(op)) {
+                if (!op.changes || op.changes.length === 0) {
+                    return Result.fail(new Error(`Update file operation on '${op.path}' is missing structural change blocks.`));
                 }
 
-                for (let i = 0; i < baseOp.changes.length; i++) {
-                    const block = baseOp.changes[i];
+                for (let i = 0; i < op.changes.length; i++) {
+                    const block = op.changes[i];
                     if (block.search === undefined || block.search.trim() === '') {
-                        return Result.fail(new Error(`Update file on '${baseOp.path}' has an empty search block at index ${i}.`));
+                        return Result.fail(new Error(`Update file on '${op.path}' has an empty search block at index ${i}.`));
                     }
                     if (block.replace === undefined) {
-                        return Result.fail(new Error(`Update file on '${baseOp.path}' has an undefined replace block at index ${i}.`));
+                        return Result.fail(new Error(`Update file on '${op.path}' has an undefined replace block at index ${i}.`));
                     }
                 }
             }
 
-            if (baseOp.type === 'move_path') {
-                if (!baseOp.destinationPath || baseOp.destinationPath.trim() === '') {
-                    return Result.fail(new Error(`Move path operation on '${baseOp.path}' is missing its destination Path.`));
+            if (isMovePathOperation(op)) {
+                if (!op.destinationPath || op.destinationPath.trim() === '') {
+                    return Result.fail(new Error(`Move path operation on '${op.path}' is missing its destination Path.`));
                 }
             }
         }
