@@ -65,18 +65,29 @@
     "configuration": {
       "title": "AI Diff Agent",
       "properties": {
-        "aiDiffAgent.autoScroll": {
+        "aiDiffAgent.behavior.autoScroll": {
           "type": "boolean",
           "default": true,
           "description": "Automatically scroll to the bottom of the chat when new messages arrive."
         },
-        "aiDiffAgent.strictParsing": {
+        "aiDiffAgent.behavior.compactMode": {
           "type": "boolean",
           "default": false,
-          "description": "Enforce strict XML parsing. If false, the agent attempts to recover from malformed markdown blocks."
+          "description": "Reduce visual padding and gaps to show more operations on screen."
+        },
+        "aiDiffAgent.engine.strictParsing": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enforce strict XML parsing. Disables recovery for malformed markdown blocks."
+        },
+        "aiDiffAgent.engine.maxBackupRetentionDays": {
+          "type": "integer",
+          "default": 7,
+          "description": "Number of days to keep transaction backups before purging."
         }
       }
     }
+  
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
