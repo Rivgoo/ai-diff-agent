@@ -35,13 +35,17 @@ interface AgentState {
         path?: string,
         conflict?: ConflictDetails
     ) => void;
+    updateLocalSetting: (category: 'behavior' | 'engine', key: string, value: any) => void;
 }
 
 export const useAgentStore = create<AgentState>((set) => ({
     sessions: {},
     activeSessionId: '',
     isAgentTyping: false,
-    settings: { autoScroll: true, strictParsing: false },
+    settings: { 
+        behavior: { autoScroll: true, compactMode: false }, 
+        engine: { strictParsing: false, maxBackupRetentionDays: 7 }
+    },
     isSettingsOpen: false,
     isPromptCopied: false,
     pipelineProgress: { stage: 'idle', current: 0, total: 0 },
@@ -51,9 +55,20 @@ export const useAgentStore = create<AgentState>((set) => ({
     hydrateSettings: (settings) => set({ settings }),
     setAgentTyping: (isTyping) => set({ isAgentTyping: isTyping }),
     setPromptCopied: (copied) => set({ isPromptCopied: copied }),
+    
     toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
     setPipelineProgress: (progress) => set({ pipelineProgress: progress }),
     setComposerDraft: (draft) => set({ composerDraft: draft }),
+
+    updateLocalSetting: (category, key, value) => set((state) => ({
+        settings: {
+            ...state.settings,
+            [category]: {
+                ...state.settings[category],
+                [key]: value
+            }
+        }
+    })),
 
     updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict) =>
         set((state) => {

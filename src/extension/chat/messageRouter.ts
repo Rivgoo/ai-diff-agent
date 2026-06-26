@@ -29,7 +29,7 @@ export class MessageRouter {
         private readonly postMessageCallback: (event: ExtensionEvent) => void
     ) {
         this.sessionManager = new ChatSessionManager(context.workspaceState);
-        this.settingsManager = new SettingsManager();
+        this.settingsManager = new SettingsManager(context, () => this.syncSettings());
         this.store = new CompensationStore(context.workspaceState);
 
         this.transactionManager = new TransactionManager(this.store, this.decorationService, (
@@ -72,23 +72,15 @@ export class MessageRouter {
             this.postMessageCallback,
             () => this.syncState()
         );
-
-        vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION)) {
-                this.syncSettings();
-            }
-        });
     }
 
     public handleMessage(event: WebviewEvent): void {
         switch (event.type) {
             case 'REQUEST_STATE_SYNC': this.syncState(); break;
             case 'REQUEST_SETTINGS_SYNC': this.syncSettings(); break;
-            case 'UPDATE_SETTINGS': this.settingsManager.updateSettings(event.settings); break;
+            case 'UPDATE_SETTING': this.settingsManager.updateSetting(event.category, event.key, event.value); break;
             case 'SUBMIT_PAYLOAD': this.processPayloadUseCase.execute(event.payload); break;
-            case 'CANCEL_PROCESSING': /* Вже обробляється у useCase, але можна залишити для розширення */ break;
-            
-            // Нове керування сесіями
+            case 'CANCEL_PROCESSING': break;
             case 'NEW_SESSION':
                 this.sessionManager.createSession();
                 this.syncState();
@@ -106,7 +98,6 @@ export class MessageRouter {
                 this.pendingOperations.clear();
                 this.syncState();
                 break;
-
             case 'ACTION_SAVE_ALL': this.transactionManager.saveBatch(); break;
             case 'ACTION_REVERT_ALL': this.transactionManager.revertBatch(); break;
             case 'ACTION_ACCEPT_OPERATION': this.transactionManager.saveOperation(event.operationId); break;
@@ -128,7 +119,8 @@ export class MessageRouter {
     }
 
     private syncSettings(): void {
-        this.postMessageCallback({ type: 'SETTINGS_HYDRATE', settings: this.settingsManager.getSettings() });
+        const settings = this.settingsManager.getSettings();
+        this.postMessageCallback({ type: 'SETTINGS_HYDRATE', settings });
     }
 
     private async handleOpenFile(operationId: string): Promise<void> {
@@ -137,7 +129,6 @@ export class MessageRouter {
         
         try {
             let targetPath = rawOp.path;
-            
             if (rawOp.type === 'move_path') {
                 const baseOp = rawOp as any;
                 const sessionOp = this.sessionManager.getActiveSession().messages
@@ -164,7 +155,6 @@ export class MessageRouter {
                 editor.revealRange(ranges[0], vscode.TextEditorRevealType.InCenter);
                 editor.selection = new vscode.Selection(ranges[0].start, ranges[0].start);
             }
-
         } catch (e) {
             OutputLogger.log(`Failed to open workspace target: ${e}`, 'ERROR');
         }
