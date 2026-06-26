@@ -1,123 +1,70 @@
-import { useAgentStore } from '@/webview/store/agentStore';
-import { useIPC } from '@/webview/hooks/useIPC';
-import styles from './EmptyState.module.css';
+import { useAgentStore } from "@/webview/store/agentStore";
+import { useIPC } from "@/webview/hooks/useIPC";
+import { Button } from "@/webview/shared/ui/Button/Button";
+import {
+  IconCopy,
+  IconDownload,
+  IconTerminal,
+  IconSettings,
+} from "@tabler/icons-react";
+import styles from "./EmptyState.module.css";
 
 export const EmptyState = () => {
-    const { sendEvent } = useIPC();
-    const settings = useAgentStore((state) => state.settings);
-    const copied = useAgentStore((state) => state.isPromptCopied);
+  const { sendEvent } = useIPC();
+  const copied = useAgentStore((state) => state.isPromptCopied);
+  const toggleSettings = useAgentStore((state) => state.toggleSettings);
 
-    return (
-        <div className={styles.container}>
-            {/* Minimalist ASCII Terminal Logo */}
-            <div className={styles.asciiHeader}>
-{`   _  _     ___  _  __  ___ 
-  / _\\ |__ / _ \\(_)/ /_/ _ \\
-  \\ \\| '_ / // / / __/ // /
-  _\\ \\ | |\\__/_/ \\__/\\___/ 
-  \\__/ |_|                 `}
-            </div>
+  return (
+    <div className={styles.container}>
+      {/* Semantic Header */}
+      <h1 className={styles.title}>AI DIFF AGENT</h1>
+      <p className={styles.description}>
+        A transactional diff engine designed to stage, review, and apply code
+        modifications with human-in-the-loop control.
+      </p>
 
-            {/* Reactive Environmental System Diagnostics */}
-            <div className={styles.metaGrid}>
-                <div className={styles.metaRow}>
-                    <span className={styles.metaKey}>AGENT STATUS:</span>
-                    <span className={`${styles.metaValue} ${styles.activeValue}`}>ONLINE</span>
-                </div>
-                <div className={styles.metaRow}>
-                    <span className={styles.metaKey}>PARSING PATTERN:</span>
-                    <span className={styles.metaValue}>
-                        {settings.strictParsing ? (
-                            <span className={styles.warnValue}>STRICT (STDOUT ENFORCED)</span>
-                        ) : (
-                            <span className={styles.activeValue}>RECOVERY (FUZZY FALLBACKS)</span>
-                        )}
-                    </span>
-                </div>
-                <div className={styles.metaRow}>
-                    <span className={styles.metaKey}>AUTO-SCROLLING:</span>
-                    <span className={styles.metaValue}>
-                        {settings.autoScroll ? (
-                            <span className={styles.activeValue}>ENABLED</span>
-                        ) : (
-                            <span>DISABLED</span>
-                        )}
-                    </span>
-                </div>
-                <div className={styles.metaRow}>
-                    <span className={styles.metaKey}>PERSISTENCE ENGINE:</span>
-                    <span className={styles.metaValue}>VSCODE MEMENTO SAGA</span>
-                </div>
-            </div>
+      {/* Action Grid Panel */}
+      <div
+        className={styles.actionsGrid}
+        role="group"
+        aria-label="Quick actions menu"
+      >
+        <Button
+          variant="secondary"
+          onClick={() => sendEvent({ type: "COPY_PROMPT" })}
+          aria-label="Copy prompt rules to clipboard"
+        >
+          <IconCopy size={14} aria-hidden="true" />
+          <span>{copied ? "Copied" : "Copy Rules"}</span>
+        </Button>
 
-            {/* CLI Command-Menu Palette */}
-            <div className={styles.cmdSection}>
-                <div className={styles.cmdTitle}>Quick Utility Menu</div>
-                
-                {/* Action 1: Copy System Prompt */}
-                <div className={styles.commandBox}>
-                    <div className={styles.commandText}>
-                        <span className={styles.promptSymbol}>$</span>
-                        <span>setup-prompt <span className={styles.argText}>--copy</span></span>
-                    </div>
-                    <button 
-                        type="button" 
-                        className={styles.actionBtn} 
-                        onClick={() => sendEvent({ type: 'COPY_PROMPT' })}
-                        aria-label="Copy AI rules to clipboard"
-                    >
-                        {copied ? 'Copied' : 'Execute'}
-                    </button>
-                </div>
+        <Button
+          variant="secondary"
+          onClick={() => sendEvent({ type: "DOWNLOAD_INSTRUCTIONS" })}
+          aria-label="Download prompt instructions document"
+        >
+          <IconDownload size={14} aria-hidden="true" />
+          <span>Instructions</span>
+        </Button>
 
-                {/* Action 2: Get Instructions (RESTORED) */}
-                <div className={styles.commandBox}>
-                    <div className={styles.commandText}>
-                        <span className={styles.promptSymbol}>$</span>
-                        <span>get-docs <span className={styles.argText}>--download</span></span>
-                    </div>
-                    <button 
-                        type="button" 
-                        className={styles.actionBtn} 
-                        onClick={() => sendEvent({ type: 'DOWNLOAD_INSTRUCTIONS' })}
-                        aria-label="Download prompt instruction sheets"
-                    >
-                        Download
-                    </button>
-                </div>
+        <Button
+          variant="secondary"
+          onClick={() => sendEvent({ type: "SHOW_OUTPUT_LOG" })}
+          aria-label="Open extension output log panel"
+        >
+          <IconTerminal size={14} aria-hidden="true" />
+          <span>Open Logs</span>
+        </Button>
 
-                {/* Action 3: Show Output Logs (NEW) */}
-                <div className={styles.commandBox}>
-                    <div className={styles.commandText}>
-                        <span className={styles.promptSymbol}>$</span>
-                        <span>view-logs <span className={styles.argText}>--open</span></span>
-                    </div>
-                    <button 
-                        type="button" 
-                        className={styles.actionBtn} 
-                        onClick={() => sendEvent({ type: 'SHOW_OUTPUT_LOG' })}
-                        aria-label="Show background output diagnostics log"
-                    >
-                        Open Logs
-                    </button>
-                </div>
-
-                {/* Action 4: Configure Settings Panel */}
-                <div className={styles.commandBox}>
-                    <div className={styles.commandText}>
-                        <span className={styles.promptSymbol}>$</span>
-                        <span>config-agent <span className={styles.argText}>--configure</span></span>
-                    </div>
-                    <button 
-                        type="button" 
-                        className={styles.actionBtn} 
-                        onClick={() => useAgentStore.getState().toggleSettings()}
-                        aria-label="Open settings dashboard panel"
-                    >
-                        Configure
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
+        <Button
+          variant="secondary"
+          onClick={toggleSettings}
+          aria-label="Open agent configuration settings"
+        >
+          <IconSettings size={14} aria-hidden="true" />
+          <span>Settings</span>
+        </Button>
+      </div>
+    </div>
+  );
 };
