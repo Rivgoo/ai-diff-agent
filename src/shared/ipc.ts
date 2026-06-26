@@ -1,4 +1,5 @@
-import type { ChatSession, OperationStatus, AgentSettings } from '@/shared/models';
+import type { ChatSession, OperationStatus, AgentSettings } from '../shared/models';
+import type { ConflictDetails } from '../shared/contracts';
 
 export type PipelineStage = 'idle' | 'parsing' | 'validating' | 'resolving' | 'applying' | 'error';
 
@@ -18,7 +19,15 @@ export type WebviewEvent =
 export type ExtensionEvent =
     | { type: 'STATE_HYDRATE'; session: ChatSession }
     | { type: 'SETTINGS_HYDRATE'; settings: AgentSettings }
-    | { type: 'OPERATION_UPDATED'; operationId: string; status: OperationStatus }
+    | { 
+        type: 'OPERATION_UPDATED'; 
+        operationId: string; 
+        status: OperationStatus;
+        resolvedResiliently?: boolean;
+        originalPath?: string;
+        path?: string;
+        conflict?: ConflictDetails;
+      }
     | { type: 'AGENT_TYPING'; isTyping: boolean }
     | { type: 'PIPELINE_STATE'; stage: PipelineStage; current: number; total: number }
     | { type: 'PROMPT_COPIED' }

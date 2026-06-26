@@ -1,7 +1,10 @@
 import type * as vscode from 'vscode';
-import type { ChatSession, ChatMessage, OperationStatus } from '@/shared/models';
-import { SYSTEM_CONSTANTS } from '@/shared/constants';
+import type { ChatSession, ChatMessage, OperationStatus, DiffOperation } from '../../shared/models';
+import { SYSTEM_CONSTANTS } from '../../shared/constants';
 
+/**
+ * Persists and updates the historical chat session log using VS Code Memento storage.
+ */
 export class ChatSessionManager {
     private session: ChatSession = { messages: [] };
 
@@ -24,6 +27,26 @@ export class ChatSessionManager {
                 const op = msg.operations.find(o => o.id === operationId);
                 if (op) {
                     op.status = status;
+                    this.saveSession();
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Updates fields of an active transaction operation dynamically (Phase 2).
+     * Replaces previous operation structures or merges additional fields (e.g. originalPath, resolvedResiliently, conflict candidates).
+     */
+    public updateOperation(operation: DiffOperation): void {
+        for (const msg of this.session.messages) {
+            if (msg.operations) {
+                const idx = msg.operations.findIndex(o => o.id === operation.id);
+                if (idx !== -1) {
+                    msg.operations[idx] = { 
+                        ...msg.operations[idx], 
+                        ...operation 
+                    };
                     this.saveSession();
                     return;
                 }

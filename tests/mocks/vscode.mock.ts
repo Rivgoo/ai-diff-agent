@@ -3,8 +3,7 @@ import * as path from 'path';
 /**
  * Stateful Centralized VS Code API Mock Engine.
  * Provides runtime implementations of VS Code types, classes, services and enums.
- * Acts as the single source of truth for UI decorations, buffers and file actions during fast Unit Tests.
- * Implements high-fidelity virtual filesystem mimicking physical OS directory hierarchies and recursive limits.
+ * Upgraded in Phase 4 with full workspace.findFiles virtual scanning support.
  */
 
 export const mockFilesystem = new Map<string, string>();
@@ -184,6 +183,34 @@ export const workspace = {
         return mockLiveDocuments;
     },
 
+    /**
+     * Executes indexing scans on virtual mockFilesystem matching globs (Phase 4).
+     */
+    findFiles: async (include: any, exclude?: any): Promise<Uri[]> => {
+        const results: Uri[] = [];
+        const globPattern = typeof include === 'string' ? include : (include && typeof include.pattern === 'string' ? include.pattern : String(include));
+        const filenamePart = globPattern.replace('**/', '').replace(/^\//, '');
+
+        for (const key of mockFilesystem.keys()) {
+            const normalized = key.replace(/\\/g, '/');
+            
+            // Apply mock exclusions matching globs roughly
+            if (exclude) {
+                const excludeStr = typeof exclude === 'string' ? exclude : (exclude.pattern || String(exclude));
+                const isExcluded = excludeStr.split(',').some((ex: string) => {
+                    const cleanEx = ex.trim().replace(/\*\*/g, '').replace(/\*/g, '');
+                    return cleanEx && normalized.includes(cleanEx);
+                });
+                if (isExcluded) continue;
+            }
+
+            if (normalized.endsWith('/' + filenamePart) || normalized === filenamePart) {
+                results.push(Uri.parse(key));
+            }
+        }
+        return results;
+    },
+
     applyEdit: async (): Promise<boolean> => {
         mockApplyEditCallCount++;
         for (const action of mockAppliedEdits) {
@@ -251,7 +278,6 @@ export const workspace = {
             if (mockFilesystem.has(uriStr)) {
                 return {};
             }
-            // Check if directory exists implicitly by verifying if any files reside inside it
             const dirPrefix = uriStr.endsWith('/') ? uriStr : uriStr + '/';
             for (const key of mockFilesystem.keys()) {
                 if (key.startsWith(dirPrefix)) {
@@ -285,7 +311,6 @@ export const workspace = {
             const dirPrefix = prefix.endsWith('/') ? prefix : prefix + '/';
             mockFilesystem.delete(dirPrefix);
             
-            // Only perform recursive deletions if options.recursive is explicitly set to true
             if (options && options.recursive) {
                 for (const key of mockFilesystem.keys()) {
                     if (key.startsWith(dirPrefix)) {

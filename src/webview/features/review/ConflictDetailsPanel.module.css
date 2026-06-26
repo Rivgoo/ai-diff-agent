@@ -58,6 +58,92 @@
     color: var(--vscode-foreground);
 }
 
+/* Ambiguous Matching alternative lists formatting */
+.candidatesContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 6px;
+    overflow: hidden;
+}
+
+.candidatesTitle {
+    font-size: 10px;
+    font-weight: bold;
+    color: var(--vscode-descriptionForeground);
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+}
+
+.candidatesList {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.candidateRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 6px;
+    border-radius: 3px;
+    background-color: var(--vscode-sideBar-background);
+    transition: background-color 0.1s ease;
+}
+
+.candidateRow:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.candidatePathBox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.candidateDocIcon {
+    color: var(--vscode-descriptionForeground);
+    flex-shrink: 0;
+}
+
+.candidateText {
+    font-size: 11px;
+    color: var(--vscode-foreground);
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl; /* Enhances reading of trailing files directories first */
+}
+
+.copyCandBtn {
+    background: none;
+    border: none;
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    transition: background-color 0.1s ease;
+}
+
+.copyCandBtn:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.successIcon {
+    color: var(--vscode-testing-iconPassed);
+}
+
 .codeSnippetContainer {
     border: 1px solid var(--vscode-panel-border);
     border-radius: 3px;
@@ -97,10 +183,6 @@
 
 .copyBtn:hover {
     background-color: var(--vscode-toolbar-hoverBackground);
-}
-
-.successIcon {
-    color: var(--vscode-testing-iconPassed);
 }
 
 .pre {

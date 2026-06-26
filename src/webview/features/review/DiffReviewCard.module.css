@@ -39,6 +39,16 @@
     box-shadow: 0 0 0 1px var(--vscode-editorError-foreground);
 }
 
+.cardResilient {
+    border-color: var(--vscode-inputValidation-warningBorder, var(--vscode-editorWarning-foreground));
+    background-color: var(--vscode-inputValidation-warningBackground, var(--vscode-editor-background));
+}
+
+.cardResilient:hover {
+    background-color: var(--vscode-inputValidation-warningBackground, var(--vscode-list-hoverBackground));
+    filter: brightness(1.02);
+}
+
 .headerRow {
     display: flex;
     align-items: center;
@@ -141,4 +151,38 @@
     color: var(--vscode-gitDecoration-deletedResourceForeground);
     display: flex;
     align-items: center;
+}
+
+/* Resilient search metadata container highlights */
+.resilientNotice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 3px 6px;
+    background-color: var(--vscode-input-background);
+    border-radius: 3px;
+    border: 1px solid var(--vscode-panel-border);
+    max-width: 100%;
+}
+
+.warnTriangle {
+    color: var(--vscode-editorWarning-foreground);
+    flex-shrink: 0;
+}
+
+.noticeText {
+    font-size: 9.5px;
+    color: var(--vscode-descriptionForeground);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rawCode {
+    font-family: var(--vscode-editor-font-family);
+    background-color: var(--vscode-textCodeBlock-background);
+    padding: 0px 4px;
+    border-radius: 2px;
+    color: var(--vscode-editorWarning-foreground);
 }

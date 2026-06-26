@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { ConflictDetails } from '@/shared/models';
-import { IconCopy, IconCheck, IconCode, IconAlertTriangle, IconHelpCircle } from '@tabler/icons-react';
+import type { ConflictDetails } from '../../../shared/contracts';
+import { IconCopy, IconCheck, IconCode, IconAlertTriangle, IconHelpCircle, IconFile } from '@tabler/icons-react';
 import styles from './ConflictDetailsPanel.module.css';
 
 interface ConflictDetailsPanelProps {
@@ -9,45 +9,63 @@ interface ConflictDetailsPanelProps {
 
 export const ConflictDetailsPanel = ({ conflict }: ConflictDetailsPanelProps) => {
     const [copied, setCopied] = useState(false);
+    const [copiedCandidateIndex, setCopiedCandidateIndex] = useState<number | null>(null);
 
     const handleCopy = async (e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevents focusing the parent card element on click
+        e.stopPropagation();
         try {
             await navigator.clipboard.writeText(conflict.originalSearchBlock);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch (err) {
-            console.error('Failed to copy conflict search block:', err);
+            console.error('Failed to copy search blocks:', err);
+        }
+    };
+
+    const handleCopyCandidate = async (e: React.MouseEvent, index: number, path: string) => {
+        e.stopPropagation();
+        try {
+            await navigator.clipboard.writeText(path);
+            setCopiedCandidateIndex(index);
+            setTimeout(() => setCopiedCandidateIndex(null), 2000);
+        } catch (err) {
+            console.error('Failed to copy file path:', err);
         }
     };
 
     const getHumanReadableReason = () => {
         switch (conflict.reason) {
             case 'NOT_FOUND':
-                return `The search pattern was not found in the target file (Block ${conflict.blockIndex} of ${conflict.totalBlocks}). This usually indicates the original code has been modified.`;
+                return `The target search pattern was not found inside the active file buffer (Block ${conflict.blockIndex} of ${conflict.totalBlocks}). The code might have been edited.`;
             case 'AMBIGUOUS_MATCH':
-                return `Multiple matching blocks were found (${conflict.matchesFound ?? 2} matches) for search block ${conflict.blockIndex}. Extend the surrounding code context to make the search query unique.`;
+                if (conflict.candidatePaths && conflict.candidatePaths.length > 0) {
+                    return `Ambiguity conflict: ${conflict.candidatePaths.length} identical file candidates were discovered in other directories of this project. Explicitly define the target directory.`;
+                }
+                return `Multiple code occurrences (${conflict.matchesFound ?? 2} matches) match the search pattern inside block ${conflict.blockIndex}. Extend the target context blocks.`;
             case 'PATH_TRAVERSAL':
-                return `Path validation failure. The operation path attempts to traverse outside the validated sandbox boundary of the active workspace folder.`;
+                return `Path validation failure. The operation path violates sandbox constraints, pointing outside the active project directory workspace root.`;
             case 'FILE_NOT_FOUND':
-                return `The target workspace file does not exist on disk. Check if it was renamed, deleted, or moved manually.`;
+                return `The target file cannot be located on disk. Check if the asset was moved, renamed, or deleted.`;
             default:
-                return `An unexpected matching mismatch was encountered during the atomic verification check.`;
+                return `An unexpected matching error was encountered during transactional pre-flight checks.`;
         }
     };
 
     const getResolutionStep = () => {
         switch (conflict.reason) {
             case 'NOT_FOUND':
-                return 'Verify if the file content changed or copy the correct updated code snippet directly from the active editor.';
+                return 'Double-check file contents or copy the updated target block directly from your active editor tabs.';
             case 'AMBIGUOUS_MATCH':
-                return 'Add 2-3 lines of preceding or succeeding code inside the search block to distinguish this exact block.';
+                if (conflict.candidatePaths && conflict.candidatePaths.length > 0) {
+                    return 'Copy the correct path from the list of alternatives below and paste it directly into your prompt.';
+                }
+                return 'Provide 2-3 additional surrounding lines of context inside your search tag block to enforce uniqueness.';
             case 'PATH_TRAVERSAL':
-                return 'Ensure target file paths resolve strictly inside the active project workspace root directory.';
+                return 'Ensure target paths resolve strictly within your active workspace folder boundaries.';
             case 'FILE_NOT_FOUND':
-                return 'Verify that the target file exists or use a <create_file> block if you intended to scaffold a new module.';
+                return 'Verify that the target file exists or use a <create_file> block to scaffold a brand-new module.';
             default:
-                return 'Re-generate the change payload or review the output logs for diagnostic warnings.';
+                return 'Review output logs for verbose diagnostics or re-generate the payload.';
         }
     };
 
@@ -55,7 +73,9 @@ export const ConflictDetailsPanel = ({ conflict }: ConflictDetailsPanelProps) =>
         <div className={styles.container} role="alert" aria-live="assertive">
             <div className={styles.header}>
                 <IconAlertTriangle size={14} className={styles.errorIcon} aria-hidden="true" />
-                <span className={styles.reasonTitle}>Matching Failure (Block {conflict.blockIndex}/{conflict.totalBlocks})</span>
+                <span className={styles.reasonTitle}>
+                    {conflict.reason === 'AMBIGUOUS_MATCH' && conflict.candidatePaths ? 'Ambiguous File Conflict' : `Pre-flight Match Mismatch (Block ${conflict.blockIndex}/${conflict.totalBlocks})`}
+                </span>
             </div>
             
             <p className={styles.description}>{getHumanReadableReason()}</p>
@@ -65,6 +85,37 @@ export const ConflictDetailsPanel = ({ conflict }: ConflictDetailsPanelProps) =>
                 <span className={styles.resolutionText}><strong>How to resolve:</strong> {getResolutionStep()}</span>
             </div>
 
+            {/* Render Candidates List specifically for Ambiguous Path Resolution conflicts */}
+            {conflict.reason === 'AMBIGUOUS_MATCH' && conflict.candidatePaths && conflict.candidatePaths.length > 0 && (
+                <div className={styles.candidatesContainer}>
+                    <div className={styles.candidatesTitle}>
+                        Project Candidates found ({conflict.candidatePaths.length}):
+                    </div>
+                    <div className={styles.candidatesList}>
+                        {conflict.candidatePaths.map((candPath, idx) => (
+                            <div key={idx} className={styles.candidateRow}>
+                                <div className={styles.candidatePathBox}>
+                                    <IconFile size={12} className={styles.candidateDocIcon} />
+                                    <span className={styles.candidateText} title={candPath}>{candPath}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    className={styles.copyCandBtn}
+                                    onClick={(e) => handleCopyCandidate(e, idx, candPath)}
+                                    title="Copy actual path to clipboard"
+                                >
+                                    {copiedCandidateIndex === idx ? (
+                                        <IconCheck size={11} className={styles.successIcon} />
+                                    ) : (
+                                        <IconCopy size={11} />
+                                    )}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {conflict.searchExcerpt && (
                 <div className={styles.codeSnippetContainer}>
                     <div className={styles.snippetHeader}>
@@ -73,7 +124,7 @@ export const ConflictDetailsPanel = ({ conflict }: ConflictDetailsPanelProps) =>
                             type="button" 
                             className={styles.copyBtn} 
                             onClick={handleCopy}
-                            aria-label="Copy exact search query to clipboard"
+                            aria-label="Copy search query to clipboard"
                         >
                             {copied ? (
                                 <><IconCheck size={11} className={styles.successIcon} aria-hidden="true" /> Copied</>

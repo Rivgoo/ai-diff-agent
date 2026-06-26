@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import type { WebviewEvent, ExtensionEvent } from '@/shared/ipc';
-import { useAgentStore } from '@/webview/store/agentStore';
+import type { WebviewEvent, ExtensionEvent } from '../../shared/ipc';
+import { useAgentStore } from '../../webview/store/agentStore';
 
 class VSCodeAPIWrapper {
     private static instance: any;
@@ -34,7 +34,16 @@ export const useIPC = () => {
                 case 'STATE_HYDRATE': hydrateSession(message.session); break;
                 case 'SETTINGS_HYDRATE': hydrateSettings(message.settings); break;
                 case 'AGENT_TYPING': setAgentTyping(message.isTyping); break;
-                case 'OPERATION_UPDATED': updateOperationStatus(message.operationId, message.status); break;
+                case 'OPERATION_UPDATED': 
+                    updateOperationStatus(
+                        message.operationId, 
+                        message.status,
+                        message.resolvedResiliently,
+                        message.originalPath,
+                        message.path,
+                        message.conflict
+                    ); 
+                    break;
                 case 'PIPELINE_STATE': setPipelineProgress({ stage: message.stage, current: message.current, total: message.total }); break;
                 case 'PROMPT_COPIED': 
                     setPromptCopied(true);

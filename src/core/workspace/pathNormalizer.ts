@@ -11,10 +11,8 @@ export class PathNormalizer {
             clean = clean.substring(7);
         }
 
-        // Clean redundant leading slashes
-        clean = clean.replace(/^\/+/, '');
-
-        const parts = clean.split('/');
+        // Split on slash and filter out empty segments to resolve redundant slashes
+        const parts = clean.split('/').filter(Boolean);
         
         // Find the root folder name. Everything after it belongs to the workspace.
         const rootIdx = parts.indexOf(rootName);
@@ -23,6 +21,6 @@ export class PathNormalizer {
         }
 
         // Fallback: If root name is missing, assume the path is already properly relative
-        return clean;
+        return parts.join('/');
     }
 }

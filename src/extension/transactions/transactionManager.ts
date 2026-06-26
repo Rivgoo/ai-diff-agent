@@ -9,14 +9,17 @@ import type { CompensationStore, AntiAction } from './compensationStore';
 import { SnapshotService } from './snapshotService';
 import { EditorService } from './editorService';
 import type { DecorationService } from './decorationService';
-import type { OperationStatus, ConflictDetails, ConflictReason } from '../../shared/models';
+import type { OperationStatus, ConflictDetails, ConflictReason, DiffOperation } from '../../shared/models';
 import { TransactionLock } from './transactionLock';
+
+// Resilient path resolver domain and adapters
+import { ResilientPathResolver } from '../../core/resolver/resilientPathResolver';
+import { VsCodeFileSystemAdapter } from '../../infrastructure/adapters/fsTargetAdapter';
+import { VsCodeWorkspaceSearchAdapter } from '../../infrastructure/adapters/workspaceSearchAdapter';
 
 /**
  * Orchestrates atomic transactions using the Saga Pattern.
- * Manages locks, directory bottom-up cleanups, and secure buffer saves.
- * Ensures absolute atomicity: if one operation in a batch fails to prepare,
- * the entire batch is rolled back and discarded before modifying files.
+ * Integrates cascading fallback path resolutions seamlessly.
  */
 export class TransactionManager {
     private searchEngine = new SearchEngine();
@@ -24,16 +27,21 @@ export class TransactionManager {
     private editorService = new EditorService();
     private transactionLock = new TransactionLock();
     
+    // Instantiating the resilient path resolver with physical vscode infrastructure adapters
+    private readonly pathResolver = new ResilientPathResolver(
+        new VsCodeFileSystemAdapter(),
+        new VsCodeWorkspaceSearchAdapter()
+    );
+    
     constructor(
         private readonly store: CompensationStore,
         private readonly decorationService: DecorationService,
-        private readonly statusCallback: (opId: string, status: OperationStatus) => void
+        private readonly statusCallback: (opId: string, status: OperationStatus, metadata?: Partial<DiffOperation>) => void
     ) {}
 
     /**
      * Applies a batch of operations. Safely backs up files, stages edits in editor memory,
-     * and acquires concurrency locks to preserve working space integrity.
-     * Incorporates a pre-flight validation pass to achieve clean atomic guarantees.
+     * and acquires concurrency locks. Resolves relative paths resiliently during pre-flight.
      */
     public async applyBatch(operations: AnyOperation[]): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -64,7 +72,7 @@ export class TransactionManager {
         const opAntiActionsMap = new Map<string, AntiAction[]>();
         const conflictMap = new Map<string, ConflictDetails>();
 
-        // Step 2: Pre-flight Verification Pass (Simulates resolution prior to filesystem writes)
+        // Step 2: Pre-flight Verification Pass with Resilient Path Resolution
         for (const op of operations) {
             if (op.status !== 'pending') continue;
 
@@ -73,10 +81,53 @@ export class TransactionManager {
             let targetUri: vscode.Uri;
             
             try {
-                targetUri = PathSandbox.validate(normalizedPath);
+                // Execute Cascading Heuristic Path Resolution
+                const resolution = await this.pathResolver.resolvePath(normalizedPath);
+
+                // Handling Ambiguous Matching Conflict
+                if (resolution.status === 'AMBIGUOUS_MATCH') {
+                    batchFailed = true;
+                    failReason = `Ambiguous matches found globally for: ${normalizedPath}`;
+                    conflictMap.set(op.id, {
+                        reason: 'AMBIGUOUS_MATCH',
+                        blockIndex: 0,
+                        totalBlocks: op.type === 'update_file' ? op.changes.length : 0,
+                        searchExcerpt: 'N/A',
+                        originalSearchBlock: '',
+                        candidatePaths: resolution.candidatePaths
+                    });
+                    break;
+                }
+
+                // Handling Strict File Not Found Errors (only for modifications and deletions)
+                if (resolution.status === 'NOT_FOUND') {
+                    if (op.type === 'update_file' || op.type === 'delete_path' || op.type === 'move_path') {
+                        batchFailed = true;
+                        failReason = `File resource not found in workspace: ${normalizedPath}`;
+                        conflictMap.set(op.id, {
+                            reason: 'FILE_NOT_FOUND',
+                            blockIndex: 0,
+                            totalBlocks: op.type === 'update_file' ? op.changes.length : 0,
+                            searchExcerpt: 'N/A',
+                            originalSearchBlock: ''
+                        });
+                        break;
+                    }
+                }
+
+                // Inject Resilient Path Warning Metadata on Successful Fallbacks
+                if (resolution.status === 'RESOLVED_RESILIENTLY') {
+                    baseOp.resolvedResiliently = true;
+                    baseOp.originalPath = baseOp.path;
+                    baseOp.path = resolution.resolvedPath; // Dynamically update file write destination
+                    OutputLogger.log(`Resiliently resolved path mapping: ${normalizedPath} -> ${resolution.resolvedPath}`, 'WARN');
+                }
+
+                const finalPath = PathNormalizer.normalize(baseOp.path, rootName);
+                targetUri = PathSandbox.validate(finalPath);
             } catch (e) {
                 batchFailed = true;
-                failReason = `Path validation failed for ${baseOp.path}: ${e instanceof Error ? e.message : 'Unknown error'}`;
+                failReason = `Path resolution or traversal validation failed: ${e instanceof Error ? e.message : 'Unknown error'}`;
                 conflictMap.set(op.id, {
                     reason: 'PATH_TRAVERSAL',
                     blockIndex: 0,
@@ -93,7 +144,7 @@ export class TransactionManager {
                     document = await vscode.workspace.openTextDocument(targetUri);
                 } catch (e) {
                     batchFailed = true;
-                    failReason = `Failed to open document: ${normalizedPath}`;
+                    failReason = `Failed to open document: ${targetUri.fsPath}`;
                     conflictMap.set(op.id, {
                         reason: 'FILE_NOT_FOUND',
                         blockIndex: 0,
@@ -112,7 +163,7 @@ export class TransactionManager {
                     if (match.status !== 'MATCHED') {
                         batchFailed = true;
                         const reasonText = match.status === 'FAILED' ? match.reason : 'unknown';
-                        failReason = `Search match failed in ${normalizedPath}. Reason: ${reasonText}`;
+                        failReason = `Search match failed in ${targetUri.fsPath}. Reason: ${reasonText}`;
                         
                         const reasonCode: ConflictReason = match.status === 'FAILED' && 
                             (match.reason === 'NOT_FOUND' || match.reason === 'AMBIGUOUS_MATCH')
@@ -136,7 +187,7 @@ export class TransactionManager {
                     await vscode.workspace.fs.stat(targetUri);
                 } catch {
                     batchFailed = true;
-                    failReason = `Source file for move not found: ${normalizedPath}`;
+                    failReason = `Source file for move not found: ${targetUri.fsPath}`;
                     conflictMap.set(op.id, {
                         reason: 'FILE_NOT_FOUND',
                         blockIndex: 0,
@@ -157,13 +208,24 @@ export class TransactionManager {
                 this.transactionLock.release(op.id);
                 if (op.status === 'pending') {
                     const conflictData = conflictMap.get(op.id);
+                    const baseOp = op as any;
+                    
                     if (conflictData) {
                         op.conflict = conflictData;
                         op.errorMessage = failReason;
-                        this.statusCallback(op.id, 'conflict');
+                        this.statusCallback(op.id, 'conflict', {
+                            conflict: conflictData,
+                            resolvedResiliently: baseOp.resolvedResiliently,
+                            originalPath: baseOp.originalPath,
+                            path: baseOp.path
+                        });
                     } else {
                         op.errorMessage = 'Transaction aborted due to conflict in other files of this batch.';
-                        this.statusCallback(op.id, 'error');
+                        this.statusCallback(op.id, 'conflict', { // Fixed: Changed from 'error' to 'conflict'
+                            resolvedResiliently: baseOp.resolvedResiliently,
+                            originalPath: baseOp.originalPath,
+                            path: baseOp.path
+                        });
                     }
                 }
             }
@@ -298,17 +360,27 @@ export class TransactionManager {
                 for (const op of operations) {
                     if (op.status !== 'pending') continue;
                     
+                    const baseOp = op as any;
                     const antiActions = opAntiActionsMap.get(op.id);
                     if (antiActions && antiActions.length > 0) {
                         this.store.addTransaction({ operationId: op.id, antiActions });
-                        this.statusCallback(op.id, 'applied_dirty');
+                        
+                        this.statusCallback(op.id, 'applied_dirty', {
+                            resolvedResiliently: baseOp.resolvedResiliently,
+                            originalPath: baseOp.originalPath,
+                            path: baseOp.path
+                        });
                         
                         const pending = pendingDecorations.get(op.id);
                         if (pending) {
                             this.decorationService.addDecorations(pending.uri, op.id, pending.ranges);
                         }
                     } else {
-                        this.statusCallback(op.id, 'saved');
+                        this.statusCallback(op.id, 'saved', {
+                            resolvedResiliently: baseOp.resolvedResiliently,
+                            originalPath: baseOp.originalPath,
+                            path: baseOp.path
+                        });
                         this.transactionLock.release(op.id);
                     }
                 }
@@ -333,17 +405,22 @@ export class TransactionManager {
             for (const op of operations) {
                 await this.snapshotService.purgeSnapshotForOp(rootUri, op.id);
                 this.transactionLock.release(op.id);
+                const baseOp = op as any;
                 if (op.status === 'pending') {
                     op.errorMessage = err instanceof Error ? err.message : 'Unknown write/edit error';
-                    this.statusCallback(op.id, 'error');
+                    this.statusCallback(op.id, 'error', {
+                        errorMessage: op.errorMessage,
+                        resolvedResiliently: baseOp.resolvedResiliently,
+                        originalPath: baseOp.originalPath,
+                        path: baseOp.path
+                    });
                 }
             }
         }
     }
 
     /**
-     * Commits all staged edits. Loads files into document cache to guarantee saves
-     * trigger even on closed, out-of-focus editor tabs.
+     * Commits all staged edits.
      */
     public async saveBatch(): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -381,8 +458,7 @@ export class TransactionManager {
     }
 
     /**
-     * Reverts all active transactions, restoring files from snapshots and recursively
-     * deleting created empty directories bottom-up.
+     * Reverts all active transactions, restoring files from snapshots.
      */
     public async revertBatch(): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -454,7 +530,6 @@ export class TransactionManager {
 
     /**
      * Traverses upwards to the workspace root to track and create missing directory paths.
-     * Registers directory segments to anti-actions for bottom-up revert cleanup.
      */
     private async trackAndCreateDirectory(rootUri: vscode.Uri, targetDir: vscode.Uri, antiActions: AntiAction[]): Promise<void> {
         const rootFsPath = rootUri.fsPath;

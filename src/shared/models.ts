@@ -1,4 +1,7 @@
-import type { ConflictDetails, Position, Range } from '@/shared/contracts';
+import type { ConflictDetails, Position, Range, ConflictReason } from './contracts';
+
+// Correctly re-exporting type system definitions to ensure TransactionManager compilation
+export type { ConflictDetails, ConflictReason, Position, Range };
 
 export interface ChangeStats {
     readonly additions: number;
@@ -24,6 +27,8 @@ export interface DiffOperation {
     id: string;
     type: OperationType;
     path: string;
+    originalPath?: string;         // Track originally requested path with errors (Phase 2 integration)
+    resolvedResiliently?: boolean; // Warning flag indicating file was resolved via fallback (Phase 2 integration)
     status: OperationStatus;
     changes: ChangeBlock[];
     sourcePath?: string;

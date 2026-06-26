@@ -1,16 +1,21 @@
 import type { ReactNode } from 'react';
-import type { DiffOperation } from '@/shared/models';
-import { useIPC } from '@/webview/hooks/useIPC';
-import { Badge } from '@/webview/shared/ui/Badge/Badge';
-import { ConflictDetailsPanel } from '@/webview/features/review/ConflictDetailsPanel';
+import type { DiffOperation } from '../../../shared/models';
+import { useIPC } from '../../hooks/useIPC';
+import { Badge } from '../../shared/ui/Badge/Badge';
+import { ConflictDetailsPanel } from './ConflictDetailsPanel';
 import { 
     IconCheck, IconPlus, IconMinus, IconAlertCircle, IconFile, 
     IconFolder, IconFolderPlus, IconEdit, IconExternalLink, 
-    IconArrowBackUp, IconArrowRight 
+    IconArrowBackUp, IconArrowRight, IconAlertTriangle 
 } from '@tabler/icons-react';
 import styles from './DiffReviewCard.module.css';
 
-interface BadgeConfig { label: string; bg: string; color: string; icon: ReactNode; }
+interface BadgeConfig { 
+    readonly label: string; 
+    readonly bg: string; 
+    readonly color: string; 
+    readonly icon: ReactNode; 
+}
 
 const BADGE_CONFIG: Record<string, BadgeConfig> = {
     create_file: { label: 'NEW', bg: 'var(--vscode-testing-iconPassed)', color: '#ffffff', icon: <IconPlus size={8} strokeWidth={3} /> },
@@ -28,6 +33,7 @@ export const DiffReviewCard = ({ operation }: { readonly operation: DiffOperatio
 
     const badge = BADGE_CONFIG[operation.type];
     const isConflict = operation.status === 'conflict';
+    const isResilient = operation.resolvedResiliently === true;
 
     const pathParts = operation.path.split('/');
     const fileName = pathParts.pop() ?? operation.path;
@@ -35,10 +41,18 @@ export const DiffReviewCard = ({ operation }: { readonly operation: DiffOperatio
 
     const renderStatusIcon = () => {
         const size = 14;
-        if (operation.status === 'applied_dirty') return <IconEdit size={size} color="var(--vscode-editorWarning-foreground)" title="Unsaved changes" />;
-        if (operation.status === 'saved') return <IconCheck size={size} color="var(--vscode-testing-iconPassed)" title="Saved to Disk" />;
-        if (operation.status === 'reverted') return <IconArrowBackUp size={size} color="var(--vscode-descriptionForeground)" title="Reverted" />;
-        if (isConflict) return <IconAlertCircle size={size} color="var(--vscode-testing-iconFailed)" title="Conflict" />;
+        if (operation.status === 'applied_dirty') {
+            return <IconEdit size={size} color="var(--vscode-editorWarning-foreground)" title="Unsaved changes" />;
+        }
+        if (operation.status === 'saved') {
+            return <IconCheck size={size} color="var(--vscode-testing-iconPassed)" title="Saved to Disk" />;
+        }
+        if (operation.status === 'reverted') {
+            return <IconArrowBackUp size={size} color="var(--vscode-descriptionForeground)" title="Reverted" />;
+        }
+        if (isConflict) {
+            return <IconAlertCircle size={size} color="var(--vscode-testing-iconFailed)" title="Conflict" />;
+        }
         return null;
     };
 
@@ -47,8 +61,8 @@ export const DiffReviewCard = ({ operation }: { readonly operation: DiffOperatio
             <button 
                 type="button"
                 onClick={() => sendEvent({ type: 'OPEN_FILE', operationId: operation.id })}
-                className={`${styles.card} ${isConflict ? styles.cardConflict : ''}`}
-                style={{ borderLeft: `3px solid ${badge ? badge.bg : 'var(--vscode-badge-background)'}` }}
+                className={`${styles.card} ${isConflict ? styles.cardConflict : ''} ${isResilient ? styles.cardResilient : ''}`}
+                style={{ borderLeft: `3px solid ${isResilient ? 'var(--vscode-editorWarning-foreground)' : (badge ? badge.bg : 'var(--vscode-badge-background)')}` }}
                 aria-label={`Review ${operation.type} on ${fileName}`}
             >
                 <div className={styles.headerRow}>
@@ -60,6 +74,11 @@ export const DiffReviewCard = ({ operation }: { readonly operation: DiffOperatio
                                 {badge && (
                                     <Badge backgroundColor={badge.bg} color={badge.color}>
                                         {badge.icon}{badge.label}
+                                    </Badge>
+                                )}
+                                {isResilient && (
+                                    <Badge backgroundColor="var(--vscode-editorWarning-foreground)" color="#000000">
+                                        <IconAlertTriangle size={8} strokeWidth={3} />HEURISTIC
                                     </Badge>
                                 )}
                             </div>
@@ -85,6 +104,15 @@ export const DiffReviewCard = ({ operation }: { readonly operation: DiffOperatio
                         {renderStatusIcon()}
                     </div>
                 </div>
+
+                {isResilient && operation.originalPath && (
+                    <div className={styles.resilientNotice} title={`Originally requested path: ${operation.originalPath}`}>
+                        <IconAlertTriangle size={12} className={styles.warnTriangle} aria-hidden="true" />
+                        <span className={styles.noticeText}>
+                            File resolved resiliently. Requested: <code className={styles.rawCode}>{operation.originalPath}</code>
+                        </span>
+                    </div>
+                )}
             </button>
 
             {isConflict && operation.conflict && (

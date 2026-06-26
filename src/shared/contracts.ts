@@ -27,6 +27,7 @@ export interface ConflictDetails {
     readonly searchExcerpt: string;
     readonly originalSearchBlock: string;
     readonly matchesFound?: number;
+    readonly candidatePaths?: string[]; // Workspace alternatives suggested on ambiguous resolution conflicts.
 }
 
 export interface BaseOperation {

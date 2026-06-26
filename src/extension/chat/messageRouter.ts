@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { WebviewEvent, ExtensionEvent } from '../../shared/ipc';
-import type { OperationStatus } from '../../shared/models';
+import type { OperationStatus, DiffOperation } from '../../shared/models';
 import { ChatSessionManager } from './sessionManager';
 import { SettingsManager } from '../settings/settingsManager';
 import { OutputLogger } from '../../infrastructure/logging/outputLogger';
@@ -15,7 +15,6 @@ import { SYSTEM_CONSTANTS } from '../../shared/constants';
 
 /**
  * MessageRouter acts as the central command dispatcher for the extension.
- * Translates incoming Webview user requests into transactional operations and syncs settings.
  */
 export class MessageRouter {
     private readonly sessionManager: ChatSessionManager;
@@ -34,9 +33,44 @@ export class MessageRouter {
         this.settingsManager = new SettingsManager();
         this.store = new CompensationStore(context.workspaceState);
 
-        this.transactionManager = new TransactionManager(this.store, this.decorationService, (opId: string, status: OperationStatus) => {
-            this.sessionManager.updateOperationStatus(opId, status);
-            this.postMessageCallback({ type: 'OPERATION_UPDATED', operationId: opId, status });
+        // Instantiating TransactionManager with advanced, multi-field metadata status synchronizer (Phase 2)
+        this.transactionManager = new TransactionManager(this.store, this.decorationService, (
+            opId: string, 
+            status: OperationStatus, 
+            metadata?: Partial<DiffOperation>
+        ) => {
+            const session = this.sessionManager.getSession();
+            let targetOp: DiffOperation | undefined;
+            
+            // Look up the operation in active historical session records
+            for (const msg of session.messages) {
+                if (msg.operations) {
+                    targetOp = msg.operations.find(o => o.id === opId);
+                    if (targetOp) break;
+                }
+            }
+
+            if (targetOp) {
+                const updated: DiffOperation = {
+                    ...targetOp,
+                    status,
+                    ...metadata
+                };
+                this.sessionManager.updateOperation(updated);
+                this.postMessageCallback({ 
+                    type: 'OPERATION_UPDATED', 
+                    operationId: opId, 
+                    status,
+                    resolvedResiliently: updated.resolvedResiliently,
+                    originalPath: updated.originalPath,
+                    path: updated.path,
+                    conflict: updated.conflict
+                });
+            } else {
+                // Fallback for flat status modifications
+                this.sessionManager.updateOperationStatus(opId, status);
+                this.postMessageCallback({ type: 'OPERATION_UPDATED', operationId: opId, status });
+            }
         });
 
         this.processPayloadUseCase = new ProcessPayloadUseCase(
@@ -56,7 +90,7 @@ export class MessageRouter {
     }
 
     /**
-     * Entry-point message dispatcher. Matches event identifiers with execute procedures.
+     * Entry-point message dispatcher.
      */
     public handleMessage(event: WebviewEvent): void {
         switch (event.type) {
@@ -104,7 +138,7 @@ export class MessageRouter {
     }
 
     /**
-     * Resolves file URI location safely, checking sandboxes, and reveals the file in active editor columns.
+     * Resolves file URI location safely and reveals the file in active editor columns.
      */
     private async handleOpenFile(operationId: string): Promise<void> {
         const rawOp = this.pendingOperations.get(operationId);
@@ -119,7 +153,6 @@ export class MessageRouter {
                     .flatMap(m => m.operations || [])
                     .find(o => o.id === operationId);
 
-                // If the move operation is already staged/applied, reveal the destination file instead
                 if (sessionOp && (sessionOp.status === 'applied_dirty' || sessionOp.status === 'saved')) {
                     targetPath = baseOp.destinationPath;
                 }
