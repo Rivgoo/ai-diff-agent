@@ -11,14 +11,20 @@ export type WebviewEvent =
     | { type: 'CANCEL_PROCESSING' }
     | { type: 'ACTION_SAVE_ALL' }
     | { type: 'ACTION_REVERT_ALL' }
+    | { type: 'ACTION_ACCEPT_OPERATION'; operationId: string }
+    | { type: 'ACTION_REVERT_OPERATION'; operationId: string }
     | { type: 'OPEN_FILE'; operationId: string }
+    | { type: 'OPEN_DIFF'; operationId: string }
     | { type: 'CLEAR_SESSION' }
+    | { type: 'NEW_SESSION' }                       
+    | { type: 'SWITCH_SESSION'; sessionId: string }        
+    | { type: 'DELETE_SESSION'; sessionId: string }        
     | { type: 'COPY_PROMPT' }
     | { type: 'DOWNLOAD_INSTRUCTIONS' }
-    | { type: 'SHOW_OUTPUT_LOG' }; // New direct route to VS Code Output Channel
+    | { type: 'SHOW_OUTPUT_LOG' };
 
 export type ExtensionEvent =
-    | { type: 'STATE_HYDRATE'; session: ChatSession }
+    | { type: 'STATE_HYDRATE'; sessions: Record<string, ChatSession>; activeSessionId: string }
     | { type: 'SETTINGS_HYDRATE'; settings: AgentSettings }
     | { 
         type: 'OPERATION_UPDATED'; 

@@ -10,7 +10,6 @@ class VSCodeAPIWrapper {
                 // @ts-ignore
                 VSCodeAPIWrapper.instance = acquireVsCodeApi();
             } catch {
-                // Fallback for isolated browser testing
                 VSCodeAPIWrapper.instance = { postMessage: () => {} };
             }
         }
@@ -31,7 +30,9 @@ export const useIPC = () => {
         const handleMessage = (event: MessageEvent<ExtensionEvent>) => {
             const message = event.data;
             switch (message.type) {
-                case 'STATE_HYDRATE': hydrateSession(message.session); break;
+                case 'STATE_HYDRATE': 
+                    hydrateSession(message.sessions, message.activeSessionId); 
+                    break;
                 case 'SETTINGS_HYDRATE': hydrateSettings(message.settings); break;
                 case 'AGENT_TYPING': setAgentTyping(message.isTyping); break;
                 case 'OPERATION_UPDATED': 
@@ -58,7 +59,6 @@ export const useIPC = () => {
         sendEvent({ type: 'REQUEST_SETTINGS_SYNC' });
 
         return () => window.removeEventListener('message', handleMessage);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const sendEvent = (event: WebviewEvent) => vscode.current.postMessage(event);

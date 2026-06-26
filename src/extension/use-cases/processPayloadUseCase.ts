@@ -31,8 +31,9 @@ export class ProcessPayloadUseCase {
         this.postMessage({ type: 'AGENT_TYPING', isTyping: true });
         this.postMessage({ type: 'PIPELINE_STATE', stage: 'parsing', current: 0, total: 0 });
 
+        await new Promise(resolve => setTimeout(resolve, 0));
+
         try {
-            // Step 1: Lexical & AST parsing
             const parseResult = this.parser.parse(payload);
             if (!parseResult.success) {
                 // Record user submit action with error metadata if parsing fails
@@ -48,11 +49,9 @@ export class ProcessPayloadUseCase {
                 throw new Error(`DSL Parsing failed: ${parseResult.error.message}`);
             }
 
-            // Step 2: Compute change telemetry and structural metrics
             const parsedOperations = parseResult.value;
             const summary = PayloadMetricsExtractor.extract(parsedOperations, payload);
 
-            // Add enriched user message containing complete payload summary metrics
             const userMsg: ChatMessage = {
                 id: Date.now().toString(),
                 role: 'user',
@@ -65,7 +64,6 @@ export class ProcessPayloadUseCase {
 
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'validating', current: 0, total: parsedOperations.length });
 
-            // Step 3: Domain validation and structural conflict validations
             const validationResult = this.validator.validate(parsedOperations);
             if (!validationResult.success) {
                 throw new Error(`DSL Validation failed: ${validationResult.error.message}`);
@@ -100,10 +98,8 @@ export class ProcessPayloadUseCase {
 
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'applying', current: 0, total: operations.length });
 
-            // Step 4: Run the transaction batch
             await this.transactionManager.applyBatch(operations);
 
-            // Step 5: Verify Transaction Batch results for atomic fallback warnings
             const hasConflicts = operations.some(op => op.status === 'conflict');
             if (hasConflicts) {
                 this.sessionManager.addMessage({

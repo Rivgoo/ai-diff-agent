@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import type { OperationRowViewModel } from '../view-models/operationMapper';
-import { IconLoader2, IconEdit, IconCheck, IconArrowBackUp, IconX } from '@tabler/icons-react';
+import { useIPC } from '@/webview/hooks/useIPC';
+import { IconLoader2, IconEdit, IconCheck, IconArrowBackUp, IconX, IconGitCompare } from '@tabler/icons-react';
 import styles from '../styles/row.module.css';
 
 interface OperationRowProps {
@@ -11,7 +12,11 @@ interface OperationRowProps {
 }
 
 const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps) => {
+    const { sendEvent } = useIPC();
     const rowClass = `${styles.row} ${isActive ? styles.rowActive : ''} ${vm.isConflict ? styles.rowConflict : ''}`;
+    
+    // Якщо іконка - олівець, значить файл очікує нашого рішення
+    const isDirty = vm.statusIcon === 'edit';
 
     const renderIcon = () => {
         const size = 12;
@@ -56,8 +61,37 @@ const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps
                 <div className={styles.statusIcon}>{renderIcon()}</div>
             </div>
 
+            {/* ШТОРКА З КНОПКАМИ */}
             <div className={styles.actionOverlay}>
-                <button type="button" className={styles.openBtn} onClick={(e) => { e.stopPropagation(); onClick(); }}>
+                {isDirty && (
+                    <>
+                        <button 
+                            type="button" 
+                            className={`${styles.actionBtn} ${styles.btnDiff}`} 
+                            onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'OPEN_DIFF', operationId: vm.id }); }} 
+                            title="Compare changes (Diff)"
+                        >
+                            <IconGitCompare size={12} />
+                        </button>
+                        <button 
+                            type="button" 
+                            className={`${styles.actionBtn} ${styles.btnAccept}`} 
+                            onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_ACCEPT_OPERATION', operationId: vm.id }); }} 
+                            title="Accept this file"
+                        >
+                            <IconCheck size={12} />
+                        </button>
+                        <button 
+                            type="button" 
+                            className={`${styles.actionBtn} ${styles.btnReject}`} 
+                            onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_REVERT_OPERATION', operationId: vm.id }); }} 
+                            title="Reject this file"
+                        >
+                            <IconX size={12} />
+                        </button>
+                    </>
+                )}
+                <button type="button" className={styles.openBtn} onClick={(e) => { e.stopPropagation(); onClick(); }} title="Open file">
                     Open
                 </button>
             </div>

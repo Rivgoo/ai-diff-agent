@@ -1,6 +1,5 @@
 import type { ConflictDetails, Position, Range, ConflictReason, PayloadSummary } from './contracts';
 
-// Correctly re-exporting type system definitions to ensure TransactionManager compilation
 export type { ConflictDetails, ConflictReason, Position, Range };
 
 export interface ChangeStats {
@@ -27,8 +26,8 @@ export interface DiffOperation {
     id: string;
     type: OperationType;
     path: string;
-    originalPath?: string;         // Track originally requested path with errors (Phase 2 integration)
-    resolvedResiliently?: boolean; // Warning flag indicating file was resolved via fallback (Phase 2 integration)
+    originalPath?: string;
+    resolvedResiliently?: boolean;
     status: OperationStatus;
     changes: ChangeBlock[];
     sourcePath?: string;
@@ -50,5 +49,7 @@ export interface ChatMessage {
 }
 
 export interface ChatSession {
+    id: string;
+    title: string;
     messages: ChatMessage[];
 }

@@ -6,13 +6,16 @@ import { TerminalLog } from '@/webview/features/terminal/components/TerminalLog'
 import { EmptyState } from '@/webview/features/chat/EmptyState';
 import { StatusBarMinimal } from '@/webview/features/status-bar/StatusBarMinimal';
 import { FeatureComposer } from '@/webview/features/composer/FeatureComposer';
+import { SessionTabs } from '@/webview/features/sessions/SessionTabs';
 import styles from './App.module.css';
 
 export const App = () => {
-    // Initialize IPC bridge once globally
     const { sendEvent } = useIPC();
 
-    const messages = useAgentStore((state) => state.messages);
+    // БЕЗПЕЧНЕ ОТРИМАННЯ ПОВІДОМЛЕНЬ
+    const activeSessionId = useAgentStore((state) => state.activeSessionId);
+    const messages = useAgentStore((state) => state.sessions[activeSessionId]?.messages) || [];
+    
     const isTyping = useAgentStore((state) => state.isAgentTyping);
     const settings = useAgentStore((state) => state.settings);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -30,6 +33,8 @@ export const App = () => {
     return (
         <main className={styles.container}>
             <SettingsModal />
+            
+            <SessionTabs />
 
             <div ref={scrollRef} className={styles.scrollArea}>
                 {messages.length === 0 ? (

@@ -1,0 +1,86 @@
+.container {
+    display: flex;
+    align-items: center;
+    background-color: var(--vscode-editorGroupHeader-tabsBackground);
+    border-bottom: 1px solid var(--vscode-editorGroupHeader-tabsBorder);
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 35px;
+    flex-shrink: 0;
+}
+
+/* Приховуємо скролбар для естетики */
+.container::-webkit-scrollbar { display: none; }
+
+.tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 100%;
+    padding: 0 10px;
+    font-family: var(--vscode-font-family);
+    font-size: 11px;
+    color: var(--vscode-tab-inactiveForeground);
+    background-color: var(--vscode-tab-inactiveBackground);
+    border-right: 1px solid var(--vscode-editorGroupHeader-tabsBorder);
+    cursor: pointer;
+    min-width: 100px;
+    max-width: 180px;
+    white-space: nowrap;
+    border-top: 1px solid transparent;
+}
+
+.tabActive {
+    color: var(--vscode-tab-activeForeground);
+    background-color: var(--vscode-tab-activeBackground);
+    border-top: 1px solid var(--vscode-tab-activeBorderTop);
+}
+
+.tab:hover:not(.tabActive) {
+    background-color: var(--vscode-tab-hoverBackground);
+}
+
+.tabTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-grow: 1;
+}
+
+.closeBtn {
+    background: none;
+    border: none;
+    color: inherit;
+    padding: 2px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.1s ease, background-color 0.1s ease;
+}
+
+.tab:hover .closeBtn, .tabActive .closeBtn {
+    opacity: 1;
+}
+
+.closeBtn:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.addBtn {
+    background: none;
+    border: none;
+    color: var(--vscode-icon-foreground);
+    padding: 4px;
+    margin: 0 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.addBtn:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
