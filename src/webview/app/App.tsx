@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useAgentStore } from '@/webview/store/agentStore';
 import { useIPC } from '@/webview/hooks/useIPC';
-import { TerminalLog } from '@/webview/features/terminal/components/TerminalLog';
 
+import { UserMessageCard } from '@/webview/features/message-feed/components/UserMessageCard';
+import { AgentMessageCard } from '@/webview/features/message-feed/components/AgentMessageCard';
 import { EmptyState } from '@/webview/features/chat/EmptyState';
 import { StatusBarMinimal } from '@/webview/features/status-bar/StatusBarMinimal';
 import { FeatureComposer } from '@/webview/features/composer/FeatureComposer';
@@ -43,11 +44,19 @@ export const App = () => {
                             <EmptyState />
                         ) : (
                             messages.map((msg) => (
-                                <TerminalLog 
-                                    key={msg.id} 
-                                    message={msg} 
-                                    onOpenFile={handleOpenFile} 
-                                />
+                                msg.role === 'user' ? (
+                                    <UserMessageCard 
+                                        key={msg.id} 
+                                        message={msg} 
+                                        onOpenFile={handleOpenFile} 
+                                    />
+                                ) : (
+                                    <AgentMessageCard 
+                                        key={msg.id} 
+                                        message={msg} 
+                                        onOpenFile={handleOpenFile} 
+                                    />
+                                )
                             ))
                         )}
                     </div>

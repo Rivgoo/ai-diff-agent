@@ -65,6 +65,7 @@ export class TransactionPipeline {
 
         try {
             this.logger.info(`Starting transaction pipeline for ${commands.length} commands.`);
+            const validatedIds = new Set<string>();
 
             // Phase 1: Validate (PreFlight)
             for (const cmd of commands) {
@@ -73,9 +74,12 @@ export class TransactionPipeline {
                     this.logger.warn(`Validation failed for ${cmd.operationId}. Aborting batch.`);
                     const conflictMap = new Map<string, ConflictDetails>();
                     conflictMap.set(cmd.operationId, res.error);
-                    this.abortBatch(pendingOps, "Validation failed", conflictMap);
+                    
+                    // Mark the specific failing command as the culprit
+                    this.abortBatch(pendingOps, "Validation failed", conflictMap, cmd.operationId, validatedIds);
                     return;
                 }
+                validatedIds.add(cmd.operationId);
             }
 
             // Phase 2: Snapshots
@@ -149,14 +153,37 @@ export class TransactionPipeline {
         }
     }
 
-    private abortBatch(operations: AnyOperation[], failReason: string, conflictMap: Map<string, ConflictDetails>): void {
+    private abortBatch(
+        operations: AnyOperation[], 
+        failReason: string, 
+        conflictMap: Map<string, ConflictDetails>,
+        culpritId?: string,
+        validatedIds?: Set<string>
+    ): void {
         for (const op of operations) {
             this.transactionLock.release(op.id);
-            const conflictData = conflictMap.get(op.id);
+            
+            let conflictData = conflictMap.get(op.id);
+            
+            // If we have a known culprit, and this is NOT the culprit, mark as an aborted victim
+            if (culpritId && op.id !== culpritId) {
+                conflictData = {
+                    reason: 'ABORTED',
+                    blockIndex: 0,
+                    totalBlocks: 0,
+                    searchExcerpt: 'Transaction aborted due to failure in another file.',
+                    originalSearchBlock: '',
+                    wasValidated: validatedIds?.has(op.id)
+                };
+            } else if (!conflictData) {
+                // Fallback for general rejection
+                conflictData = { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: failReason, originalSearchBlock: '' };
+            }
+
             this.onStatusUpdate({
                 operationId: op.id,
                 status: 'conflict',
-                conflict: conflictData || { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: failReason, originalSearchBlock: '' }
+                conflict: conflictData
             });
         }
     }

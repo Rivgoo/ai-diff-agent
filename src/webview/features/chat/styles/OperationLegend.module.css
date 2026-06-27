@@ -1,0 +1,64 @@
+.legendContainer {
+    margin-top: 24px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--vscode-panel-border);
+    width: 100%;
+    max-width: 340px; /* Expanded slightly to let 2 columns live comfortably side-by-side */
+    text-align: left;
+    box-sizing: border-box;
+}
+
+.legendTitle {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--vscode-descriptionForeground);
+    margin: 0 0 12px 0;
+    user-select: none;
+}
+
+.list {
+    display: grid;
+    grid-template-rows: repeat(3, auto); /* Max 3 rows per column */
+    grid-auto-flow: column; /* Flows sequentially down the first column first, then moves to column 2 */
+    gap: 10px 16px; /* 10px row spacing, 16px column spacing */
+    margin: 0;
+    padding: 0;
+}
+
+.item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-family: var(--vscode-font-family);
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+.prefix {
+    font-family: var(--vscode-editor-font-family);
+    font-weight: 700;
+    font-size: 11px;
+    white-space: nowrap;
+    min-width: 20px;
+    text-align: center;
+    user-select: none;
+}
+
+.details {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.label {
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.description {
+    color: var(--vscode-descriptionForeground);
+    font-size: 10px;
+}

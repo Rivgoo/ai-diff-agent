@@ -30,6 +30,23 @@ export class DeletePathCommand extends BaseCommand<DeletePathOperation> {
             }
             
             this.targetUri = PathSandbox.validate(this.normalizedPath);
+
+            // Pre-flight check: determine if target path points to a directory
+            try {
+                const stat = await vscode.workspace.fs.stat(this.targetUri);
+                const isDir = (stat.type === vscode.FileType.Directory);
+                this.metadata = {
+                    ...this.metadata,
+                    isDirectory: isDir
+                };
+            } catch {
+                // Safe default if directory/file is already missing on disk
+                this.metadata = {
+                    ...this.metadata,
+                    isDirectory: false
+                };
+            }
+
             return Result.ok(undefined);
         } catch (e) {
             return Result.fail(this.buildConflict('PATH_TRAVERSAL'));

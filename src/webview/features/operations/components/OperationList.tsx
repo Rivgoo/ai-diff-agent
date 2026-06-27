@@ -44,7 +44,8 @@ export const OperationList = ({ operations, onOpenFile }: OperationListProps) =>
                                 onMouseEnter={() => setActiveIndex(index)}
                                 onClick={() => onOpenFile(vm.id)}
                             />
-                            {vm.isConflict && vm.conflictDetails && (
+                            {/* Render detailed Conflict Gutter ONLY for the active culprit causing the transaction abort */}
+                            {vm.isRealConflict && vm.conflictDetails && (
                                 <ConflictGutter details={vm.conflictDetails} />
                             )}
                         </div>

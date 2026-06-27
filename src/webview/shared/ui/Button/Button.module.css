@@ -39,16 +39,18 @@
     background-color: var(--vscode-button-hoverBackground);
 }
 
+/* Beautiful solid secondary styling for cancel button to align with standard theme rules */
 .danger {
     padding: 4px 10px;
     height: 24px;
-    background-color: var(--vscode-button-secondaryBackground);
-    color: var(--vscode-button-secondaryForeground);
+    background-color: var(--vscode-button-secondaryBackground, #3a3d41);
+    color: var(--vscode-button-secondaryForeground, #ffffff);
+    border: 1px solid var(--vscode-button-border, #4c4f52);
 }
 
 .danger:hover:not(:disabled) {
-    background-color: var(--vscode-errorForeground);
-    color: #ffffff;
+    background-color: var(--vscode-button-secondaryHoverBackground, #4c4f52);
+    color: var(--vscode-button-secondaryForeground, #ffffff);
 }
 
 .secondary {

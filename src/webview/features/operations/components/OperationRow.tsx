@@ -13,9 +13,17 @@ interface OperationRowProps {
 
 const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps) => {
     const { sendEvent } = useIPC();
-    const rowClass = `${styles.row} ${isActive ? styles.rowActive : ''} ${vm.isConflict ? styles.rowConflict : ''}`;
     
-    // Якщо іконка - олівець, значить файл очікує нашого рішення
+    // Generate semantic UI classes based on ViewModel truth matrix
+    const classNames = [styles.row];
+    if (isActive) classNames.push(styles.rowActive);
+    if (vm.isRealConflict) classNames.push(styles.rowConflict);
+    else if (vm.wasValidated) classNames.push(styles.rowAbortedValidated);
+    else if (vm.isAborted) classNames.push(styles.rowAborted);
+    
+    const rowClass = classNames.join(' ');
+    
+    // Pencil icon indicates the file is fully staged and waiting for user decision
     const isDirty = vm.statusIcon === 'edit';
 
     const renderIcon = () => {
@@ -61,7 +69,7 @@ const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps
                 <div className={styles.statusIcon}>{renderIcon()}</div>
             </div>
 
-            {/* ШТОРКА З КНОПКАМИ */}
+            {/* ACTION MENU OVERLAY */}
             <div className={styles.actionOverlay}>
                 {isDirty && (
                     <>

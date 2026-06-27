@@ -42,7 +42,8 @@ export const useIPC = () => {
                         message.resolvedResiliently,
                         message.originalPath,
                         message.path,
-                        message.conflict
+                        message.conflict,
+                        message.isDirectory
                     ); 
                     break;
                 case 'PIPELINE_STATE': setPipelineProgress({ stage: message.stage, current: message.current, total: message.total }); break;

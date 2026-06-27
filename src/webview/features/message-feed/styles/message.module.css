@@ -1,0 +1,156 @@
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.userCard {
+    background-color: var(--vscode-editor-background);
+}
+
+.agentCard {
+    background-color: transparent;
+}
+
+.summaryContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.metricsGrid {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.impactDivider {
+    width: 1px;
+    height: 12px;
+    background-color: var(--vscode-panel-border);
+    margin: 0 4px;
+}
+
+.impactText {
+    font-family: var(--vscode-editor-font-family);
+    font-size: 10.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    gap: 6px;
+}
+
+.addText { color: var(--vscode-gitDecoration-addedResourceForeground); }
+.delText { color: var(--vscode-gitDecoration-deletedResourceForeground); }
+
+.accordionHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 6px;
+    border-radius: 3px;
+    background-color: var(--vscode-sideBar-background);
+    border: 1px solid var(--vscode-panel-border);
+    font-family: var(--vscode-font-family);
+    font-size: 11px;
+}
+
+.accordionToggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: 500;
+}
+
+.accordionToggle:hover {
+    color: var(--vscode-textLink-foreground);
+}
+
+.chevron {
+    transition: transform 0.2s ease;
+    color: var(--vscode-descriptionForeground);
+}
+
+.chevronOpen {
+    transform: rotate(90deg);
+}
+
+.copyBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-family: inherit;
+    font-size: 10px;
+    min-width: 60px; /* Zero layout shift threshold */
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.copyBtn:hover {
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.copySuccess {
+    color: var(--vscode-testing-iconPassed) !important;
+}
+
+.payloadContent {
+    margin: 4px 0 0 0;
+    padding: 8px;
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 3px;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 11px;
+    color: var(--vscode-foreground);
+    overflow-y: auto;
+    max-height: 250px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    
+    /* Performance optimizations for large XML renders */
+    content-visibility: auto;
+    contain-intrinsic-size: 0 150px;
+}
+
+.xmlTag {
+    color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
+}
+
+.xmlTagHighlight {
+    color: var(--vscode-symbolIcon-classForeground, #4ec9b0);
+    font-weight: bold;
+}
+
+.textContent {
+    font-size: 12px;
+    color: var(--vscode-foreground);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.errorContent {
+    color: var(--vscode-editorError-foreground);
+    border-left: 2px solid var(--vscode-editorError-foreground);
+    padding-left: 8px;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 11.5px;
+}

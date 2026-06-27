@@ -1,6 +1,7 @@
 import { useAgentStore } from "@/webview/store/agentStore";
 import { useIPC } from "@/webview/hooks/useIPC";
 import { Button } from "@/webview/shared/ui/Button/Button";
+import { OperationLegend } from "./components/OperationLegend";
 import {
   IconCopy,
   IconDownload,
@@ -65,6 +66,9 @@ export const EmptyState = () => {
           <span>Settings</span>
         </Button>
       </div>
+
+      {/* Semantic Operational Code Prefix Explanation Section */}
+      <OperationLegend />
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import type { DiffOperation, ConflictDetails } from '@/shared/models';
+import { OPERATION_DESCRIPTORS } from '../constants/descriptors';
 
 export interface OperationRowViewModel {
     readonly id: string;
@@ -10,10 +11,14 @@ export interface OperationRowViewModel {
     readonly metricAdd: number | null;
     readonly metricDel: number | null;
     readonly isConflict: boolean;
+    readonly isRealConflict: boolean;
+    readonly isAborted: boolean;
+    readonly wasValidated: boolean;
     readonly conflictDetails?: ConflictDetails;
     readonly isResilient: boolean;
     readonly originalPath?: string;
     readonly statusIcon: 'edit' | 'check' | 'revert' | 'error' | 'loading' | null;
+    readonly isDirectory: boolean;
 }
 
 /**
@@ -21,7 +26,15 @@ export interface OperationRowViewModel {
  * Decouples complex conditional rendering logic from the React UI components.
  */
 export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewModel {
+    const isAborted = op.conflict?.reason === 'ABORTED';
     const isConflict = op.status === 'conflict' || op.status === 'error';
+    
+    // A file is a real conflict (culprit) if it failed, but wasn't purely aborted due to another failure
+    const isRealConflict = isConflict && !isAborted;
+    
+    // Identifies victims that successfully passed validation before the overall transaction crashed
+    const wasValidated = isAborted && op.conflict?.wasValidated === true;
+    
     const isProcessing = op.status === 'pending';
 
     // File name and directory parsing
@@ -29,31 +42,17 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
     const fileName = pathParts.pop() || op.path;
     const dirPath = pathParts.join('/');
 
-    // Determine CLI-style status marker and VS Code semantic color
-    let statusMarker = '[ ]';
-    let markerColor = 'var(--vscode-descriptionForeground)';
-
-    if (op.type === 'create_file') {
-        statusMarker = '[A]';
-        markerColor = 'var(--vscode-gitDecoration-addedResourceForeground)';
-    } else if (op.type === 'update_file') {
-        statusMarker = '[M]';
-        markerColor = 'var(--vscode-gitDecoration-modifiedResourceForeground)';
-    } else if (op.type === 'delete_path') {
-        statusMarker = '[D]';
-        markerColor = 'var(--vscode-gitDecoration-deletedResourceForeground)';
-    } else if (op.type === 'move_path') {
-        statusMarker = '[R]';
-        markerColor = 'var(--vscode-gitDecoration-renamedResourceForeground)';
-    } else if (op.type === 'create_dir') {
-        statusMarker = '[+]';
-        markerColor = 'var(--vscode-descriptionForeground)';
-    }
+    // Centralised descriptors lookup replacing fragile inline conditionals
+    const descriptor = OPERATION_DESCRIPTORS[op.type];
+    const statusMarker = descriptor ? descriptor.prefix : '[ ]';
+    const markerColor = descriptor ? descriptor.themeColorVar : 'var(--vscode-descriptionForeground)';
 
     // Determine trailing status icon
     let statusIcon: OperationRowViewModel['statusIcon'] = null;
+    
     if (isProcessing) statusIcon = 'loading';
-    else if (isConflict) statusIcon = 'error';
+    else if (isRealConflict) statusIcon = 'error';
+    else if (isAborted) statusIcon = null; // Hide icons completely for safe victims to reduce visual noise
     else if (op.status === 'applied_dirty') statusIcon = 'edit';
     else if (op.status === 'saved') statusIcon = 'check';
     else if (op.status === 'reverted') statusIcon = 'revert';
@@ -68,9 +67,13 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
         metricAdd: op.stats?.additions || null,
         metricDel: op.stats?.deletions || null,
         isConflict,
+        isRealConflict,
+        isAborted,
+        wasValidated,
         conflictDetails: op.conflict,
         isResilient: !!op.resolvedResiliently,
         originalPath: op.originalPath,
-        statusIcon
+        statusIcon,
+        isDirectory: !!op.isDirectory
     };
 }

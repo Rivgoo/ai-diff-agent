@@ -14,7 +14,7 @@ export interface Range {
 /**
  * Diagnostic categorization of transactional conflict triggers.
  */
-export type ConflictReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'PATH_TRAVERSAL' | 'FILE_NOT_FOUND' | 'UNKNOWN';
+export type ConflictReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'PATH_TRAVERSAL' | 'FILE_NOT_FOUND' | 'UNKNOWN' | 'ABORTED';
 
 /**
  * Encapsulates matching failure telemetry used by presentation components
@@ -28,6 +28,7 @@ export interface ConflictDetails {
     readonly originalSearchBlock: string;
     readonly matchesFound?: number;
     readonly candidatePaths?: string[]; // Workspace alternatives suggested on ambiguous resolution conflicts.
+    readonly wasValidated?: boolean; // Indicates if the file successfully passed pre-flight validation before the transaction was aborted
 }
 
 export interface BaseOperation {
@@ -37,6 +38,7 @@ export interface BaseOperation {
     status: OperationStatus;
     errorMessage?: string;
     conflict?: ConflictDetails;
+    isDirectory?: boolean;
 }
 
 export type MatchFailureReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'EMPTY_SEARCH_BLOCK';
