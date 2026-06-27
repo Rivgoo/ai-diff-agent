@@ -10,6 +10,9 @@ export interface OperationRowViewModel {
     readonly metricAdd: number | null;
     readonly metricDel: number | null;
     readonly isConflict: boolean;
+    readonly isRealConflict: boolean;
+    readonly isAborted: boolean;
+    readonly wasValidated: boolean;
     readonly conflictDetails?: ConflictDetails;
     readonly isResilient: boolean;
     readonly originalPath?: string;
@@ -21,7 +24,15 @@ export interface OperationRowViewModel {
  * Decouples complex conditional rendering logic from the React UI components.
  */
 export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewModel {
+    const isAborted = op.conflict?.reason === 'ABORTED';
     const isConflict = op.status === 'conflict' || op.status === 'error';
+    
+    // A file is a real conflict (culprit) if it failed, but wasn't purely aborted due to another failure
+    const isRealConflict = isConflict && !isAborted;
+    
+    // Identifies victims that successfully passed validation before the overall transaction crashed
+    const wasValidated = isAborted && op.conflict?.wasValidated === true;
+    
     const isProcessing = op.status === 'pending';
 
     // File name and directory parsing
@@ -52,8 +63,10 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
 
     // Determine trailing status icon
     let statusIcon: OperationRowViewModel['statusIcon'] = null;
+    
     if (isProcessing) statusIcon = 'loading';
-    else if (isConflict) statusIcon = 'error';
+    else if (isRealConflict) statusIcon = 'error';
+    else if (isAborted) statusIcon = null; // Hide icons completely for safe victims to reduce visual noise
     else if (op.status === 'applied_dirty') statusIcon = 'edit';
     else if (op.status === 'saved') statusIcon = 'check';
     else if (op.status === 'reverted') statusIcon = 'revert';
@@ -68,6 +81,9 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
         metricAdd: op.stats?.additions || null,
         metricDel: op.stats?.deletions || null,
         isConflict,
+        isRealConflict,
+        isAborted,
+        wasValidated,
         conflictDetails: op.conflict,
         isResilient: !!op.resolvedResiliently,
         originalPath: op.originalPath,
