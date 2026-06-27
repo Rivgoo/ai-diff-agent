@@ -1,9 +1,5 @@
 import * as vscode from 'vscode';
 
-/**
- * Manages the visual highlighting of transactional AI-applied edits.
- * Leverages native theme colors dynamically to adjust to dark, light, or high-contrast editors.
- */
 export class DecorationService {
     private decorationType: vscode.TextEditorDecorationType;
     private activeDecorations = new Map<string, { opId: string; range: vscode.Range }[]>();
@@ -51,10 +47,6 @@ export class DecorationService {
         this.triggerUpdateDecorations();
     }
 
-    /**
-     * Повертає список координат (Ranges) для конкретної операції.
-     * Використовується для автоматичного фокусування та прокрутки екрана.
-     */
     public getRangesForOp(opId: string): vscode.Range[] {
         const result: vscode.Range[] = [];
         for (const decs of this.activeDecorations.values()) {

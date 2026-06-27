@@ -1,20 +1,12 @@
 import * as vscode from 'vscode';
-import { OutputLogger } from '../../infrastructure/logging/outputLogger';
-import { SYSTEM_CONSTANTS } from '../../shared/constants';
-import { LiveDocumentRegistry } from './liveDocumentRegistry';
+import { OutputLogger } from '@/infrastructure/logging/outputLogger';
+import { SYSTEM_CONSTANTS } from '@/shared/constants';
+import { LiveDocumentRegistry } from './LiveDocumentRegistry';
 
-/**
- * Handles transaction-scoped, isolated backups of files undergoing AI operations.
- * Captures live unsaved states from editor buffers to prevent data loss.
- */
 export class SnapshotService {
     private readonly liveRegistry = new LiveDocumentRegistry();
     private readonly backupFolder = SYSTEM_CONSTANTS.BACKUP_FOLDER_NAME;
 
-    /**
-     * Generates an isolated, safe URI for a snapshot within the transaction scope directory.
-     * PUBLIC to allow Diff Viewer to access original files.
-     */
     public getBackupUri(workspaceRoot: vscode.Uri, opId: string, relativePath: string): vscode.Uri {
         const safeName = encodeURIComponent(relativePath).replace(/%/g, '_');
         return vscode.Uri.joinPath(workspaceRoot, this.backupFolder, opId, safeName);
@@ -55,7 +47,7 @@ export class SnapshotService {
             await vscode.workspace.fs.delete(backupDir, { recursive: true, useTrash: false });
             OutputLogger.log(`Flushed file snapshots for operation: ${opId}`);
         } catch {
-            // Directory already purged or missing, fail-safe ignore
+            // Safe ignore
         }
     }
 

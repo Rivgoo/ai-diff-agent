@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SidebarWebviewProvider } from '@/extension/vscode/webviewHost';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
-import { DecorationService } from '@/extension/transactions/decorationService';
+import { DecorationService } from '@/extension/transactions/services/DecorationService';
 
 export function activate(context: vscode.ExtensionContext): void {
     OutputLogger.initialize();
@@ -15,7 +15,6 @@ export function activate(context: vscode.ExtensionContext): void {
                 decorationService.updateDecorationsForEditor(editor);
             }
         }),
-        // Звільнення пам'яті: очищення кешу декорацій при закритті документа
         vscode.workspace.onDidCloseTextDocument(doc => {
             decorationService.clearDecorationsForDocument(doc.uri);
         })
@@ -33,10 +32,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('ai-diff-agent.action.acceptAll', () => {
-            sidebarProvider.router.handleMessage({ type: 'ACTION_SAVE_ALL' });
+            sidebarProvider.router.transactionPipeline.saveBatch();
         }),
         vscode.commands.registerCommand('ai-diff-agent.action.rejectAll', () => {
-            sidebarProvider.router.handleMessage({ type: 'ACTION_REVERT_ALL' });
+            sidebarProvider.router.transactionPipeline.revertBatch();
         }),
         vscode.commands.registerCommand('ai-diff-agent.start', () => {
             vscode.commands.executeCommand(`${SidebarWebviewProvider.viewType}.focus`);

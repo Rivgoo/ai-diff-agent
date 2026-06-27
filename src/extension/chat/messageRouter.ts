@@ -1,27 +1,37 @@
 import * as vscode from 'vscode';
-import type { WebviewEvent, ExtensionEvent } from '../../shared/ipc';
-import type { OperationStatus, DiffOperation } from '../../shared/models';
+import type { WebviewEvent, ExtensionEvent } from '@/shared/ipc';
+import type { DiffOperation } from '@/shared/models';
 import { ChatSessionManager } from './sessionManager';
-import { SettingsManager } from '../settings/settingsManager';
-import { OutputLogger } from '../../infrastructure/logging/outputLogger';
-import type { AnyOperation } from '../../core/models/operations';
-import { TransactionManager } from '../transactions/transactionManager';
-import { CompensationStore } from '../transactions/compensationStore';
-import type { DecorationService } from '../transactions/decorationService';
-import { PathSandbox } from '../../vscode/workspace/pathSandbox';
-import { PathNormalizer } from '../../core/workspace/pathNormalizer';
-import { ProcessPayloadUseCase } from '../use-cases/processPayloadUseCase';
-import { SYSTEM_CONSTANTS } from '../../shared/constants';
-import { SnapshotService } from '../transactions/snapshotService';
+import { SettingsManager } from '@/extension/settings/settingsManager';
+import { OutputLogger } from '@/infrastructure/logging/outputLogger';
+import type { AnyOperation } from '@/core/models/operations';
+import { ProcessPayloadUseCase } from '@/extension/use-cases/processPayloadUseCase';
+import { SnapshotService } from '@/extension/transactions/services/SnapshotService';
+import { PathSandbox } from '@/vscode/workspace/pathSandbox';
+import { PathNormalizer } from '@/core/workspace/pathNormalizer';
+
+// New Architecture Imports
+import { TransactionPipeline } from '@/extension/transactions/orchestrator/TransactionPipeline';
+import { SearchEngine } from '@/core/matcher/searchEngine';
+import { ResilientPathResolver } from '@/core/resolver/resilientPathResolver';
+import { VsCodeFileSystemAdapter } from '@/infrastructure/adapters/fsTargetAdapter';
+import { VsCodeWorkspaceSearchAdapter } from '@/infrastructure/adapters/workspaceSearchAdapter';
+import { EditorService } from '@/extension/transactions/services/EditorService';
+import { DirectoryCleanupService } from '@/extension/transactions/services/DirectoryCleanupService';
+import { LoggerAdapter } from '@/extension/transactions/context/LoggerAdapter';
+import { CompensationStore } from '@/extension/transactions/store/CompensationStore';
+import type { DecorationService } from '@/extension/transactions/services/DecorationService';
+import type { OperationStatusUpdate } from '@/extension/transactions/core/TransactionEvents';
 
 export class MessageRouter {
     private readonly sessionManager: ChatSessionManager;
     private readonly settingsManager: SettingsManager;
-    public readonly transactionManager: TransactionManager;
     private readonly store: CompensationStore;
     private readonly pendingOperations = new Map<string, AnyOperation>();
     private readonly processPayloadUseCase: ProcessPayloadUseCase;
     private readonly snapshotService = new SnapshotService();
+
+    public readonly transactionPipeline: TransactionPipeline;
 
     constructor(
         private readonly context: vscode.ExtensionContext,
@@ -32,42 +42,63 @@ export class MessageRouter {
         this.settingsManager = new SettingsManager(context, () => this.syncSettings());
         this.store = new CompensationStore(context.workspaceState);
 
-        this.transactionManager = new TransactionManager(this.store, this.decorationService, (
-            opId: string, 
-            status: OperationStatus, 
-            metadata?: Partial<DiffOperation>
-        ) => {
-            const session = this.sessionManager.getActiveSession();
-            let targetOp: DiffOperation | undefined;
-            
-            for (const msg of session.messages) {
-                if (msg.operations) {
-                    targetOp = msg.operations.find(o => o.id === opId);
-                    if (targetOp) break;
+        // Instantiate Dependencies for Pipeline Context
+        const logger = new LoggerAdapter();
+        const searchEngine = new SearchEngine();
+        const pathResolver = new ResilientPathResolver(new VsCodeFileSystemAdapter(), new VsCodeWorkspaceSearchAdapter());
+        const editorService = new EditorService();
+        const directoryCleanupService = new DirectoryCleanupService();
+
+        this.transactionPipeline = new TransactionPipeline(
+            this.store,
+            this.decorationService,
+            searchEngine,
+            pathResolver,
+            this.snapshotService,
+            editorService,
+            directoryCleanupService,
+            logger,
+            (update: OperationStatusUpdate) => {
+                const session = this.sessionManager.getActiveSession();
+                let targetOp: DiffOperation | undefined;
+                
+                for (const msg of session.messages) {
+                    if (msg.operations) {
+                        targetOp = msg.operations.find(o => o.id === update.operationId);
+                        if (targetOp) break;
+                    }
+                }
+
+                if (targetOp) {
+                    const { status, resolvedResiliently, originalPath, path, conflict } = update;
+                    const updated: DiffOperation = { 
+                        ...targetOp, 
+                        status,
+                        resolvedResiliently: resolvedResiliently ?? targetOp.resolvedResiliently,
+                        originalPath: originalPath ?? targetOp.originalPath,
+                        path: path ?? targetOp.path,
+                        conflict: conflict ?? targetOp.conflict
+                    };
+                    this.sessionManager.updateOperation(updated);
+                    this.postMessageCallback({ 
+                        type: 'OPERATION_UPDATED', 
+                        operationId: update.operationId, 
+                        status,
+                        resolvedResiliently: updated.resolvedResiliently,
+                        originalPath: updated.originalPath,
+                        path: updated.path,
+                        conflict: updated.conflict
+                    });
+                } else {
+                    this.sessionManager.updateOperationStatus(update.operationId, update.status);
+                    this.postMessageCallback({ type: 'OPERATION_UPDATED', operationId: update.operationId, status: update.status });
                 }
             }
-
-            if (targetOp) {
-                const updated: DiffOperation = { ...targetOp, status, ...metadata };
-                this.sessionManager.updateOperation(updated);
-                this.postMessageCallback({ 
-                    type: 'OPERATION_UPDATED', 
-                    operationId: opId, 
-                    status,
-                    resolvedResiliently: updated.resolvedResiliently,
-                    originalPath: updated.originalPath,
-                    path: updated.path,
-                    conflict: updated.conflict
-                });
-            } else {
-                this.sessionManager.updateOperationStatus(opId, status);
-                this.postMessageCallback({ type: 'OPERATION_UPDATED', operationId: opId, status });
-            }
-        });
+        );
 
         this.processPayloadUseCase = new ProcessPayloadUseCase(
             this.sessionManager,
-            this.transactionManager,
+            this.transactionPipeline,
             this.pendingOperations,
             this.postMessageCallback,
             () => this.syncState()
@@ -98,10 +129,10 @@ export class MessageRouter {
                 this.pendingOperations.clear();
                 this.syncState();
                 break;
-            case 'ACTION_SAVE_ALL': this.transactionManager.saveBatch(); break;
-            case 'ACTION_REVERT_ALL': this.transactionManager.revertBatch(); break;
-            case 'ACTION_ACCEPT_OPERATION': this.transactionManager.saveOperation(event.operationId); break;
-            case 'ACTION_REVERT_OPERATION': this.transactionManager.revertOperation(event.operationId); break;
+            case 'ACTION_SAVE_ALL': this.transactionPipeline.saveBatch(); break;
+            case 'ACTION_REVERT_ALL': this.transactionPipeline.revertBatch(); break;
+            case 'ACTION_ACCEPT_OPERATION': this.transactionPipeline.saveOperation(event.operationId); break;
+            case 'ACTION_REVERT_OPERATION': this.transactionPipeline.revertOperation(event.operationId); break;
             case 'OPEN_FILE': this.handleOpenFile(event.operationId); break;
             case 'OPEN_DIFF': this.handleOpenDiff(event.operationId); break;
             case 'COPY_PROMPT': this.handleCopyPrompt(); break;
