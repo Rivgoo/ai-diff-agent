@@ -11,15 +11,8 @@ export interface Range {
     readonly end: Position;
 }
 
-/**
- * Diagnostic categorization of transactional conflict triggers.
- */
-export type ConflictReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'PATH_TRAVERSAL' | 'FILE_NOT_FOUND' | 'UNKNOWN' | 'ABORTED';
+export type ConflictReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'PATH_TRAVERSAL' | 'FILE_NOT_FOUND' | 'UNKNOWN' | 'ABORTED' | 'SYNTAX_CORRUPTION_PREVENTED';
 
-/**
- * Encapsulates matching failure telemetry used by presentation components
- * to describe conflict resolution strategies to the user.
- */
 export interface ConflictDetails {
     readonly reason: ConflictReason;
     readonly blockIndex: number;
@@ -27,8 +20,8 @@ export interface ConflictDetails {
     readonly searchExcerpt: string;
     readonly originalSearchBlock: string;
     readonly matchesFound?: number;
-    readonly candidatePaths?: string[]; // Workspace alternatives suggested on ambiguous resolution conflicts.
-    readonly wasValidated?: boolean; // Indicates if the file successfully passed pre-flight validation before the transaction was aborted
+    readonly candidatePaths?: string[];
+    readonly wasValidated?: boolean;
 }
 
 export interface BaseOperation {
@@ -41,7 +34,7 @@ export interface BaseOperation {
     isDirectory?: boolean;
 }
 
-export type MatchFailureReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'EMPTY_SEARCH_BLOCK';
+export type MatchFailureReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'EMPTY_SEARCH_BLOCK' | 'SYNTAX_CORRUPTION_PREVENTED';
 
 export interface MatchSuccess {
     readonly status: 'MATCHED';
@@ -70,17 +63,11 @@ export const Result = {
     }
 };
 
-/**
- * Quantifies line changes calculated strictly from parsed search/replace streams.
- */
 export interface CodeImpactMetrics {
-    readonly additions: number; // Sum of lines generated inside replace blocks or new files
-    readonly deletions: number; // Sum of lines captured inside search blocks or deleted paths
+    readonly additions: number;
+    readonly deletions: number;
 }
 
-/**
- * Metadata summarizing structural changes inside a submitted DSL payload.
- */
 export interface PayloadSummary {
     readonly rawInput: string;
     readonly totalCreatedFiles: number;

@@ -58,12 +58,16 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
 
         for (let i = 0; i < this.operation.changes.length; i++) {
             const change = this.operation.changes[i];
-            const match = context.searchEngine.findMatch(domainDoc, change.search);
+            
+            // Invoke the new async Matcher Pipeline, passing replacement string for AST verification
+            const match = await context.searchEngine.findMatch(domainDoc, change.search, change.replace);
 
             if (match.status !== 'MATCHED') {
-                const reason = match.reason === 'AMBIGUOUS_MATCH' ? 'AMBIGUOUS_MATCH' : 'NOT_FOUND';
+                const reason = match.reason === 'AMBIGUOUS_MATCH' ? 'AMBIGUOUS_MATCH' : 
+                               match.reason === 'SYNTAX_CORRUPTION_PREVENTED' ? 'SYNTAX_CORRUPTION_PREVENTED' : 'NOT_FOUND';
+                
                 const excerpt = change.search.split(/\r?\n/).slice(0, 3).join('\n');
-                return Result.fail(this.buildConflict(reason, undefined, i + 1, this.operation.changes.length, excerpt));
+                return Result.fail(this.buildConflict(reason as any, undefined, i + 1, this.operation.changes.length, excerpt));
             }
 
             this.matchedBlocks.push({

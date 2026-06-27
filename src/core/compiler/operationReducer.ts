@@ -4,10 +4,6 @@ import { CompilerWarning } from './models';
 import { SearchEngine } from '../matcher/searchEngine';
 import { VirtualDocument } from './virtualDocument';
 
-/**
- * Pure state machine logic for flattening chronological operations into virtual nodes.
- * Isolates conflict resolution rules (Mutual Exclusion, Redundancy, Overwrites).
- */
 export class OperationReducer {
     constructor(
         private readonly workspace: VirtualWorkspace,
@@ -42,7 +38,7 @@ export class OperationReducer {
         node.stagedChanges = [];
     }
 
-    public applyUpdate(op: UpdateFileOperation): void {
+    public async applyUpdate(op: UpdateFileOperation): Promise<void> {
         const node = this.workspace.getNode(op.path);
 
         if (node.state === 'DELETED') {
@@ -50,7 +46,6 @@ export class OperationReducer {
             return;
         }
 
-        // If the file was created in this same transaction, perform the update purely in-memory
         if (node.state === 'CREATED') {
             let currentContent = node.contentBuffer || '';
             const searchEngine = new SearchEngine();
@@ -58,7 +53,7 @@ export class OperationReducer {
 
             for (const change of op.changes) {
                 const doc = new VirtualDocument(node.currentPath, currentContent);
-                const match = searchEngine.findMatch(doc, change.search);
+                const match = await searchEngine.findMatch(doc, change.search, change.replace);
                 
                 if (match.status === 'MATCHED') {
                     currentContent = doc.applyChange(match.range, change.replace);
@@ -77,7 +72,6 @@ export class OperationReducer {
             return;
         }
 
-        // For files existing on disk (UNTOUCHED or MODIFIED), accumulate changes to emit as a single batch
         node.state = 'MODIFIED';
         node.stagedChanges.push(...op.changes);
     }
@@ -90,8 +84,6 @@ export class OperationReducer {
             return;
         }
 
-        // Transfer the node pointer. If updates follow targeting the old path, 
-        // the workspace alias engine will safely redirect them to the new node.
         this.workspace.transferNode(op.path, op.destinationPath);
     }
 
