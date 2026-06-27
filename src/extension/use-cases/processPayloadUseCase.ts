@@ -46,7 +46,9 @@ export class ProcessPayloadUseCase {
             const parsedOperations = parseResult.value;
 
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'resolving', current: 0, total: parsedOperations.length });
-            const compilationResult = this.compiler.compile(parsedOperations);
+            
+            // Compilation is now awaited to handle AST loading inside OperationReducer
+            const compilationResult = await this.compiler.compile(parsedOperations);
             if (!compilationResult.success) {
                 throw new Error(`Transaction Compilation failed: ${compilationResult.error.message}`);
             }
@@ -106,7 +108,6 @@ export class ProcessPayloadUseCase {
 
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'applying', current: 0, total: operations.length });
 
-            // Delegate to the new Pipeline Orchestrator Architecture
             await this.transactionPipeline.applyBatch(operations);
 
             const hasConflicts = operations.some(op => op.status === 'conflict');

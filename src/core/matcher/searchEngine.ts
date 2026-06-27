@@ -1,43 +1,30 @@
 import type { IDocument } from '@/core/matcher/documentPort';
 import type { MatchResult } from '@/shared/contracts';
-import { TextNormalizer } from '@/core/matcher/textNormalizer';
-import { ExactMatchStrategy } from '@/core/matcher/searchPhaseExact';
-import { FuzzyMatchStrategy } from '@/core/matcher/searchPhaseFuzzy';
+import { MatchPipeline } from './orchestrator/matchPipeline';
+import type { MatchContext } from './types';
 
 export class SearchEngine {
-    private readonly exactStrategy = new ExactMatchStrategy();
-    private readonly fuzzyStrategy = new FuzzyMatchStrategy();
+    private readonly pipeline = new MatchPipeline();
 
-    // Формати файлів, для яких відступи є критичною частиною синтаксису
-    private readonly strictExtensions = new Set(['.py', '.yaml', '.yml']);
-
-    public findMatch(document: IDocument, searchBlock: string): MatchResult {
-        const cleanSearchBlock = TextNormalizer.stripBOM(searchBlock).trim();
+    public async findMatch(document: IDocument, searchBlock: string, replaceBlock?: string): Promise<MatchResult> {
+        const cleanSearchBlock = this.stripBOM(searchBlock).trim();
+        
         if (!cleanSearchBlock) {
             return { status: 'FAILED', reason: 'EMPTY_SEARCH_BLOCK', matchesFound: 0 };
         }
 
-        const docText = TextNormalizer.stripBOM(document.getText());
-        
-        // 1. Спочатку завжди намагаємося знайти точний збіг
-        let result = this.exactStrategy.findMatches(docText, cleanSearchBlock, document);
-        if (result.status === 'MATCHED' || (result.status === 'FAILED' && result.reason === 'AMBIGUOUS_MATCH')) {
-            return result;
-        }
+        const context: MatchContext = {
+            document,
+            searchBlock: cleanSearchBlock,
+            replaceBlock,
+            fileExtension: this.getFileExtension(document.path)
+        };
 
-        // 2. Блокуємо нечіткий пошук (Fuzzy Match) для чутливих до відступів мов
-        const ext = this.getFileExtension(document.path);
-        if (this.strictExtensions.has(ext)) {
-            return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
-        }
+        return await this.pipeline.execute(context);
+    }
 
-        // 3. Застосовуємо нечіткий пошук як запасний варіант
-        result = this.fuzzyStrategy.findMatches(docText, cleanSearchBlock, document);
-        if (result.status === 'MATCHED' || (result.status === 'FAILED' && result.reason === 'AMBIGUOUS_MATCH')) {
-            return result;
-        }
-
-        return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
+    private stripBOM(text: string): string {
+        return text.charCodeAt(0) === 0xFEFF ? text.substring(1) : text;
     }
 
     private getFileExtension(filePath: string): string {

@@ -122,16 +122,24 @@ The parser applies your output verbatim to the file system. It cannot "fill in t
 
 ---
 
-### RULE 2 — SEARCH BLOCKS MUST MATCH VERBATIM
+### RULE 2 — SEARCH BLOCKS MUST HAVE UNIQUE ANCHORS (Stable Boundaries)
+The matching engine is resilient to whitespace and indentation errors, but it requires **stable boundaries**.
+- The FIRST line of your `<search>` block must be a unique, easily identifiable line (e.g., a function signature, an object key, or a specific comment).
+- The LAST line of your `<search>` block must also be unique.
+- Do NOT worry about getting the exact internal indentation perfectly right. Focus on ensuring the start and end of the block perfectly identify the region to replace.
 
-The text inside `<search>` must be a **character-for-character exact copy** of what is in the file.
+❌ Weak Anchors:
+<search>
+    }
+  }
+</search>
 
-- Do not alter spacing, indentation, blank lines, or punctuation.
-- Do not paraphrase or restructure the code.
-- Do not add or remove trailing spaces.
-- Copy the text as if you are screenshot-pasting it.
-
-The parser first attempts an exact character match, then falls back to a whitespace-tolerant fuzzy match. Do not rely on the fuzzy fallback — write for exact match.
+✅ Strong Anchors:
+<search>
+  public async processPayload(data: string): Promise<void> {
+      // ... internal code ...
+  }
+</search>
 
 ---
 
