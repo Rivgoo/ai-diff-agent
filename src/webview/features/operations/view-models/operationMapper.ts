@@ -1,4 +1,5 @@
 import type { DiffOperation, ConflictDetails } from '@/shared/models';
+import { OPERATION_DESCRIPTORS } from '../constants/descriptors';
 
 export interface OperationRowViewModel {
     readonly id: string;
@@ -40,26 +41,10 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
     const fileName = pathParts.pop() || op.path;
     const dirPath = pathParts.join('/');
 
-    // Determine CLI-style status marker and VS Code semantic color
-    let statusMarker = '[ ]';
-    let markerColor = 'var(--vscode-descriptionForeground)';
-
-    if (op.type === 'create_file') {
-        statusMarker = '[A]';
-        markerColor = 'var(--vscode-gitDecoration-addedResourceForeground)';
-    } else if (op.type === 'update_file') {
-        statusMarker = '[M]';
-        markerColor = 'var(--vscode-gitDecoration-modifiedResourceForeground)';
-    } else if (op.type === 'delete_path') {
-        statusMarker = '[D]';
-        markerColor = 'var(--vscode-gitDecoration-deletedResourceForeground)';
-    } else if (op.type === 'move_path') {
-        statusMarker = '[R]';
-        markerColor = 'var(--vscode-gitDecoration-renamedResourceForeground)';
-    } else if (op.type === 'create_dir') {
-        statusMarker = '[+]';
-        markerColor = 'var(--vscode-descriptionForeground)';
-    }
+    // Centralised descriptors lookup replacing fragile inline conditionals
+    const descriptor = OPERATION_DESCRIPTORS[op.type];
+    const statusMarker = descriptor ? descriptor.prefix : '[ ]';
+    const markerColor = descriptor ? descriptor.themeColorVar : 'var(--vscode-descriptionForeground)';
 
     // Determine trailing status icon
     let statusIcon: OperationRowViewModel['statusIcon'] = null;
