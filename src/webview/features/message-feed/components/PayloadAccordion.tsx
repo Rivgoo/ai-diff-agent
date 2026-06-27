@@ -1,25 +1,13 @@
 import { useState } from 'react';
 import { IconChevronRight, IconCopy, IconCheck } from '@tabler/icons-react';
+import { XmlViewer } from './xml-viewer/XmlViewer';
 import styles from '../styles/message.module.css';
 
-const HighlightedXML = ({ content }: { content: string }) => {
-    const parts = content.split(/(<\/?[a-zA-Z0-9_="-]+\s*\/?>)/g);
-    
-    return (
-        <code>
-            {parts.map((part, i) => {
-                if (part.startsWith('<') && part.endsWith('>')) {
-                    const isCrucialTag = part.includes('search') || part.includes('replace');
-                    const tagClass = isCrucialTag ? styles.xmlTagHighlight : styles.xmlTag;
-                    return <span key={i} className={tagClass}>{part}</span>;
-                }
-                return <span key={i}>{part}</span>;
-            })}
-        </code>
-    );
-};
+interface PayloadAccordionProps {
+    readonly rawInput: string;
+}
 
-export const PayloadAccordion = ({ rawInput }: { rawInput: string }) => {
+export const PayloadAccordion = ({ rawInput }: PayloadAccordionProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
 
@@ -65,9 +53,9 @@ export const PayloadAccordion = ({ rawInput }: { rawInput: string }) => {
             </div>
 
             {isOpen && (
-                <pre className={styles.payloadContent} role="region">
-                    <HighlightedXML content={rawInput} />
-                </pre>
+                <div style={{ marginTop: '4px' }} role="region">
+                    <XmlViewer rawInput={rawInput} />
+                </div>
             )}
         </div>
     );
