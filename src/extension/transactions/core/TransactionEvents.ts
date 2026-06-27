@@ -7,4 +7,5 @@ export interface OperationStatusUpdate {
     originalPath?: string;
     path?: string;
     conflict?: ConflictDetails;
+    isDirectory?: boolean;
 }

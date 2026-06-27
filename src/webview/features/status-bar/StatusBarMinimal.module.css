@@ -12,6 +12,7 @@
     flex-shrink: 0;
     user-select: none;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 .leftGroup {
@@ -20,13 +21,14 @@
     gap: 8px;
     min-width: 0;
     overflow: hidden;
+    flex: 1;
 }
 
 .spinner {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    border: 2px solid var(--vscode-textLink-foreground);
+    border: 1.5px solid var(--vscode-textLink-foreground);
     border-top-color: transparent;
     animation: spin 0.8s linear infinite;
     flex-shrink: 0;
@@ -36,47 +38,41 @@
     to { transform: rotate(360deg); } 
 }
 
-/* Tabular Mini Metrics Styles */
-.metricsList {
+/* Compact Metrics Container and Rules */
+.metricsContainer {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-variant-numeric: tabular-nums;
-    font-size: 10.5px;
+    overflow: hidden;
+    min-width: 0;
+    flex-shrink: 1;
+}
+
+.lineImpact {
+    font-size: 10px;
     color: var(--vscode-descriptionForeground);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    opacity: 0.85;
+    white-space: nowrap;
+    user-select: none;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.metricValue {
-    font-weight: bold;
-}
-
-.metricAdd {
+.addCount {
     color: var(--vscode-gitDecoration-addedResourceForeground);
 }
 
-.metricMod {
-    color: var(--vscode-gitDecoration-modifiedResourceForeground);
-}
-
-.metricDel {
+.delCount {
     color: var(--vscode-gitDecoration-deletedResourceForeground);
 }
 
-.impactDiff {
-    font-size: 10px;
-    opacity: 0.85;
-}
-
-.separator {
-    color: var(--vscode-panel-border);
-    user-select: none;
-}
-
-/* Action Controls Panel */
 .rightGroup {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex-shrink: 0;
 }
 
@@ -84,7 +80,7 @@
     background: none;
     border: 1px solid transparent;
     color: var(--vscode-descriptionForeground);
-    font-family: var(--vscode-editor-font-family);
+    font-family: var(--vscode-font-family);
     font-size: 11px;
     font-weight: 500;
     cursor: pointer;
@@ -96,28 +92,26 @@
     transition: all 0.15s ease;
 }
 
-/* Affirmative "Save" micro-interaction styling */
 .btnSave:hover {
     color: var(--vscode-gitDecoration-addedResourceForeground);
     background-color: rgba(74, 163, 102, 0.1);
     border-color: rgba(74, 163, 102, 0.2);
 }
 
-/* Destructive "Revert" micro-interaction styling */
 .btnRevert:hover {
     color: var(--vscode-gitDecoration-deletedResourceForeground);
     background-color: rgba(241, 70, 70, 0.1);
     border-color: rgba(241, 70, 70, 0.2);
 }
 
-/* Compact Monospace Keyboard Shortcut Pills */
-.shortcutHint {
-    font-size: 9px;
-    padding: 0px 3px;
-    border-radius: 2px;
-    background-color: var(--vscode-editor-background);
-    border: 1px solid var(--vscode-panel-border);
-    color: var(--vscode-descriptionForeground);
-    margin-left: 2px;
-    opacity: 0.8;
+.errorText {
+    color: var(--vscode-editorError-foreground);
+    font-weight: 600;
+}
+
+/* Hide line metrics when vertical/horizontal spaces are highly constrained */
+@media (max-width: 250px) {
+    .lineImpact {
+        display: none;
+    }
 }

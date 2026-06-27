@@ -1,6 +1,7 @@
 import { useAgentStore } from '@/webview/store/agentStore';
 import { useIPC } from '@/webview/hooks/useIPC';
-import { IconDeviceFloppy, IconArrowBackUp } from '@tabler/icons-react';
+import { StatusBarMetrics } from './components/StatusBarMetrics';
+import { ActionControls } from './components/ActionControls';
 import type { PipelineStage } from '@/shared/ipc';
 import styles from './StatusBarMinimal.module.css';
 
@@ -17,7 +18,6 @@ export const StatusBarMinimal = () => {
     const { sendEvent } = useIPC();
     const { stage } = useAgentStore((state) => state.pipelineProgress);
     
-    // БЕЗПЕЧНЕ ОТРИМАННЯ ПОВІДОМЛЕНЬ
     const activeSessionId = useAgentStore((state) => state.activeSessionId);
     const messages = useAgentStore((state) => state.sessions[activeSessionId]?.messages) || [];
 
@@ -34,26 +34,8 @@ export const StatusBarMinimal = () => {
         return null; 
     }
 
-    let added = 0;
-    let modified = 0;
-    let deleted = 0;
-    let totalAdditions = 0;
-    let totalDeletions = 0;
-
-    dirtyOps.forEach(op => {
-        if (op.type === 'create_file' || op.type === 'create_dir') added++;
-        else if (op.type === 'update_file' || op.type === 'move_path') modified++;
-        else if (op.type === 'delete_path') deleted++;
-
-        if (op.stats) {
-            totalAdditions += op.stats.additions;
-            totalDeletions += op.stats.deletions;
-        }
-    });
-
-    const isMac = navigator.userAgent.toUpperCase().includes('MAC');
-    const saveShortcut = isMac ? '⇧⌘A' : 'Ctrl+Shift+A';
-    const revertShortcut = isMac ? '⇧⌘R' : 'Ctrl+Shift+R';
+    const handleSaveAll = () => sendEvent({ type: 'ACTION_SAVE_ALL' });
+    const handleRevertAll = () => sendEvent({ type: 'ACTION_REVERT_ALL' });
 
     return (
         <div className={styles.statusBar} role="status">
@@ -65,44 +47,13 @@ export const StatusBarMinimal = () => {
                         {STAGE_LABELS[stage]}
                     </span>
                 ) : (
-                    dirtyOps.length > 0 && (
-                        <div className={styles.metricsList}>
-                            {added > 0 && <span><span className={styles.metricAdd}>+A</span> <span className={styles.metricValue}>{added}</span></span>}
-                            {modified > 0 && <span>{added > 0 && <span className={styles.separator}>·</span>}<span className={styles.metricMod}>~M</span> <span className={styles.metricValue}>{modified}</span></span>}
-                            {deleted > 0 && <span>{(added > 0 || modified > 0) && <span className={styles.separator}>·</span>}<span className={styles.metricDel}>-D</span> <span className={styles.metricValue}>{deleted}</span></span>}
-                            {(totalAdditions > 0 || totalDeletions > 0) && (
-                                <span className={styles.impactDiff}>(<span className={styles.metricAdd}>+{totalAdditions}</span>{'/'}<span className={styles.metricDel}>-{totalDeletions}</span>)</span>
-                            )}
-                        </div>
-                    )
+                    <StatusBarMetrics operations={dirtyOps} />
                 )}
             </div>
 
-            <div className={styles.rightGroup}>
-                {dirtyOps.length > 0 && !isProcessing && (
-                    <>
-                        <button 
-                            type="button" 
-                            className={`${styles.actionBtn} ${styles.btnRevert}`} 
-                            onClick={() => sendEvent({ type: 'ACTION_REVERT_ALL' })}
-                            title={`Discard all uncommitted files (${revertShortcut})`}
-                        >
-                            <IconArrowBackUp size={12} />
-                            <span>Revert</span>
-                        </button>
-                        
-                        <button 
-                            type="button" 
-                            className={`${styles.actionBtn} ${styles.btnSave}`} 
-                            onClick={() => sendEvent({ type: 'ACTION_SAVE_ALL' })}
-                            title={`Commit all transaction writes to disk (${saveShortcut})`}
-                        >
-                            <IconDeviceFloppy size={12} />
-                            <span>Save All</span>
-                        </button>
-                    </>
-                )}
-            </div>
+            {!isProcessing && dirtyOps.length > 0 && (
+                <ActionControls onSave={handleSaveAll} onRevert={handleRevertAll} />
+            )}
         </div>
     );
 };

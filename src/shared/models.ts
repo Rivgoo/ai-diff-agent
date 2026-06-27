@@ -20,7 +20,9 @@ export type OperationStatus =
   | "reverted"
   | "conflict"
   | "error";
+
 export type MessageRole = "user" | "agent" | "system";
+
 export type OperationType =
   | "create_file"
   | "update_file"
@@ -62,6 +64,7 @@ export interface DiffOperation {
   errorMessage?: string;
   stats?: ChangeStats;
   conflict?: ConflictDetails;
+  isDirectory?: boolean;
 }
 
 export interface ChatMessage {

@@ -5,7 +5,7 @@ import { TransactionContext } from '@/extension/transactions/context/Transaction
 import { VsCodeUnitOfWork } from '@/extension/transactions/context/VsCodeUnitOfWork';
 import { TransactionLock } from '@/extension/transactions/store/TransactionLock';
 import type { OperationStatusUpdate } from '@/extension/transactions/core/TransactionEvents';
-import type { CompensationStore } from '@/extension/transactions/store/CompensationStore';
+import type { CompensationStore, AntiAction } from '@/extension/transactions/store/CompensationStore';
 import type { DecorationService } from '@/extension/transactions/services/DecorationService';
 import type { SearchEngine } from '@/core/matcher/searchEngine';
 import type { ResilientPathResolver } from '@/core/resolver/resilientPathResolver';

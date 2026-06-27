@@ -8,6 +8,7 @@ export interface CommandMetadata {
     resolvedResiliently?: boolean;
     originalPath?: string;
     path?: string;
+    isDirectory?: boolean;
 }
 
 export interface ITransactionCommand {

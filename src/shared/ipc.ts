@@ -53,6 +53,7 @@ export type ExtensionEvent =
       originalPath?: string;
       path?: string;
       conflict?: ConflictDetails;
+      isDirectory?: boolean;
     }
   | { type: "AGENT_TYPING"; isTyping: boolean }
   | {

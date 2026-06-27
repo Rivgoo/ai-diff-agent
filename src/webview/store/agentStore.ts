@@ -33,7 +33,8 @@ interface AgentState {
         resolvedResiliently?: boolean,
         originalPath?: string,
         path?: string,
-        conflict?: ConflictDetails
+        conflict?: ConflictDetails,
+        isDirectory?: boolean
     ) => void;
     updateLocalSetting: (category: 'behavior' | 'engine', key: string, value: any) => void;
 }
@@ -70,7 +71,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         }
     })),
 
-    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict) =>
+    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory) =>
         set((state) => {
             const activeSession = state.sessions[state.activeSessionId];
             if (!activeSession) return state;
@@ -87,7 +88,8 @@ export const useAgentStore = create<AgentState>((set) => ({
                     resolvedResiliently: resolvedResiliently ?? updatedOps[opIndex].resolvedResiliently,
                     originalPath: originalPath ?? updatedOps[opIndex].originalPath,
                     path: path ?? updatedOps[opIndex].path,
-                    conflict: conflict ?? updatedOps[opIndex].conflict
+                    conflict: conflict ?? updatedOps[opIndex].conflict,
+                    isDirectory: isDirectory ?? updatedOps[opIndex].isDirectory
                 };
                 return { ...msg, operations: updatedOps };
             });

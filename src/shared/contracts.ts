@@ -38,6 +38,7 @@ export interface BaseOperation {
     status: OperationStatus;
     errorMessage?: string;
     conflict?: ConflictDetails;
+    isDirectory?: boolean;
 }
 
 export type MatchFailureReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'EMPTY_SEARCH_BLOCK';
