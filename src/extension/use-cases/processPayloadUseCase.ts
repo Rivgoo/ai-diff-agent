@@ -4,16 +4,11 @@ import { PayloadMetricsExtractor } from '../../core/parser/metricsExtractor';
 import { TransactionCompiler } from '../../core/compiler';
 import type { ChatMessage, DiffOperation } from '../../shared/models';
 import type { ChatSessionManager } from '../chat/sessionManager';
-import type { TransactionManager } from '../transactions/transactionManager';
+import type { TransactionPipeline } from '../transactions/orchestrator/TransactionPipeline';
 import type { AnyOperation } from '../../core/models/operations';
 import type { ExtensionEvent } from '../../shared/ipc';
 import { OutputLogger } from '../../infrastructure/logging/outputLogger';
 
-/**
- * Orchestrates the full, asynchronous processing pipeline of LLM payloads.
- * Decouples message ingestion from direct workspace modifications, advancing the progress
- * pipeline state sequentially, calculating change impact, and managing error states gracefully.
- */
 export class ProcessPayloadUseCase {
     private readonly parser = new DSLParser();
     private readonly validator = new DomainValidator();
@@ -21,15 +16,12 @@ export class ProcessPayloadUseCase {
 
     constructor(
         private readonly sessionManager: ChatSessionManager,
-        private readonly transactionManager: TransactionManager,
+        private readonly transactionPipeline: TransactionPipeline,
         private readonly pendingOperations: Map<string, AnyOperation>,
         private readonly postMessage: (event: ExtensionEvent) => void,
         private readonly syncState: () => void
     ) {}
 
-    /**
-     * Executes the parsing, compilation, validation, metrics calculation, and transaction staging sequence.
-     */
     public async execute(payload: string): Promise<void> {
         this.postMessage({ type: 'AGENT_TYPING', isTyping: true });
         this.postMessage({ type: 'PIPELINE_STATE', stage: 'parsing', current: 0, total: 0 });
@@ -37,7 +29,6 @@ export class ProcessPayloadUseCase {
         await new Promise(resolve => setTimeout(resolve, 0));
 
         try {
-            // 1. Parsing Phase (Syntactic validation and XML parsing)
             const parseResult = this.parser.parse(payload);
             if (!parseResult.success) {
                 const userFailMsg: ChatMessage = {
@@ -54,7 +45,6 @@ export class ProcessPayloadUseCase {
 
             const parsedOperations = parseResult.value;
 
-            // 2. Compilation Phase (Flattening, Merging, and Resolving chronological logical conflicts)
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'resolving', current: 0, total: parsedOperations.length });
             const compilationResult = this.compiler.compile(parsedOperations);
             if (!compilationResult.success) {
@@ -63,7 +53,6 @@ export class ProcessPayloadUseCase {
 
             const { operations: compiledOperations, warnings } = compilationResult.value;
 
-            // Flush out-of-order optimization alerts directly into the observability console
             if (warnings.length > 0) {
                 OutputLogger.log(`Transaction Compiler successfully resolved ${warnings.length} conflict(s):`, 'WARN');
                 for (const warning of warnings) {
@@ -71,7 +60,6 @@ export class ProcessPayloadUseCase {
                 }
             }
 
-            // Calculate metrics on the COMPILED/OPTIMIZED operations to preserve 100% accurate file statistics
             const summary = PayloadMetricsExtractor.extract(compiledOperations, payload);
 
             const userMsg: ChatMessage = {
@@ -84,7 +72,6 @@ export class ProcessPayloadUseCase {
             this.sessionManager.addMessage(userMsg);
             this.syncState();
 
-            // 3. Validation Phase (Sanity-checking safety bounds of optimized operations)
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'validating', current: 0, total: compiledOperations.length });
 
             const validationResult = this.validator.validate(compiledOperations);
@@ -95,7 +82,6 @@ export class ProcessPayloadUseCase {
             const operations = validationResult.value;
             const diffOps: DiffOperation[] = operations.map((op: AnyOperation) => {
                 this.pendingOperations.set(op.id, op);
-
                 const rawOp = op as any;
                 return {
                     id: op.id,
@@ -108,7 +94,6 @@ export class ProcessPayloadUseCase {
                 };
             });
 
-            // Post initial pending staging block to the conversation timeline
             const agentMsg: ChatMessage = {
                 id: (Date.now() + 1).toString(),
                 role: 'agent',
@@ -119,10 +104,10 @@ export class ProcessPayloadUseCase {
             this.sessionManager.addMessage(agentMsg);
             this.syncState();
 
-            // 4. Application Phase (Staging changes with isolated snapshots)
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'applying', current: 0, total: operations.length });
 
-            await this.transactionManager.applyBatch(operations);
+            // Delegate to the new Pipeline Orchestrator Architecture
+            await this.transactionPipeline.applyBatch(operations);
 
             const hasConflicts = operations.some(op => op.status === 'conflict');
             if (hasConflicts) {
@@ -136,7 +121,6 @@ export class ProcessPayloadUseCase {
 
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Unknown compilation or parsing failure';
-
             this.sessionManager.addMessage({
                 id: Date.now().toString(),
                 role: 'system',
