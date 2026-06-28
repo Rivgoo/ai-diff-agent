@@ -110,6 +110,7 @@ export class MessageRouter {
             this.sessionManager,
             this.transactionPipeline,
             this.pendingOperations,
+            this.settingsManager,
             this.postMessageCallback,
             () => this.syncState()
         );

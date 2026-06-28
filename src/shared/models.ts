@@ -39,6 +39,7 @@ export interface BehaviorSettings {
 export interface EngineSettings {
   strictParsing: boolean;
   maxBackupRetentionDays: number;
+  autoFixSyntax: boolean;
 }
 
 export interface AgentSettings {

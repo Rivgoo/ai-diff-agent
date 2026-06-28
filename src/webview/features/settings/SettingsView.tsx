@@ -4,6 +4,7 @@ import { useAgentStore } from '@/webview/store/agentStore';
 import { useSettingsSync } from './hooks/useSettingsSync';
 import { IconArrowLeft } from '@tabler/icons-react';
 import styles from './SettingsView.module.css';
+import bonkGif from '@/webview/assets/bonk.gif';
 
 export const SettingsView = () => {
     const settings = useAgentStore((state) => state.settings);
@@ -93,6 +94,20 @@ export const SettingsView = () => {
                         />
                         <p className={styles.description}>Number of days to keep transaction backups before purging.</p>
                     </div>
+
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.engine.autoFixSyntax} 
+                            onChange={(e: any) => updateSetting('engine', 'autoFixSyntax', e.target.checked)}
+                        >
+                            <div className={styles.labelWithGif}>
+                                <img src={bonkGif} alt="Bonk" className={styles.bonkGif} />
+                                <span>Auto-Fix Syntax Hallucinations</span>
+                            </div>
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>Safely repair missing quotes, JSON trailing commas, and invisible characters based on file type.</p>
+                    </div>
+
                 </section>
             </div>
         </div>

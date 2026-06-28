@@ -9,6 +9,9 @@ import type { AnyOperation } from '../../core/models/operations';
 import type { ExtensionEvent } from '../../shared/ipc';
 import { OutputLogger } from '../../infrastructure/logging/outputLogger';
 
+import { PayloadAutoFixer } from '../../core/parser/payloadAutoFixer';
+import { SettingsManager } from '../settings/settingsManager';
+
 export class ProcessPayloadUseCase {
     private readonly parser = new DSLParser();
     private readonly validator = new DomainValidator();
@@ -18,6 +21,7 @@ export class ProcessPayloadUseCase {
         private readonly sessionManager: ChatSessionManager,
         private readonly transactionPipeline: TransactionPipeline,
         private readonly pendingOperations: Map<string, AnyOperation>,
+        private readonly settingsManager: SettingsManager,
         private readonly postMessage: (event: ExtensionEvent) => void,
         private readonly syncState: () => void
     ) {}
@@ -82,6 +86,20 @@ export class ProcessPayloadUseCase {
             }
 
             const operations = validationResult.value;
+            
+            const engineSettings = this.settingsManager.getSettings().engine;
+            if (engineSettings.autoFixSyntax) {
+                for (const op of operations) {
+                    if (op.type === 'create_file' && op.content) {
+                        (op as any).content = PayloadAutoFixer.fix(op.content, op.path);
+                    } else if (op.type === 'update_file' && op.changes) {
+                        for (const change of op.changes) {
+                            (change as any).replace = PayloadAutoFixer.fix(change.replace, op.path);
+                        }
+                    }
+                }
+            }
+
             const diffOps: DiffOperation[] = operations.map((op: AnyOperation) => {
                 this.pendingOperations.set(op.id, op);
                 const rawOp = op as any;

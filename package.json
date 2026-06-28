@@ -70,9 +70,18 @@
           "type": "object",
           "description": "Agent behavior settings",
           "properties": {
-            "autoScroll": { "type": "boolean", "default": true },
-            "compactMode": { "type": "boolean", "default": false },
-            "storeChatInWorkspace": { "type": "boolean", "default": false }
+            "autoScroll": {
+              "type": "boolean",
+              "default": true
+            },
+            "compactMode": {
+              "type": "boolean",
+              "default": false
+            },
+            "storeChatInWorkspace": {
+              "type": "boolean",
+              "default": false
+            }
           },
           "default": {
             "autoScroll": true,
@@ -85,11 +94,13 @@
           "description": "Diff engine settings",
           "properties": {
             "strictParsing": { "type": "boolean", "default": false },
-            "maxBackupRetentionDays": { "type": "number", "default": 7 }
+            "maxBackupRetentionDays": { "type": "number", "default": 7 },
+            "autoFixSyntax": { "type": "boolean", "default": true }
           },
           "default": {
             "strictParsing": false,
-            "maxBackupRetentionDays": 7
+            "maxBackupRetentionDays": 7,
+            "autoFixSyntax": true
           }
         }
       }
@@ -115,7 +126,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "^26.x",
+    "@types/node": "^26.0.1",
     "@types/react": "^19.x",
     "@types/react-dom": "^19.x",
     "@types/vscode": "^1.x",

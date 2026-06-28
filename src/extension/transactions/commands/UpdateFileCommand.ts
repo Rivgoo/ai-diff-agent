@@ -23,7 +23,10 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
 
         if (!currentUri) {
             try {
-                const resolution = await context.pathResolver.resolvePath(this.normalizedPath);
+                // Витягуємо перший блок пошуку як "відбиток" (fingerprint) файлу для резолвера
+                const firstSearchBlock = this.operation.changes.length > 0 ? this.operation.changes[0].search : undefined;
+                const resolution = await context.pathResolver.resolvePath(this.normalizedPath, firstSearchBlock);
+                
                 if (resolution.status === 'AMBIGUOUS_MATCH') {
                     return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));
                 }

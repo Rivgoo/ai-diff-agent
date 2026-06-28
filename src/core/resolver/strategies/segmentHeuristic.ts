@@ -27,7 +27,8 @@ export class SegmentHeuristicStrategy implements IPathResolutionStrategy {
     public async resolve(
         rawPath: string,
         _fs: IFileSystemPort,
-        search: IWorkspaceSearchPort
+        search: IWorkspaceSearchPort,
+        _searchBlock?: string
     ): Promise<ResolutionResult | null> {
         const requestedSegments = rawPath.replace(/\\/g, '/').split('/').filter(Boolean);
         if (requestedSegments.length === 0) {

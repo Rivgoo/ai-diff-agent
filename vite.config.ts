@@ -12,6 +12,7 @@ export default defineConfig({
   build: {
     outDir: 'out/webview',
     emptyOutDir: true,
+    assetsInlineLimit: 100000, // <--- Змушуємо Vite запакувати гіфку у Base64
     rollupOptions: {
       input: resolve(__dirname, 'src/webview/index.tsx'),
       output: {

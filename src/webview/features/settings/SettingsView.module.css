@@ -78,3 +78,19 @@
     color: var(--vscode-descriptionForeground);
     line-height: 1.4;
 }
+
+.labelWithGif {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    vertical-align: middle;
+}
+
+.bonkGif {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    border-radius: 4px;
+    pointer-events: none;
+    user-select: none;
+}
