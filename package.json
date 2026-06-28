@@ -26,7 +26,8 @@
         {
           "type": "webview",
           "id": "ai-diff-agent-sidebar-view",
-          "name": "Chat"
+          "name": "Chat",
+          "icon": "robot"
         }
       ]
     },
@@ -65,25 +66,31 @@
     "configuration": {
       "title": "AI Diff Agent",
       "properties": {
-        "aiDiffAgent.behavior.autoScroll": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically scroll to the bottom of the chat when new messages arrive."
+        "aiDiffAgent.behavior": {
+          "type": "object",
+          "description": "Agent behavior settings",
+          "properties": {
+            "autoScroll": { "type": "boolean", "default": true },
+            "compactMode": { "type": "boolean", "default": false },
+            "storeChatInWorkspace": { "type": "boolean", "default": false }
+          },
+          "default": {
+            "autoScroll": true,
+            "compactMode": false,
+            "storeChatInWorkspace": false
+          }
         },
-        "aiDiffAgent.behavior.compactMode": {
-          "type": "boolean",
-          "default": false,
-          "description": "Reduce visual padding and gaps to show more operations on screen."
-        },
-        "aiDiffAgent.engine.strictParsing": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enforce strict XML parsing. Disables recovery for malformed markdown blocks."
-        },
-        "aiDiffAgent.engine.maxBackupRetentionDays": {
-          "type": "integer",
-          "default": 7,
-          "description": "Number of days to keep transaction backups before purging."
+        "aiDiffAgent.engine": {
+          "type": "object",
+          "description": "Diff engine settings",
+          "properties": {
+            "strictParsing": { "type": "boolean", "default": false },
+            "maxBackupRetentionDays": { "type": "number", "default": 7 }
+          },
+          "default": {
+            "strictParsing": false,
+            "maxBackupRetentionDays": 7
+          }
         }
       }
     }

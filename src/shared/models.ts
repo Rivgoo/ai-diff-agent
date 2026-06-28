@@ -33,6 +33,7 @@ export type OperationType =
 export interface BehaviorSettings {
   autoScroll: boolean;
   compactMode: boolean;
+  storeChatInWorkspace: boolean;
 }
 
 export interface EngineSettings {
@@ -43,6 +44,7 @@ export interface EngineSettings {
 export interface AgentSettings {
   behavior: BehaviorSettings;
   engine: EngineSettings;
+  isFallbackMode: boolean;
 }
 
 export interface ChangeBlock {

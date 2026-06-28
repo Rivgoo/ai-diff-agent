@@ -44,8 +44,9 @@ export const useAgentStore = create<AgentState>((set) => ({
     activeSessionId: '',
     isAgentTyping: false,
     settings: { 
-        behavior: { autoScroll: true, compactMode: false }, 
-        engine: { strictParsing: false, maxBackupRetentionDays: 7 }
+        behavior: { autoScroll: true, compactMode: false, storeChatInWorkspace: false }, 
+        engine: { strictParsing: false, maxBackupRetentionDays: 7 },
+        isFallbackMode: false
     },
     isSettingsOpen: false,
     isPromptCopied: false,

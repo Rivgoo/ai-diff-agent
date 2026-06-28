@@ -38,8 +38,18 @@ export class MessageRouter {
         private readonly decorationService: DecorationService,
         private readonly postMessageCallback: (event: ExtensionEvent) => void
     ) {
-        this.sessionManager = new ChatSessionManager(context.workspaceState);
-        this.settingsManager = new SettingsManager(context, () => this.syncSettings());
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const workspaceRoot = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri : undefined;
+
+        this.settingsManager = new SettingsManager(context, workspaceRoot, () => this.syncSettings());
+        this.settingsManager.init(); 
+
+        this.sessionManager = new ChatSessionManager(
+            context.workspaceState,
+            workspaceRoot,
+            () => this.settingsManager.getSettings().behavior.storeChatInWorkspace,
+            () => this.syncState() 
+        );
         this.store = new CompensationStore(context.workspaceState);
 
         // Instantiate Dependencies for Pipeline Context
@@ -109,7 +119,12 @@ export class MessageRouter {
         switch (event.type) {
             case 'REQUEST_STATE_SYNC': this.syncState(); break;
             case 'REQUEST_SETTINGS_SYNC': this.syncSettings(); break;
-            case 'UPDATE_SETTING': this.settingsManager.updateSetting(event.category, event.key, event.value); break;
+            case 'UPDATE_SETTING': 
+                this.settingsManager.updateSetting(event.category, event.key, event.value);
+                if (event.key === 'storeChatInWorkspace') {
+                    this.sessionManager.reload();
+                }
+                break;
             case 'SUBMIT_PAYLOAD': this.processPayloadUseCase.execute(event.payload); break;
             case 'CANCEL_PROCESSING': break;
             case 'NEW_SESSION':
