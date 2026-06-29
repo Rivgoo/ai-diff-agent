@@ -2,7 +2,9 @@ name: Generate Production VSIX Package
 
 on:
   workflow_dispatch:
-    description: "Manual trigger to compile and package the production-ready VSIX artifact"
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
