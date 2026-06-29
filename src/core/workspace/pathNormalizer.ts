@@ -1,34 +1,41 @@
+import * as vscode from 'vscode';
 import { PathSanitizer } from './pathSanitizer';
 
 /**
  * Domain-driven Path Normalizer.
- * Safely sanitizes AI-generated paths, resolving absolute/hallucinated segments into strict relative paths.
+ * Safely sanitizes AI-generated paths, resolving absolute/hallucinated segments 
+ * into strict relative paths based on the active VS Code workspace boundaries.
  */
 export class PathNormalizer {
-    /**
-     * Converts absolute, protocol-wrapped, or redundant root-prefixed paths into clean,
-     * safe, relative workspace paths.
-     * e.g., "/ai-diff-agent/src//modules/core/UTILS/logging/Logger.ts \r" ──► "src/modules/core/UTILS/logging/Logger.ts"
-     */
-    public static normalize(rawPath: string, rootName: string): string {
-        // Run robust physical string sanitization first
+    public static normalize(rawPath: string): string {
         let clean = PathSanitizer.sanitize(rawPath);
         
-        // Handle common file protocol wrappers case-insensitively
         if (clean.toLowerCase().startsWith('file://')) {
             clean = clean.substring(7);
         }
 
-        // Split on slash and filter out empty segments to resolve redundant slashes
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            return clean.replace(/^\/+/, '');
+        }
+
+        const rootName = workspaceFolders[0].name.toLowerCase();
         const parts = clean.split('/').filter(Boolean);
-        
-        // Find the root folder name case-insensitively. Everything after it belongs to the workspace.
-        const rootIdx = parts.findIndex(p => p.toLowerCase() === rootName.toLowerCase());
+
+        if (parts.length === 0) return '';
+
+        // Якщо перший сегмент шляху - це ім'я проєкту (напр. totemforge-client/src/...)
+        // Жорстко відрізаємо його!
+        if (parts[0].toLowerCase() === rootName) {
+            return parts.slice(1).join('/');
+        }
+
+        // Якщо ім'я проєкту загубилося десь посередині (напр. /home/user/totemforge-client/src/...)
+        const rootIdx = parts.findIndex(p => p.toLowerCase() === rootName);
         if (rootIdx !== -1 && rootIdx < parts.length - 1) {
             return parts.slice(rootIdx + 1).join('/');
         }
 
-        // Fallback: If root name is missing, assume the path is already properly relative
-        return parts.join('/');
+        return clean.replace(/^\/+/, '');
     }
 }

@@ -33,11 +33,14 @@ export type OperationType =
 export interface BehaviorSettings {
   autoScroll: boolean;
   compactMode: boolean;
+  storeChatInWorkspace: boolean;
 }
 
 export interface EngineSettings {
   strictParsing: boolean;
   maxBackupRetentionDays: number;
+  autoFixSyntax: boolean;
+  autoFormatOnApply: boolean;
 }
 
 export interface AgentSettings {

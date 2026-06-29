@@ -26,7 +26,8 @@
         {
           "type": "webview",
           "id": "ai-diff-agent-sidebar-view",
-          "name": "Chat"
+          "name": "Chat",
+          "icon": "robot"
         }
       ]
     },
@@ -65,25 +66,44 @@
     "configuration": {
       "title": "AI Diff Agent",
       "properties": {
-        "aiDiffAgent.behavior.autoScroll": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically scroll to the bottom of the chat when new messages arrive."
+        "aiDiffAgent.behavior": {
+          "type": "object",
+          "description": "Agent behavior settings",
+          "properties": {
+            "autoScroll": {
+              "type": "boolean",
+              "default": true
+            },
+            "compactMode": {
+              "type": "boolean",
+              "default": false
+            },
+            "storeChatInWorkspace": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "default": {
+            "autoScroll": true,
+            "compactMode": false,
+            "storeChatInWorkspace": false
+          }
         },
-        "aiDiffAgent.behavior.compactMode": {
-          "type": "boolean",
-          "default": false,
-          "description": "Reduce visual padding and gaps to show more operations on screen."
-        },
-        "aiDiffAgent.engine.strictParsing": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enforce strict XML parsing. Disables recovery for malformed markdown blocks."
-        },
-        "aiDiffAgent.engine.maxBackupRetentionDays": {
-          "type": "integer",
-          "default": 7,
-          "description": "Number of days to keep transaction backups before purging."
+        "aiDiffAgent.engine": {
+          "type": "object",
+          "description": "Diff engine settings",
+          "properties": {
+            "strictParsing": { "type": "boolean", "default": false },
+            "maxBackupRetentionDays": { "type": "number", "default": 7 },
+            "autoFixSyntax": { "type": "boolean", "default": true },
+            "autoFormatOnApply": { "type": "boolean", "default": true, "description": "Automatically format files in the background after operations are applied." }
+          },
+          "default": {
+            "strictParsing": false,
+            "maxBackupRetentionDays": 7,
+            "autoFixSyntax": true,
+            "autoFormatOnApply": true
+          }
         }
       }
     }
@@ -91,10 +111,10 @@
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build:webview": "vite build",
-    "build:extension": "npx esbuild src/extension/extension.ts --bundle --platform=node --target=node16 --external:vscode --outfile=out/extension/extension.js --sourcemap && node scripts/build/copy-wasm.js",
+    "build:extension": "npx esbuild src/extension/extension.ts --bundle --platform=node --target=node16 --external:vscode --outfile=out/extension/extension.js --sourcemap && node scripts/copy-wasm.js",
     "build": "npm run build:webview && npm run build:extension",
     "watch:webview": "vite build --watch",
-    "watch:extension": "node scripts/build/copy-wasm.js && npx esbuild src/extension/extension.ts --bundle --platform=node --target=node16 --external:vscode --outfile=out/extension/extension.js --sourcemap --watch",
+    "watch:extension": "node scripts/copy-wasm.js && npx esbuild src/extension/extension.ts --bundle --platform=node --target=node16 --external:vscode --outfile=out/extension/extension.js --sourcemap --watch",
     "lint": "eslint src --ext ts,tsx",
     "test": "mocha -r ts-node/register -r tests/setup.ts tests/**/*.spec.ts"
   },
@@ -108,7 +128,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "^26.x",
+    "@types/node": "^26.0.1",
     "@types/react": "^19.x",
     "@types/react-dom": "^19.x",
     "@types/vscode": "^1.x",

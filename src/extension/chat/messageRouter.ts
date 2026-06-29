@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import type { WebviewEvent, ExtensionEvent } from '@/shared/ipc';
-import type { DiffOperation } from '@/shared/models';
 import { ChatSessionManager } from './sessionManager';
 import { SettingsManager } from '@/extension/settings/settingsManager';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
@@ -29,7 +28,10 @@ export class MessageRouter {
     private readonly store: CompensationStore;
     private readonly pendingOperations = new Map<string, AnyOperation>();
     private readonly processPayloadUseCase: ProcessPayloadUseCase;
-    private readonly snapshotService = new SnapshotService();
+    private readonly snapshotService: SnapshotService;
+
+    private statusUpdateQueue: any[] = [];
+    private updateTimer: ReturnType<typeof setTimeout> | null = null;
 
     public readonly transactionPipeline: TransactionPipeline;
 
@@ -38,8 +40,20 @@ export class MessageRouter {
         private readonly decorationService: DecorationService,
         private readonly postMessageCallback: (event: ExtensionEvent) => void
     ) {
-        this.sessionManager = new ChatSessionManager(context.workspaceState);
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const workspaceRoot = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri : undefined;
+
         this.settingsManager = new SettingsManager(context, () => this.syncSettings());
+        
+        this.sessionManager = new ChatSessionManager(
+            context.workspaceState,
+            workspaceRoot,
+            () => this.settingsManager.getSettings().behavior.storeChatInWorkspace,
+            () => {
+                setTimeout(() => this.syncState(), 0);
+            }
+        );
+        
         this.store = new CompensationStore(context.workspaceState);
 
         // Instantiate Dependencies for Pipeline Context
@@ -48,6 +62,8 @@ export class MessageRouter {
         const pathResolver = new ResilientPathResolver(new VsCodeFileSystemAdapter(), new VsCodeWorkspaceSearchAdapter());
         const editorService = new EditorService();
         const directoryCleanupService = new DirectoryCleanupService();
+
+        this.snapshotService = new SnapshotService(context.globalStorageUri);
 
         this.transactionPipeline = new TransactionPipeline(
             this.store,
@@ -58,40 +74,19 @@ export class MessageRouter {
             editorService,
             directoryCleanupService,
             logger,
+            this.settingsManager,
             (update: OperationStatusUpdate) => {
-                const session = this.sessionManager.getActiveSession();
-                let targetOp: DiffOperation | undefined;
+                // Оновлюємо внутрішній стейт розширення миттєво
+                this.sessionManager.updateOperationStatus(update.operationId, update.status);
                 
-                for (const msg of session.messages) {
-                    if (msg.operations) {
-                        targetOp = msg.operations.find(o => o.id === update.operationId);
-                        if (targetOp) break;
-                    }
-                }
+                // Додаємо оновлення в чергу для UI
+                this.statusUpdateQueue.push(update);
 
-                if (targetOp) {
-                    const { status, resolvedResiliently, originalPath, path, conflict } = update;
-                    const updated: DiffOperation = { 
-                        ...targetOp, 
-                        status,
-                        resolvedResiliently: resolvedResiliently ?? targetOp.resolvedResiliently,
-                        originalPath: originalPath ?? targetOp.originalPath,
-                        path: path ?? targetOp.path,
-                        conflict: conflict ?? targetOp.conflict
-                    };
-                    this.sessionManager.updateOperation(updated);
-                    this.postMessageCallback({ 
-                        type: 'OPERATION_UPDATED', 
-                        operationId: update.operationId, 
-                        status,
-                        resolvedResiliently: updated.resolvedResiliently,
-                        originalPath: updated.originalPath,
-                        path: updated.path,
-                        conflict: updated.conflict
-                    });
-                } else {
-                    this.sessionManager.updateOperationStatus(update.operationId, update.status);
-                    this.postMessageCallback({ type: 'OPERATION_UPDATED', operationId: update.operationId, status: update.status });
+                // Запускаємо таймер на 50мс, якщо він ще не запущений
+                if (!this.updateTimer) {
+                    this.updateTimer = setTimeout(() => {
+                        this.flushStatusUpdates();
+                    }, 50);
                 }
             }
         );
@@ -100,16 +95,36 @@ export class MessageRouter {
             this.sessionManager,
             this.transactionPipeline,
             this.pendingOperations,
+            this.settingsManager,
             this.postMessageCallback,
             () => this.syncState()
         );
+    }
+
+    private flushStatusUpdates(): void {
+        this.updateTimer = null;
+        if (this.statusUpdateQueue.length === 0) return;
+
+        const batch = [...this.statusUpdateQueue];
+        this.statusUpdateQueue = [];
+
+        // Відправляємо єдиний пакет в UI
+        this.postMessageCallback({
+            type: 'OPERATION_BATCH_UPDATED',
+            updates: batch
+        });
     }
 
     public handleMessage(event: WebviewEvent): void {
         switch (event.type) {
             case 'REQUEST_STATE_SYNC': this.syncState(); break;
             case 'REQUEST_SETTINGS_SYNC': this.syncSettings(); break;
-            case 'UPDATE_SETTING': this.settingsManager.updateSetting(event.category, event.key, event.value); break;
+            case 'UPDATE_SETTING': 
+                this.settingsManager.updateSetting(event.category, event.key, event.value);
+                if (event.key === 'storeChatInWorkspace') {
+                    this.sessionManager.reload();
+                }
+                break;
             case 'SUBMIT_PAYLOAD': this.processPayloadUseCase.execute(event.payload); break;
             case 'CANCEL_PROCESSING': break;
             case 'NEW_SESSION':
@@ -174,8 +189,7 @@ export class MessageRouter {
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) return;
             
-            const rootName = workspaceFolders[0].name;
-            const normalized = PathNormalizer.normalize(targetPath, rootName);
+            const normalized = PathNormalizer.normalize(targetPath);
             const uri = PathSandbox.validate(normalized);
             
             const doc = await vscode.workspace.openTextDocument(uri);
@@ -210,11 +224,10 @@ export class MessageRouter {
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) return;
             
-            const rootName = workspaceFolders[0].name;
-            const normalized = PathNormalizer.normalize(targetPath, rootName);
+            const normalized = PathNormalizer.normalize(targetPath);
             const targetUri = PathSandbox.validate(normalized);
             
-            const backupUri = this.snapshotService.getBackupUri(workspaceFolders[0].uri, operationId, normalized);
+            const backupUri = this.snapshotService.getBackupUri(operationId, normalized);
 
             try {
                 await vscode.workspace.fs.stat(backupUri);

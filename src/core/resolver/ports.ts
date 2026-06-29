@@ -5,11 +5,12 @@
  */
 
 export interface IFileSystemPort {
-    /**
-     * Verifies the physical existence of a file or directory on the host workspace.
-     * @param relativePath Clean relative path to test.
-     */
     exists(relativePath: string): Promise<boolean>;
+    /**
+     * Reads the content of a file. Returns undefined if the file cannot be read.
+     * @param relativePath Clean relative path to the file.
+     */
+    readFile(relativePath: string): Promise<string | undefined>;
 }
 
 export interface IWorkspaceSearchPort {

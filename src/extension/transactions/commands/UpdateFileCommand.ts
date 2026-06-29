@@ -17,13 +17,16 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
     private matchedBlocks: MatchedBlock[] = [];
 
     public async validate(context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
-        this.normalizedPath = PathNormalizer.normalize(this.operation.path, context.rootName);
+        this.normalizedPath = PathNormalizer.normalize(this.operation.path);
         
         let currentUri = context.getResolvedUri(this.normalizedPath);
 
         if (!currentUri) {
             try {
-                const resolution = await context.pathResolver.resolvePath(this.normalizedPath);
+                // Витягуємо перший блок пошуку як "відбиток" (fingerprint) файлу для резолвера
+                const firstSearchBlock = this.operation.changes.length > 0 ? this.operation.changes[0].search : undefined;
+                const resolution = await context.pathResolver.resolvePath(this.normalizedPath, firstSearchBlock);
+                
                 if (resolution.status === 'AMBIGUOUS_MATCH') {
                     return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));
                 }
@@ -37,7 +40,7 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                         originalPath: this.operation.path,
                         path: resolution.resolvedPath
                     };
-                    this.normalizedPath = PathNormalizer.normalize(resolution.resolvedPath, context.rootName);
+                    this.normalizedPath = PathNormalizer.normalize(resolution.resolvedPath);
                 }
                 currentUri = PathSandbox.validate(this.normalizedPath);
             } catch (e) {
@@ -84,7 +87,6 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
 
     public async prepareBackup(context: ITransactionContext): Promise<void> {
         await context.snapshotService.createSnapshot(
-            context.workspaceRoot, 
             this.operationId, 
             this.normalizedPath, 
             this.targetUri

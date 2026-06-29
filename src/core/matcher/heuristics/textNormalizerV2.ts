@@ -77,4 +77,43 @@ export class TextNormalizerV2 {
         
         return { s, e };
     }
+
+    public static aggressiveNormalizeWithMap(originalText: string): NormalizationMap {
+        let textToProcess = originalText;
+        let offset = 0;
+        
+        if (textToProcess.charCodeAt(0) === 0xFEFF) {
+            textToProcess = textToProcess.substring(1);
+            offset = 1;
+        }
+
+        const len = textToProcess.length;
+        const indices = new Uint32Array(len);
+        const chars: string[] = [];
+        let normIdx = 0;
+
+        // Потужний набір символів для ігнорування
+        const drops = new Set([' ', '\t', '\n', '\r', '"', "'", '`', '$', ';', ',']);
+
+        for (let i = 0; i < len; i++) {
+            const char = textToProcess[i];
+            if (drops.has(char)) continue;
+            
+            chars.push(char);
+            indices[normIdx] = i + offset; 
+            normIdx++;
+        }
+
+        return {
+            normalizedText: chars.join(''),
+            originalIndices: indices.slice(0, normIdx)
+        };
+    }
+
+    /**
+     * Aggressively strips the search block down to an extreme semantic skeleton.
+     */
+    public static aggressiveNormalizeSearchBlock(searchBlock: string): string {
+        return searchBlock.replace(/[\s\r\n"'`$;,]/g, '');
+    }
 }

@@ -9,7 +9,7 @@ import { PathSandbox } from '../../../vscode/workspace/pathSandbox';
 
 export class DeletePathCommand extends BaseCommand<DeletePathOperation> {
     public async validate(context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
-        this.normalizedPath = PathNormalizer.normalize(this.operation.path, context.rootName);
+        this.normalizedPath = PathNormalizer.normalize(this.operation.path);
         
         try {
             const resolution = await context.pathResolver.resolvePath(this.normalizedPath);
@@ -26,7 +26,7 @@ export class DeletePathCommand extends BaseCommand<DeletePathOperation> {
                     originalPath: this.operation.path,
                     path: resolution.resolvedPath
                 };
-                this.normalizedPath = PathNormalizer.normalize(resolution.resolvedPath, context.rootName);
+                this.normalizedPath = PathNormalizer.normalize(resolution.resolvedPath);
             }
             
             this.targetUri = PathSandbox.validate(this.normalizedPath);
@@ -57,7 +57,6 @@ export class DeletePathCommand extends BaseCommand<DeletePathOperation> {
         try {
             await vscode.workspace.fs.stat(this.targetUri);
             await context.snapshotService.createSnapshot(
-                context.workspaceRoot, 
                 this.operationId, 
                 this.normalizedPath, 
                 this.targetUri

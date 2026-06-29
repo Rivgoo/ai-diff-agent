@@ -18,6 +18,7 @@ interface AgentState {
     isPromptCopied: boolean;
     pipelineProgress: PipelineProgress;
     composerDraft: string;
+    updateOperationBatch: (updates: any[]) => void;
 
     hydrateSession: (sessions: Record<string, ChatSession>, activeId: string) => void;
     hydrateSettings: (settings: AgentSettings) => void;
@@ -44,8 +45,8 @@ export const useAgentStore = create<AgentState>((set) => ({
     activeSessionId: '',
     isAgentTyping: false,
     settings: { 
-        behavior: { autoScroll: true, compactMode: false }, 
-        engine: { strictParsing: false, maxBackupRetentionDays: 7 }
+        behavior: { autoScroll: true, compactMode: false, storeChatInWorkspace: false }, 
+        engine: { strictParsing: false, maxBackupRetentionDays: 7, autoFixSyntax: true, autoFormatOnApply: true }
     },
     isSettingsOpen: false,
     isPromptCopied: false,
@@ -103,5 +104,44 @@ export const useAgentStore = create<AgentState>((set) => ({
                     }
                 }
             };
-        })
+        }),
+
+        updateOperationBatch: (updates) => set((state) => {
+        const activeSession = state.sessions[state.activeSessionId];
+        if (!activeSession) return state;
+
+        let updatedMessages = [...activeSession.messages];
+
+        for (const update of updates) {
+            updatedMessages = updatedMessages.map((msg) => {
+                if (!msg.operations) return msg;
+                const opIndex = msg.operations.findIndex((o) => o.id === update.operationId);
+                if (opIndex === -1) return msg;
+
+                const updatedOps = [...msg.operations];
+                updatedOps[opIndex] = {
+                    ...updatedOps[opIndex],
+                    status: update.status,
+                    resolvedResiliently: update.resolvedResiliently ?? updatedOps[opIndex].resolvedResiliently,
+                    originalPath: update.originalPath ?? updatedOps[opIndex].originalPath,
+                    path: update.path ?? updatedOps[opIndex].path,
+                    conflict: update.conflict ?? updatedOps[opIndex].conflict,
+                    isDirectory: update.isDirectory ?? updatedOps[opIndex].isDirectory
+                };
+                return { ...msg, operations: updatedOps };
+            });
+        }
+
+        return {
+            sessions: {
+                ...state.sessions,
+                [state.activeSessionId]: {
+                    ...activeSession,
+                    messages: updatedMessages
+                }
+            }
+        };
+    }),
+        
 }));
+

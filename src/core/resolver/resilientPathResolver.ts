@@ -22,11 +22,7 @@ export class ResilientPathResolver {
         private readonly searchPort: IWorkspaceSearchPort
     ) {}
 
-    /**
-     * Resolves the target raw path against the workspace.
-     * Throws PathResolutionException on malformed parameters or strategy execution breakdowns.
-     */
-    public async resolvePath(rawPath: string): Promise<ResolutionResult> {
+    public async resolvePath(rawPath: string, searchBlock?: string): Promise<ResolutionResult> {
         if (!rawPath || rawPath.trim() === '') {
             throw PathResolutionException.emptyInputPath();
         }
@@ -36,7 +32,8 @@ export class ResilientPathResolver {
         // Process strategies in sequential priority
         for (const strategy of this.strategies) {
             try {
-                const result = await strategy.resolve(cleanPath, this.fsPort, this.searchPort);
+                // Передаємо searchBlock в стратегію
+                const result = await strategy.resolve(cleanPath, this.fsPort, this.searchPort, searchBlock);
                 if (result !== null) {
                     return result;
                 }
@@ -46,7 +43,6 @@ export class ResilientPathResolver {
             }
         }
 
-        // Return strict fallback if all strategies fail to find matching assets
         return {
             status: 'NOT_FOUND',
             resolvedPath: cleanPath,

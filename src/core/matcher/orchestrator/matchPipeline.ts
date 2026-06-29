@@ -5,13 +5,15 @@ import { ExactMatchStrategy } from '../heuristics/exactMatchStrategy';
 import { NormalizedMatchStrategy } from '../heuristics/normalizedMatchStrategy';
 import { AnchorMatchStrategy } from '../heuristics/anchorMatchStrategy';
 import { SyntaxSanityChecker } from '../verification/syntaxSanityChecker';
+import { AggressiveMatchStrategy } from '../heuristics/aggressiveMatchStrategy';
 
 export class MatchPipeline {
     private readonly strategies: IMatchStrategy[] = [
         new AstMatchStrategy(),
         new ExactMatchStrategy(),
         new NormalizedMatchStrategy(),
-        new AnchorMatchStrategy()
+        new AnchorMatchStrategy(),
+        new AggressiveMatchStrategy()
     ];
 
     private readonly strictExtensions = new Set(['.py', '.yaml', '.yml']);

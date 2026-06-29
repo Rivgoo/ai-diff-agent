@@ -1,15 +1,12 @@
 import { StreamScanner } from '@/core/lexer/scanner';
 import type { XmlTree, XmlElementNode, XmlTextNode } from './models';
 
-/**
- * Transforms a flat token stream into a hierarchical Abstract Syntax Tree (AST) suitable for UI rendering.
- * Safely handles unclosed tags and whitespace preservation.
- */
 export class XmlTreeBuilder {
     private static scanner = new StreamScanner();
 
-    public static build(rawInput: string): XmlTree {
-        const tokens = this.scanner.tokenize(rawInput);
+    // Тепер це async, щоб дочекатися фонового парсингу
+    public static async buildAsync(rawInput: string): Promise<XmlTree> {
+        const tokens = await this.scanner.tokenize(rawInput);
         const rootNodes: XmlTree = [];
         const stack: XmlElementNode[] = [];
 
@@ -35,7 +32,6 @@ export class XmlTreeBuilder {
             else if (token.type === 'CLOSE_TAG') {
                 const index = this.findMatchingOpenTagIndex(stack, token.name);
                 if (index !== -1) {
-                    // Close all nested tags up to the matching tag to handle missing close tags gracefully
                     while (stack.length > index) {
                         stack.pop();
                     }
@@ -59,7 +55,6 @@ export class XmlTreeBuilder {
                 }
             } 
             else if (token.type === 'TEXT_CONTENT') {
-                // Ignore pure empty whitespace nodes, keeping formatting inside actual content
                 if (token.content.trim() === '' && stack.length === 0) {
                     continue;
                 }
@@ -78,7 +73,6 @@ export class XmlTreeBuilder {
             }
         }
 
-        // Mark any remaining open tags on the stack as unclosed error states
         while (stack.length > 0) {
             const node = stack.pop();
             if (node) {

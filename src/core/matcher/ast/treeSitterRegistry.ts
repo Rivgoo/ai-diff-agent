@@ -1,27 +1,54 @@
-import type Parser from 'web-tree-sitter';
+/// <reference types="node" />
 import * as _Parser from 'web-tree-sitter';
 import * as path from 'path';
+import * as fs from 'fs';
 
-/**
- * Dynamic ESM-to-CJS Interop Resolver.
- * Uses bracket notation lookup to bypass esbuild's compile-time static analysis warnings.
- */
-const ParserConstructor = (_Parser as any)['default'] || _Parser;
+// 1. Створюємо власні строгі інтерфейси
+export interface ISyntaxNode {
+    hasError(): boolean;
+    text: string;
+    children: ISyntaxNode[];
+    startIndex: number;
+    endIndex: number;
+}
+
+export interface IParserTree {
+    rootNode: ISyntaxNode;
+    delete(): void;
+}
+
+export interface ITreeSitterParser {
+    setLanguage(language: unknown): void;
+    parse(input: string): IParserTree;
+}
+
+interface ITreeSitterConstructor {
+    init(options?: object): Promise<void>;
+    Language: {
+        load(wasmFilePath: string): Promise<unknown>;
+    };
+    new (): ITreeSitterParser;
+}
+
+// 2. Ховаємо ключ 'default' у змінну
+const defaultKey = 'default';
+const ParserConstructor = (((_Parser as unknown) as Record<string, ITreeSitterConstructor>)[defaultKey] || _Parser) as ITreeSitterConstructor;
 
 /**
  * Singleton Registry for loading and caching WebAssembly Tree-sitter parsers.
  */
 export class AstParserRegistry {
     private static initialized = false;
-    private static parsers = new Map<string, Parser>();
+    private static parsers = new Map<string, ITreeSitterParser>();
 
-    public static async getParser(language: string): Promise<Parser | null> {
+    public static async getParser(language: string): Promise<ITreeSitterParser | null> {
         try {
             if (!this.initialized) {
-                // Initialize Parser with dynamic file resolution for VS Code sandboxes
+                const grammarsDir = path.join(__dirname, 'grammars');
+                
                 await ParserConstructor.init({
                     locateFile: (scriptName: string) => {
-                        return path.join(__dirname, 'grammars', scriptName);
+                        return path.join(grammarsDir, scriptName);
                     }
                 });
                 this.initialized = true;
@@ -31,15 +58,21 @@ export class AstParserRegistry {
                 return this.parsers.get(language)!;
             }
 
-            const parser = new ParserConstructor() as Parser;
             const wasmPath = path.join(__dirname, 'grammars', `tree-sitter-${language}.wasm`);
+            
+            if (!fs.existsSync(wasmPath)) {
+                console.warn(`[AstParserRegistry] WASM file missing: ${wasmPath}`);
+                return null;
+            }
+
+            const parser = new ParserConstructor();
             const lang = await ParserConstructor.Language.load(wasmPath);
             parser.setLanguage(lang);
             
             this.parsers.set(language, parser);
             return parser;
         } catch (e) {
-            console.warn(`[AstParserRegistry] Failed to load WASM grammar for ${language}. Falling back to heuristics.`);
+            console.warn(`[AstParserRegistry] Failed to load WASM grammar for ${language}:`, e);
             return null;
         }
     }

@@ -13,7 +13,8 @@ export class DirectMatchStrategy implements IPathResolutionStrategy {
     public async resolve(
         rawPath: string,
         fs: IFileSystemPort,
-        _search: IWorkspaceSearchPort
+        _search: IWorkspaceSearchPort,
+        _searchBlock?: string
     ): Promise<ResolutionResult | null> {
         const pathExists = await fs.exists(rawPath);
         if (pathExists) {

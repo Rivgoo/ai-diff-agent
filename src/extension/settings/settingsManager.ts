@@ -22,22 +22,13 @@ export class SettingsManager {
         );
     }
 
-    /**
-     * Retrieves aggregated public settings from the configurations store synchronously.
-     */
     public getSettings(): AgentSettings {
-        const behavior = this.configService.getBehaviorSettings();
-        const engine = this.configService.getEngineSettings();
-
         return {
-            behavior,
-            engine
+            behavior: this.configService.getBehaviorSettings(),
+            engine: this.configService.getEngineSettings()
         };
     }
 
-    /**
-     * Synchronously triggers a workspace configuration update.
-     */
     public async updateSetting(category: 'behavior' | 'engine', key: string, value: any): Promise<void> {
         try {
             await this.configService.updateSetting(category, key, value);

@@ -13,9 +13,12 @@ export class ExactMatchStrategy implements IMatchStrategy {
         const { document, searchBlock } = context;
         const docText = document.getText();
         
+        // Розбиваємо на рядки та екрануємо кожен окремо
         const lines = searchBlock.replace(/\r\n/g, '\n').split('\n');
         const escapedLines = lines.map(line => escapeRegExp(line));
         
+        // Збираємо назад, дозволяючи опціональні символи повернення каретки (\r) 
+        // для сумісності між Windows та Unix
         const exactPattern = escapedLines.join('\\r?\\n');
         const regex = new RegExp(exactPattern, 'g');
 
@@ -24,12 +27,15 @@ export class ExactMatchStrategy implements IMatchStrategy {
 
         while ((match = regex.exec(docText)) !== null) {
             matches.push({ index: match.index, length: match[0].length });
+            // Запобігаємо нескінченному циклу для пустих збігів
             if (regex.lastIndex === match.index) {
                 regex.lastIndex++;
             }
         }
 
         if (matches.length === 0) return null;
+        
+        // Якщо знайдено більше одного точного збігу - сигналізуємо про амбівалентність
         if (matches.length > 1) {
             return { status: 'FAILED', reason: 'AMBIGUOUS_MATCH', matchesFound: matches.length };
         }
