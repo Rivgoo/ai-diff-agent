@@ -22,6 +22,7 @@ export class ConfigurationService {
       strictParsing: engine.strictParsing ?? false,
       maxBackupRetentionDays: engine.maxBackupRetentionDays ?? 7,
       autoFixSyntax: engine.autoFixSyntax ?? true,
+      autoFormatOnApply: engine.autoFormatOnApply ?? true,
     };
   }
 

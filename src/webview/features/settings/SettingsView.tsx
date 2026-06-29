@@ -108,6 +108,16 @@ export const SettingsView = () => {
                         <p className={styles.description}>Safely repair missing quotes, JSON trailing commas, and invisible characters based on file type.</p>
                     </div>
 
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.engine.autoFormatOnApply} 
+                            onChange={(e: any) => updateSetting('engine', 'autoFormatOnApply', e.target.checked)}
+                        >
+                            Auto-Format on Apply
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>Silently format files in the background after AI modifications are applied.</p>
+                    </div>
+
                 </section>
             </div>
         </div>

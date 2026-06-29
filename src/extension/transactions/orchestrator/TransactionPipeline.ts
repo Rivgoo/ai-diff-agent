@@ -15,6 +15,7 @@ import type { DirectoryCleanupService } from '@/extension/transactions/services/
 import type { ILogger } from '@/extension/transactions/core/ILogger';
 import { PathNormalizer } from '@/core/workspace/pathNormalizer';
 import type { ConflictDetails } from '@/shared/models';
+import type { SettingsManager } from '@/extension/settings/settingsManager'; 
 
 export class TransactionPipeline {
     private readonly transactionLock = new TransactionLock();
@@ -28,6 +29,7 @@ export class TransactionPipeline {
         private readonly editorService: EditorService,
         private readonly directoryCleanupService: DirectoryCleanupService,
         private readonly logger: ILogger,
+        private readonly settingsManager: SettingsManager,
         private readonly onStatusUpdate: (event: OperationStatusUpdate) => void
     ) {}
 
@@ -107,7 +109,7 @@ export class TransactionPipeline {
 
                 const cmdCandidates = this.extractDirectoryCandidates(cmd.operation, rootName);
                 for (const dirUri of cleanedDirs) {
-                    const relativeDir = PathNormalizer.normalize(dirUri.fsPath, rootName);
+                    const relativeDir = PathNormalizer.normalize(dirUri.fsPath);
                     if (cmdCandidates.includes(relativeDir)) {
                         antiActions.push({ type: 'restore_dir', uri: dirUri });
                     }
@@ -135,7 +137,11 @@ export class TransactionPipeline {
                 }
             }
 
-            await this.editorService.focusFiles(uow.getModifiedUris());
+            const engineSettings = this.settingsManager.getSettings().engine;
+            if (engineSettings.autoFormatOnApply) {
+                await this.editorService.formatFilesSilently(uow.getModifiedUris());
+            }
+
             this.logger.info("Transaction pipeline executed successfully.");
 
         } catch (err) {
@@ -192,10 +198,10 @@ export class TransactionPipeline {
         return operations.flatMap(op => this.extractDirectoryCandidates(op, rootName));
     }
 
-    private extractDirectoryCandidates(op: AnyOperation, rootName: string): string[] {
+    private extractDirectoryCandidates(op: AnyOperation, _rootName: string): string[] {
         const candidates: string[] = [];
         if (op.type === 'delete_path' || op.type === 'move_path') {
-            const normalizedPath = PathNormalizer.normalize((op as any).path, rootName);
+            const normalizedPath = PathNormalizer.normalize((op as any).path);
             let currentDir = normalizedPath.split('/').slice(0, -1).join('/');
             while (currentDir) {
                 candidates.push(currentDir);

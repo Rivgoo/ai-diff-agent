@@ -74,6 +74,7 @@ export class MessageRouter {
             editorService,
             directoryCleanupService,
             logger,
+            this.settingsManager,
             (update: OperationStatusUpdate) => {
                 // Оновлюємо внутрішній стейт розширення миттєво
                 this.sessionManager.updateOperationStatus(update.operationId, update.status);

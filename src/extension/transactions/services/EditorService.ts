@@ -2,43 +2,46 @@ import * as vscode from 'vscode';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
 
 export class EditorService {
-    private readonly maxOpenFiles = 5;
+    /**
+     * Silently formats a list of URIs in the background without stealing editor focus.
+     */
+    public async formatFilesSilently(uris: vscode.Uri[]): Promise<void> {
+        if (uris.length === 0) return;
 
-    public async focusFiles(uris: vscode.Uri[]): Promise<void> {
-        const toOpen = uris.slice(0, this.maxOpenFiles);
-        
-        for (const uri of toOpen) {
+        const formatEdit = new vscode.WorkspaceEdit();
+        let formattedCount = 0;
+
+        for (const uri of uris) {
             try {
-                const doc = await vscode.workspace.openTextDocument(uri);
-                await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });
+                const edits = await vscode.commands.executeCommand<vscode.TextEdit[]>(
+                    'vscode.executeFormatDocumentProvider', 
+                    uri, 
+                    { tabSize: 4, insertSpaces: true } 
+                );
 
-                try {
-                    const fallbackOptions = { tabSize: 4, insertSpaces: true };
-                    const editor = vscode.window.visibleTextEditors.find(e => e.document.uri.toString() === uri.toString());
-                    const formatOptions = editor ? editor.options : fallbackOptions;
-
-                    const edits = await vscode.commands.executeCommand<vscode.TextEdit[]>(
-                        'vscode.executeFormatDocumentProvider', 
-                        uri, 
-                        formatOptions
-                    );
-
-                    if (edits && edits.length > 0) {
-                        const formatEdit = new vscode.WorkspaceEdit();
-                        formatEdit.set(uri, edits);
-                        await vscode.workspace.applyEdit(formatEdit);
-                    }
-                } catch {
-                    OutputLogger.log(`Skipped auto-formatting for ${uri.fsPath}`, 'INFO');
+                if (edits && edits.length > 0) {
+                    formatEdit.set(uri, edits);
+                    formattedCount++;
                 }
-
             } catch (error) {
-                OutputLogger.log(`Failed to open document: ${uri.fsPath}`, 'WARN');
+                OutputLogger.log(`Skipped silent auto-formatting for ${uri.fsPath}`, 'INFO');
             }
         }
 
-        if (uris.length > this.maxOpenFiles) {
-            vscode.window.showInformationMessage(`Applied edits to ${uris.length} files (opened ${this.maxOpenFiles}).`);
+        if (formattedCount > 0) {
+            try {
+
+                await vscode.workspace.applyEdit(formatEdit);
+                
+                for (const uri of uris) {
+                    const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString());
+                    if (doc && doc.isDirty) {
+                        await doc.save();
+                    }
+                }
+            } catch (error) {
+                OutputLogger.log(`Failed to apply background formatting: ${error}`, 'ERROR');
+            }
         }
     }
 }
