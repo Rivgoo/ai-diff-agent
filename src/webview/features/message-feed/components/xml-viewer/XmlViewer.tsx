@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { IconChevronRight } from '@tabler/icons-react';
 import { XmlTreeBuilder } from './XmlTreeBuilder';
 import { XmlOpeningTag, XmlClosingTag, XmlText, XmlRowIndent } from './XmlElements';
@@ -9,15 +9,12 @@ interface XmlViewerProps {
     readonly rawInput: string;
 }
 
-/**
- * Pre-calculates initially collapsed IDs based on line count heuristics
- */
 function getInitialCollapsedIds(tree: XmlTree, initialSet = new Set<string>()): Set<string> {
     for (const node of tree) {
         if (node.type === 'ELEMENT') {
             if (node.tagName === 'search' || node.tagName === 'replace') {
-                const textChild = node.children.find(c => c.type === 'TEXT') as XmlTextNode;
-                if (textChild && textChild.content.split('\n').length > 10) {
+                const textChild = node.children.find(c => c.type === 'TEXT') as XmlTextNode | undefined;
+                if (textChild && textChild.content && textChild.content.split('\n').length > 10) {
                     initialSet.add(node.id);
                 }
             }
@@ -27,10 +24,6 @@ function getInitialCollapsedIds(tree: XmlTree, initialSet = new Set<string>()): 
     return initialSet;
 }
 
-/**
- * Flattens the hierarchical XML tree dynamically into a single list of renderable lines.
- * This ensures perfect zero-gap spacing and straightforward line numbering.
- */
 function flattenTree(
     tree: XmlTree,
     collapsedIds: Set<string>,
@@ -70,7 +63,6 @@ function flattenTree(
                 }
             }
         } else {
-            // Split multi-line blocks into explicit separate line rows
             const lines = node.content.split(/\r?\n/);
             lines.forEach((lineText, idx) => {
                 rows.push({
@@ -87,29 +79,44 @@ function flattenTree(
 }
 
 export const XmlViewer = ({ rawInput }: XmlViewerProps) => {
-    // 1. Build the immutable AST
-    const tree = useMemo(() => XmlTreeBuilder.build(rawInput), [rawInput]);
+    // Стан для асинхронного завантаження AST дерева
+    const [tree, setTree] = useState<XmlTree | null>(null);
+    const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(new Set());
 
-    // 2. Pre-calculate collapsed sections
-    const initialCollapsed = useMemo(() => getInitialCollapsedIds(tree), [tree]);
-    const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(initialCollapsed);
+    // Запускаємо побудову дерева у фоні при відкритті акордеону
+    useEffect(() => {
+        let isMounted = true;
+        XmlTreeBuilder.buildAsync(rawInput).then(result => {
+            if (isMounted) {
+                setTree(result);
+                setCollapsedNodeIds(getInitialCollapsedIds(result));
+            }
+        });
+        return () => { isMounted = false; };
+    }, [rawInput]);
 
-    // 3. Flatten the expanded elements into visible rows
     const rows = useMemo(() => {
+        if (!tree) return [];
         return flattenTree(tree, collapsedNodeIds);
     }, [tree, collapsedNodeIds]);
 
     const toggleCollapse = (nodeId: string) => {
         setCollapsedNodeIds(prev => {
             const next = new Set(prev);
-            if (next.has(nodeId)) {
-                next.delete(nodeId);
-            } else {
-                next.add(nodeId);
-            }
+            if (next.has(nodeId)) next.delete(nodeId);
+            else next.add(nodeId);
             return next;
         });
     };
+
+    // Показуємо прелоадер, доки лексер працює
+    if (!tree) {
+        return (
+            <div className={styles.container} style={{ padding: '8px 12px', color: 'var(--vscode-descriptionForeground)' }}>
+                Parsing XML payload...
+            </div>
+        );
+    }
 
     return (
         <div className={styles.container}>
@@ -120,13 +127,11 @@ export const XmlViewer = ({ rawInput }: XmlViewerProps) => {
 
                 return (
                     <div key={row.id} className={styles.line}>
-                        {/* Line number Gutter */}
                         <div className={styles.gutter}>{index + 1}</div>
                         
                         <div className={styles.content}>
                             <XmlRowIndent depth={row.depth} />
                             
-                            {/* Expand/Collapse Chevron control */}
                             {canExpand ? (
                                 <button 
                                     type="button"
@@ -145,7 +150,6 @@ export const XmlViewer = ({ rawInput }: XmlViewerProps) => {
                                 <div className={styles.spacer} aria-hidden="true" />
                             )}
 
-                            {/* Render explicit line content */}
                             {row.type === 'OPENING_TAG' && (
                                 <>
                                     <XmlOpeningTag 

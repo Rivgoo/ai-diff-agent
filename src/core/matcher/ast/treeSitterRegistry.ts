@@ -1,9 +1,9 @@
 /// <reference types="node" />
 import * as _Parser from 'web-tree-sitter';
 import * as path from 'path';
+import * as fs from 'fs';
 
-// 1. Створюємо власні строгі інтерфейси, що описують AST-дерево.
-// Це ізолює наш код від проблемних типів зовнішньої бібліотеки web-tree-sitter.
+// 1. Створюємо власні строгі інтерфейси
 export interface ISyntaxNode {
     hasError(): boolean;
     text: string;
@@ -30,8 +30,7 @@ interface ITreeSitterConstructor {
     new (): ITreeSitterParser;
 }
 
-// 2. Ховаємо ключ 'default' у змінну, щоб збирач ESBuild не зміг провести 
-// статичний аналіз і не видавав жодних попереджень (Warnings)
+// 2. Ховаємо ключ 'default' у змінну
 const defaultKey = 'default';
 const ParserConstructor = (((_Parser as unknown) as Record<string, ITreeSitterConstructor>)[defaultKey] || _Parser) as ITreeSitterConstructor;
 
@@ -45,10 +44,11 @@ export class AstParserRegistry {
     public static async getParser(language: string): Promise<ITreeSitterParser | null> {
         try {
             if (!this.initialized) {
-                // Initialize Parser with dynamic file resolution for VS Code sandboxes
+                const grammarsDir = path.join(__dirname, 'grammars');
+                
                 await ParserConstructor.init({
                     locateFile: (scriptName: string) => {
-                        return path.join(__dirname, 'grammars', scriptName);
+                        return path.join(grammarsDir, scriptName);
                     }
                 });
                 this.initialized = true;
@@ -58,15 +58,21 @@ export class AstParserRegistry {
                 return this.parsers.get(language)!;
             }
 
-            const parser = new ParserConstructor();
             const wasmPath = path.join(__dirname, 'grammars', `tree-sitter-${language}.wasm`);
+            
+            if (!fs.existsSync(wasmPath)) {
+                console.warn(`[AstParserRegistry] WASM file missing: ${wasmPath}`);
+                return null;
+            }
+
+            const parser = new ParserConstructor();
             const lang = await ParserConstructor.Language.load(wasmPath);
             parser.setLanguage(lang);
             
             this.parsers.set(language, parser);
             return parser;
         } catch (e) {
-            console.warn(`[AstParserRegistry] Failed to load WASM grammar for ${language}. Falling back to heuristics.`);
+            console.warn(`[AstParserRegistry] Failed to load WASM grammar for ${language}:`, e);
             return null;
         }
     }
