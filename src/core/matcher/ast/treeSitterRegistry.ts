@@ -1,21 +1,48 @@
-import type Parser from 'web-tree-sitter';
+/// <reference types="node" />
 import * as _Parser from 'web-tree-sitter';
 import * as path from 'path';
 
-/**
- * Dynamic ESM-to-CJS Interop Resolver.
- * Uses bracket notation lookup to bypass esbuild's compile-time static analysis warnings.
- */
-const ParserConstructor = (_Parser as any)['default'] || _Parser;
+// 1. Створюємо власні строгі інтерфейси, що описують AST-дерево.
+// Це ізолює наш код від проблемних типів зовнішньої бібліотеки web-tree-sitter.
+export interface ISyntaxNode {
+    hasError(): boolean;
+    text: string;
+    children: ISyntaxNode[];
+    startIndex: number;
+    endIndex: number;
+}
+
+export interface IParserTree {
+    rootNode: ISyntaxNode;
+    delete(): void;
+}
+
+export interface ITreeSitterParser {
+    setLanguage(language: unknown): void;
+    parse(input: string): IParserTree;
+}
+
+interface ITreeSitterConstructor {
+    init(options?: object): Promise<void>;
+    Language: {
+        load(wasmFilePath: string): Promise<unknown>;
+    };
+    new (): ITreeSitterParser;
+}
+
+// 2. Ховаємо ключ 'default' у змінну, щоб збирач ESBuild не зміг провести 
+// статичний аналіз і не видавав жодних попереджень (Warnings)
+const defaultKey = 'default';
+const ParserConstructor = (((_Parser as unknown) as Record<string, ITreeSitterConstructor>)[defaultKey] || _Parser) as ITreeSitterConstructor;
 
 /**
  * Singleton Registry for loading and caching WebAssembly Tree-sitter parsers.
  */
 export class AstParserRegistry {
     private static initialized = false;
-    private static parsers = new Map<string, Parser>();
+    private static parsers = new Map<string, ITreeSitterParser>();
 
-    public static async getParser(language: string): Promise<Parser | null> {
+    public static async getParser(language: string): Promise<ITreeSitterParser | null> {
         try {
             if (!this.initialized) {
                 // Initialize Parser with dynamic file resolution for VS Code sandboxes
@@ -31,7 +58,7 @@ export class AstParserRegistry {
                 return this.parsers.get(language)!;
             }
 
-            const parser = new ParserConstructor() as Parser;
+            const parser = new ParserConstructor();
             const wasmPath = path.join(__dirname, 'grammars', `tree-sitter-${language}.wasm`);
             const lang = await ParserConstructor.Language.load(wasmPath);
             parser.setLanguage(lang);
