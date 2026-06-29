@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { IWorkspaceSearchPort } from '../../core/resolver/ports';
+import type { IWorkspaceSearchPort } from '../../core/resolver/ports';
 import { PathNormalizer } from '../../core/workspace/pathNormalizer';
 
 /**
@@ -12,15 +12,13 @@ export class VsCodeWorkspaceSearchAdapter implements IWorkspaceSearchPort {
         if (!workspaceFolders || workspaceFolders.length === 0) {
             return [];
         }
-
-        const rootName = workspaceFolders[0].name;
         
         // Resolve target workspace exclusions globs securely
         const excludeFilter = excludePattern ? excludePattern : undefined;
 
         try {
             const matches = await vscode.workspace.findFiles(globPattern, excludeFilter);
-            return matches.map(uri => PathNormalizer.normalize(uri.fsPath, rootName));
+            return matches.map(uri => PathNormalizer.normalize(uri.fsPath));
         } catch {
             return [];
         }

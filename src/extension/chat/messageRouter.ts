@@ -29,7 +29,7 @@ export class MessageRouter {
     private readonly store: CompensationStore;
     private readonly pendingOperations = new Map<string, AnyOperation>();
     private readonly processPayloadUseCase: ProcessPayloadUseCase;
-    private readonly snapshotService = new SnapshotService();
+    private readonly snapshotService: SnapshotService;
 
     public readonly transactionPipeline: TransactionPipeline;
 
@@ -58,6 +58,8 @@ export class MessageRouter {
         const pathResolver = new ResilientPathResolver(new VsCodeFileSystemAdapter(), new VsCodeWorkspaceSearchAdapter());
         const editorService = new EditorService();
         const directoryCleanupService = new DirectoryCleanupService();
+
+        this.snapshotService = new SnapshotService(context.globalStorageUri);
 
         this.transactionPipeline = new TransactionPipeline(
             this.store,
@@ -190,8 +192,7 @@ export class MessageRouter {
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) return;
             
-            const rootName = workspaceFolders[0].name;
-            const normalized = PathNormalizer.normalize(targetPath, rootName);
+            const normalized = PathNormalizer.normalize(targetPath);
             const uri = PathSandbox.validate(normalized);
             
             const doc = await vscode.workspace.openTextDocument(uri);
@@ -226,11 +227,10 @@ export class MessageRouter {
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) return;
             
-            const rootName = workspaceFolders[0].name;
-            const normalized = PathNormalizer.normalize(targetPath, rootName);
+            const normalized = PathNormalizer.normalize(targetPath);
             const targetUri = PathSandbox.validate(normalized);
             
-            const backupUri = this.snapshotService.getBackupUri(workspaceFolders[0].uri, operationId, normalized);
+            const backupUri = this.snapshotService.getBackupUri(operationId, normalized);
 
             try {
                 await vscode.workspace.fs.stat(backupUri);

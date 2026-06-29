@@ -17,7 +17,7 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
     private matchedBlocks: MatchedBlock[] = [];
 
     public async validate(context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
-        this.normalizedPath = PathNormalizer.normalize(this.operation.path, context.rootName);
+        this.normalizedPath = PathNormalizer.normalize(this.operation.path);
         
         let currentUri = context.getResolvedUri(this.normalizedPath);
 
@@ -40,7 +40,7 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                         originalPath: this.operation.path,
                         path: resolution.resolvedPath
                     };
-                    this.normalizedPath = PathNormalizer.normalize(resolution.resolvedPath, context.rootName);
+                    this.normalizedPath = PathNormalizer.normalize(resolution.resolvedPath);
                 }
                 currentUri = PathSandbox.validate(this.normalizedPath);
             } catch (e) {
@@ -87,7 +87,6 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
 
     public async prepareBackup(context: ITransactionContext): Promise<void> {
         await context.snapshotService.createSnapshot(
-            context.workspaceRoot, 
             this.operationId, 
             this.normalizedPath, 
             this.targetUri

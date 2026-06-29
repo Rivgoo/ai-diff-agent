@@ -12,8 +12,8 @@ export class MovePathCommand extends BaseCommand<MovePathOperation> {
     private normalizedDestPath!: string;
 
     public async validate(context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
-        this.normalizedPath = PathNormalizer.normalize(this.operation.path, context.rootName);
-        this.normalizedDestPath = PathNormalizer.normalize(this.operation.destinationPath, context.rootName);
+        this.normalizedPath = PathNormalizer.normalize(this.operation.path);
+        this.normalizedDestPath = PathNormalizer.normalize(this.operation.destinationPath);
         
         try {
             const resolution = await context.pathResolver.resolvePath(this.normalizedPath);
@@ -30,7 +30,7 @@ export class MovePathCommand extends BaseCommand<MovePathOperation> {
                     originalPath: this.operation.path,
                     path: resolution.resolvedPath
                 };
-                this.normalizedPath = PathNormalizer.normalize(resolution.resolvedPath, context.rootName);
+                this.normalizedPath = PathNormalizer.normalize(resolution.resolvedPath);
             }
             
             this.targetUri = PathSandbox.validate(this.normalizedPath);
@@ -53,7 +53,6 @@ export class MovePathCommand extends BaseCommand<MovePathOperation> {
 
     public async prepareBackup(context: ITransactionContext): Promise<void> {
         await context.snapshotService.createSnapshot(
-            context.workspaceRoot, 
             this.operationId, 
             this.normalizedPath, 
             this.targetUri

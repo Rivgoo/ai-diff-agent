@@ -5,7 +5,7 @@ import { TransactionContext } from '@/extension/transactions/context/Transaction
 import { VsCodeUnitOfWork } from '@/extension/transactions/context/VsCodeUnitOfWork';
 import { TransactionLock } from '@/extension/transactions/store/TransactionLock';
 import type { OperationStatusUpdate } from '@/extension/transactions/core/TransactionEvents';
-import type { CompensationStore, AntiAction } from '@/extension/transactions/store/CompensationStore';
+import type { CompensationStore } from '@/extension/transactions/store/CompensationStore';
 import type { DecorationService } from '@/extension/transactions/services/DecorationService';
 import type { SearchEngine } from '@/core/matcher/searchEngine';
 import type { ResilientPathResolver } from '@/core/resolver/resilientPathResolver';
@@ -142,7 +142,7 @@ export class TransactionPipeline {
             this.logger.error(`Pipeline execution crashed: ${err}`);
             
             for (const cmd of commands) {
-                await this.snapshotService.purgeSnapshotForOp(rootUri, cmd.operationId);
+                await this.snapshotService.purgeSnapshotForOp(cmd.operationId);
                 this.transactionLock.release(cmd.operationId);
                 this.onStatusUpdate({
                     operationId: cmd.operationId,
@@ -243,14 +243,9 @@ export class TransactionPipeline {
         this.store.clearTransaction(opId);
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
-        await this.snapshotService.purgeSnapshotForOp(workspaceFolders[0].uri, opId);
     }
 
     public async revertOperation(opId: string): Promise<void> {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) return;
-        const rootUri = workspaceFolders[0].uri;
-
         const tx = this.store.getTransaction(opId);
         if (!tx) return;
 
@@ -258,6 +253,7 @@ export class TransactionPipeline {
         const directoriesToDelete: vscode.Uri[] = [];
         const directoriesToRestore: vscode.Uri[] = [];
 
+        // Формуємо операції видалення/переміщення
         for (let i = tx.antiActions.length - 1; i >= 0; i--) {
             const act = tx.antiActions[i];
             if (act.type === 'delete_created') edit.deleteFile(act.uri, { ignoreIfNotExists: true });
@@ -266,8 +262,39 @@ export class TransactionPipeline {
             else if (act.type === 'restore_dir') directoriesToRestore.push(act.uri);
         }
 
+        // ВІДНОВЛЕННЯ ІСТОРІЇ Ctrl+Z (Текстові файли)
+        for (const act of tx.antiActions) {
+            let backupUri: vscode.Uri | undefined;
+            let targetUri: vscode.Uri | undefined;
+
+            if (act.type === 'restore_file') {
+                backupUri = this.snapshotService.getBackupUri(opId, act.relativePath);
+                targetUri = act.uri;
+            } else if (act.type === 'restore_move') {
+                backupUri = this.snapshotService.getBackupUri(opId, act.relativeSourcePath);
+                targetUri = act.sourceUri;
+            }
+
+            if (backupUri && targetUri) {
+                try {
+                    // Читаємо оригінальний текст з ізольованого бекапу
+                    const backupData = await vscode.workspace.fs.readFile(backupUri);
+                    const originalText = new TextDecoder('utf-8').decode(backupData);
+                    
+                    // Відкриваємо файл і замінюємо ВЕСЬ його текст через WorkspaceEdit
+                    const doc = await vscode.workspace.openTextDocument(targetUri);
+                    const fullRange = new vscode.Range(0, 0, doc.lineCount, 9999);
+                    edit.replace(targetUri, fullRange, originalText);
+                } catch (e) {
+                    this.logger.error(`Failed to stage text restoration for ${targetUri?.fsPath}: ${e}`);
+                }
+            }
+        }
+
+        // Застосовуємо єдину транзакцію відкату
         await vscode.workspace.applyEdit(edit);
 
+        // Очищення папок...
         directoriesToDelete.sort((a, b) => b.fsPath.length - a.fsPath.length);
         for (const dirUri of directoriesToDelete) {
             try {
@@ -275,32 +302,22 @@ export class TransactionPipeline {
                 if (contents.length === 0) {
                     await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
                 }
-            } catch {
-                /* ignore */
-            }
+            } catch { /* ignore */ }
         }
 
         directoriesToRestore.sort((a, b) => a.fsPath.length - b.fsPath.length);
         for (const dirUri of directoriesToRestore) {
             try {
                 await vscode.workspace.fs.createDirectory(dirUri);
-            } catch {
-                /* ignore */
-            }
-        }
-
-        for (const act of tx.antiActions) {
-            if (act.type === 'restore_file') {
-                await this.snapshotService.restoreSnapshot(rootUri, opId, act.relativePath, act.uri);
-            } else if (act.type === 'restore_move') {
-                await this.snapshotService.restoreSnapshot(rootUri, opId, act.relativeSourcePath, act.sourceUri);
-            }
+            } catch { /* ignore */ }
         }
 
         this.onStatusUpdate({ operationId: opId, status: 'reverted' });
         this.store.clearTransaction(opId);
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
-        await this.snapshotService.purgeSnapshotForOp(rootUri, opId);
+        
+        // Примусово видаляємо бекап після відкату, бо він більше не потрібен
+        await this.snapshotService.purgeSnapshotForOp(opId);
     }
 }

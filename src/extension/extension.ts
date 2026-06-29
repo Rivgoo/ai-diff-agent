@@ -2,10 +2,16 @@ import * as vscode from 'vscode';
 import { SidebarWebviewProvider } from '@/extension/vscode/webviewHost';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
 import { DecorationService } from '@/extension/transactions/services/DecorationService';
+import { SnapshotService } from '@/extension/transactions/services/SnapshotService';
 
 export function activate(context: vscode.ExtensionContext): void {
     OutputLogger.initialize();
     OutputLogger.log('AI Diff Agent activating...', 'INFO');
+
+    const config = vscode.workspace.getConfiguration('aiDiffAgent');
+    const retentionDays = config.get<number>('engine.maxBackupRetentionDays') || 7;
+    const snapshotService = new SnapshotService(context.globalStorageUri);
+    snapshotService.cleanStaleBackups(retentionDays);
 
     const decorationService = new DecorationService();
 

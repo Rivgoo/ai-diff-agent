@@ -7,8 +7,8 @@ import { PathNormalizer } from '../../../core/workspace/pathNormalizer';
 import { PathSandbox } from '../../../vscode/workspace/pathSandbox';
 
 export class CreateDirCommand extends BaseCommand<CreateDirOperation> {
-    public async validate(context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
-        this.normalizedPath = PathNormalizer.normalize(this.operation.path, context.rootName);
+    public async validate(_context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
+        this.normalizedPath = PathNormalizer.normalize(this.operation.path);
         try {
             this.targetUri = PathSandbox.validate(this.normalizedPath);
             return Result.ok(undefined);

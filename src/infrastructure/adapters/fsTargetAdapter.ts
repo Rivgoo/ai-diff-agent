@@ -9,8 +9,7 @@ export class VsCodeFileSystemAdapter implements IFileSystemPort {
         if (!workspaceFolders || workspaceFolders.length === 0) return false;
 
         try {
-            const rootName = workspaceFolders[0].name;
-            const cleanPath = PathNormalizer.normalize(relativePath, rootName);
+            const cleanPath = PathNormalizer.normalize(relativePath);
             const targetUri = PathSandbox.validate(cleanPath);
             
             await vscode.workspace.fs.stat(targetUri);
@@ -25,8 +24,7 @@ export class VsCodeFileSystemAdapter implements IFileSystemPort {
         if (!workspaceFolders || workspaceFolders.length === 0) return undefined;
 
         try {
-            const rootName = workspaceFolders[0].name;
-            const cleanPath = PathNormalizer.normalize(relativePath, rootName);
+            const cleanPath = PathNormalizer.normalize(relativePath);
             const targetUri = PathSandbox.validate(cleanPath);
             
             const fileData = await vscode.workspace.fs.readFile(targetUri);

@@ -10,8 +10,8 @@ import { PathSandbox } from '../../../vscode/workspace/pathSandbox';
 export class CreateFileCommand extends BaseCommand<CreateFileOperation> {
     private fileExistsOnDisk = false;
 
-    public async validate(context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
-        this.normalizedPath = PathNormalizer.normalize(this.operation.path, context.rootName);
+    public async validate(_context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
+        this.normalizedPath = PathNormalizer.normalize(this.operation.path)
         
         try {
             this.targetUri = PathSandbox.validate(this.normalizedPath);
@@ -28,14 +28,11 @@ export class CreateFileCommand extends BaseCommand<CreateFileOperation> {
     }
 
     public async prepareBackup(context: ITransactionContext): Promise<void> {
-        if (this.fileExistsOnDisk) {
-            await context.snapshotService.createSnapshot(
-                context.workspaceRoot, 
-                this.operationId, 
-                this.normalizedPath, 
-                this.targetUri
-            );
-        }
+        await context.snapshotService.createSnapshot(
+            this.operationId, 
+            this.normalizedPath, 
+            this.targetUri
+        );
     }
 
     public async apply(context: ITransactionContext): Promise<void> {

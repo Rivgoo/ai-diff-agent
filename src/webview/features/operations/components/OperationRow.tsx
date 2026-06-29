@@ -14,7 +14,6 @@ interface OperationRowProps {
 const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps) => {
     const { sendEvent } = useIPC();
     
-    // Generate semantic UI classes based on ViewModel truth matrix
     const classNames = [styles.row];
     if (isActive) classNames.push(styles.rowActive);
     if (vm.isRealConflict) classNames.push(styles.rowConflict);
@@ -22,9 +21,7 @@ const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps
     else if (vm.isAborted) classNames.push(styles.rowAborted);
     
     const rowClass = classNames.join(' ');
-    
-    // Pencil icon indicates the file is fully staged and waiting for user decision
-    const isDirty = vm.statusIcon === 'edit';
+
 
     const renderIcon = () => {
         const size = 12;
@@ -37,6 +34,10 @@ const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps
             default: return null;
         }
     };
+
+    const isDirty = vm.statusIcon === 'edit';
+    const isSaved = vm.statusIcon === 'check';
+    const canDiff = isDirty || isSaved; 
 
     return (
         <div 
@@ -71,16 +72,18 @@ const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps
 
             {/* ACTION MENU OVERLAY */}
             <div className={styles.actionOverlay}>
+                {canDiff && (
+                    <button 
+                        type="button" 
+                        className={`${styles.actionBtn} ${styles.btnDiff}`} 
+                        onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'OPEN_DIFF', operationId: vm.id }); }} 
+                        title="Compare changes (Diff)"
+                    >
+                        <IconGitCompare size={12} />
+                    </button>
+                )}
                 {isDirty && (
                     <>
-                        <button 
-                            type="button" 
-                            className={`${styles.actionBtn} ${styles.btnDiff}`} 
-                            onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'OPEN_DIFF', operationId: vm.id }); }} 
-                            title="Compare changes (Diff)"
-                        >
-                            <IconGitCompare size={12} />
-                        </button>
                         <button 
                             type="button" 
                             className={`${styles.actionBtn} ${styles.btnAccept}`} 
