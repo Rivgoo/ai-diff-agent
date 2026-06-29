@@ -63,4 +63,16 @@ export type ExtensionEvent =
       total: number;
     }
   | { type: "PROMPT_COPIED" }
-  | { type: "ERROR_OCCURRED"; message: string };
+  | { type: "ERROR_OCCURRED"; message: string }
+  | {
+      type: "OPERATION_BATCH_UPDATED";
+      updates: Array<{
+        operationId: string;
+        status: OperationStatus;
+        resolvedResiliently?: boolean;
+        originalPath?: string;
+        path?: string;
+        conflict?: ConflictDetails;
+        isDirectory?: boolean;
+      }>;
+    };

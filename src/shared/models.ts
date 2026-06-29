@@ -45,7 +45,6 @@ export interface EngineSettings {
 export interface AgentSettings {
   behavior: BehaviorSettings;
   engine: EngineSettings;
-  isFallbackMode: boolean;
 }
 
 export interface ChangeBlock {

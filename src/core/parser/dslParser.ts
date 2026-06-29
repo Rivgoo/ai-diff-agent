@@ -10,14 +10,16 @@ import { PathSanitizer } from '../workspace/pathSanitizer';
  */
 export class DSLParser {
     private readonly scanner = new StreamScanner();
+    private isStrict = false;
 
     /**
      * Parses raw input instructions and generates executable file operations.
      */
-    public parse(rawInput: string): Result<AnyOperation[]> {
+    public async parse(rawInput: string, isStrict: boolean = false): Promise<Result<AnyOperation[]>> {
+        this.isStrict = isStrict; 
         try {
             const cleanedInput = this.stripMarkdownFences(rawInput);
-            const tokens = this.scanner.tokenize(cleanedInput);
+            const tokens = await this.scanner.tokenize(cleanedInput);
 
             let index = 0;
             while (index < tokens.length) {
@@ -244,7 +246,7 @@ export class DSLParser {
             const token = tokens[index];
 
             if (token.type === 'CLOSE_TAG' && token.name === tagName) {
-                return { content: builder.join(''), nextIndex: index + 1 };
+                return { content: this.stripMarkdownFences(builder.join('')), nextIndex: index + 1 };
             }
 
             if (token.type === 'TEXT_CONTENT') {
@@ -256,7 +258,7 @@ export class DSLParser {
             index++;
         }
 
-        return { content: builder.join(''), nextIndex: index };
+        return { content: this.stripMarkdownFences(builder.join('')), nextIndex: index };
     }
 
     /**
@@ -281,8 +283,15 @@ export class DSLParser {
      */
     private stripMarkdownFences(content: string): string {
         let cleaned = content.trim();
+        
+        if (this.isStrict) {
+            return cleaned;
+        }
+        
         cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\r?\n/g, '');
         cleaned = cleaned.replace(/\r?\n```$/g, '');
+        cleaned = cleaned.replace(/^[ \t]*(code|Code)\r?\n/gm, '');
+
         return cleaned.trim();
     }
 

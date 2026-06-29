@@ -33,7 +33,9 @@ export class ProcessPayloadUseCase {
         await new Promise(resolve => setTimeout(resolve, 0));
 
         try {
-            const parseResult = this.parser.parse(payload);
+            const isStrict = this.settingsManager.getSettings().engine.strictParsing;
+            
+            const parseResult = await this.parser.parse(payload, isStrict); 
             if (!parseResult.success) {
                 const userFailMsg: ChatMessage = {
                     id: Date.now().toString(),

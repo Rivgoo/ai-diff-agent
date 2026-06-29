@@ -23,6 +23,7 @@ export const useIPC = () => {
     const hydrateSettings = useAgentStore((state) => state.hydrateSettings);
     const setAgentTyping = useAgentStore((state) => state.setAgentTyping);
     const updateOperationStatus = useAgentStore((state) => state.updateOperationStatus);
+    const updateOperationBatch = useAgentStore((state) => state.updateOperationBatch);
     const setPipelineProgress = useAgentStore((state) => state.setPipelineProgress);
     const setPromptCopied = useAgentStore((state) => state.setPromptCopied);
 
@@ -52,6 +53,9 @@ export const useIPC = () => {
                     setTimeout(() => setPromptCopied(false), 2000);
                     break;
                 case 'ERROR_OCCURRED': console.error(message.message); break;
+                case 'OPERATION_BATCH_UPDATED':
+                    updateOperationBatch(message.updates);
+                    break;
             }
         };
 

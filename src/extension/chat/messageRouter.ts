@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import type { WebviewEvent, ExtensionEvent } from '@/shared/ipc';
-import type { DiffOperation } from '@/shared/models';
 import { ChatSessionManager } from './sessionManager';
 import { SettingsManager } from '@/extension/settings/settingsManager';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
@@ -31,6 +30,9 @@ export class MessageRouter {
     private readonly processPayloadUseCase: ProcessPayloadUseCase;
     private readonly snapshotService: SnapshotService;
 
+    private statusUpdateQueue: any[] = [];
+    private updateTimer: ReturnType<typeof setTimeout> | null = null;
+
     public readonly transactionPipeline: TransactionPipeline;
 
     constructor(
@@ -41,15 +43,17 @@ export class MessageRouter {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         const workspaceRoot = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri : undefined;
 
-        this.settingsManager = new SettingsManager(context, workspaceRoot, () => this.syncSettings());
-        this.settingsManager.init(); 
-
+        this.settingsManager = new SettingsManager(context, () => this.syncSettings());
+        
         this.sessionManager = new ChatSessionManager(
             context.workspaceState,
             workspaceRoot,
             () => this.settingsManager.getSettings().behavior.storeChatInWorkspace,
-            () => this.syncState() 
+            () => {
+                setTimeout(() => this.syncState(), 0);
+            }
         );
+        
         this.store = new CompensationStore(context.workspaceState);
 
         // Instantiate Dependencies for Pipeline Context
@@ -71,39 +75,17 @@ export class MessageRouter {
             directoryCleanupService,
             logger,
             (update: OperationStatusUpdate) => {
-                const session = this.sessionManager.getActiveSession();
-                let targetOp: DiffOperation | undefined;
+                // Оновлюємо внутрішній стейт розширення миттєво
+                this.sessionManager.updateOperationStatus(update.operationId, update.status);
                 
-                for (const msg of session.messages) {
-                    if (msg.operations) {
-                        targetOp = msg.operations.find(o => o.id === update.operationId);
-                        if (targetOp) break;
-                    }
-                }
+                // Додаємо оновлення в чергу для UI
+                this.statusUpdateQueue.push(update);
 
-                if (targetOp) {
-                    const { status, resolvedResiliently, originalPath, path, conflict } = update;
-                    const updated: DiffOperation = { 
-                        ...targetOp, 
-                        status,
-                        resolvedResiliently: resolvedResiliently ?? targetOp.resolvedResiliently,
-                        originalPath: originalPath ?? targetOp.originalPath,
-                        path: path ?? targetOp.path,
-                        conflict: conflict ?? targetOp.conflict
-                    };
-                    this.sessionManager.updateOperation(updated);
-                    this.postMessageCallback({ 
-                        type: 'OPERATION_UPDATED', 
-                        operationId: update.operationId, 
-                        status,
-                        resolvedResiliently: updated.resolvedResiliently,
-                        originalPath: updated.originalPath,
-                        path: updated.path,
-                        conflict: updated.conflict
-                    });
-                } else {
-                    this.sessionManager.updateOperationStatus(update.operationId, update.status);
-                    this.postMessageCallback({ type: 'OPERATION_UPDATED', operationId: update.operationId, status: update.status });
+                // Запускаємо таймер на 50мс, якщо він ще не запущений
+                if (!this.updateTimer) {
+                    this.updateTimer = setTimeout(() => {
+                        this.flushStatusUpdates();
+                    }, 50);
                 }
             }
         );
@@ -116,6 +98,20 @@ export class MessageRouter {
             this.postMessageCallback,
             () => this.syncState()
         );
+    }
+
+    private flushStatusUpdates(): void {
+        this.updateTimer = null;
+        if (this.statusUpdateQueue.length === 0) return;
+
+        const batch = [...this.statusUpdateQueue];
+        this.statusUpdateQueue = [];
+
+        // Відправляємо єдиний пакет в UI
+        this.postMessageCallback({
+            type: 'OPERATION_BATCH_UPDATED',
+            updates: batch
+        });
     }
 
     public handleMessage(event: WebviewEvent): void {

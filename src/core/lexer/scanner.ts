@@ -34,13 +34,20 @@ export class StreamScanner {
 
     /**
      * Tokenizes a raw string input into a flat sequence of matched tokens.
+     * Uses asynchronous Event Loop Yielding to prevent Extension Host freezes on huge payloads.
      */
-    public tokenize(input: string): Token[] {
+    public async tokenize(input: string): Promise<Token[]> {
         const tokens: Token[] = [];
         let index = 0;
         const length = input.length;
 
         while (index < length) {
+            // YIELDING: Кожні 50,000 символів віддаємо керування головному потоку VS Code на 0мс.
+            // Це дозволяє UI не "мерзнути", поки йде важкий парсинг.
+            if (index % 50000 === 0 && index > 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+
             const char = input[index];
 
             if (char === '<') {
@@ -61,7 +68,6 @@ export class StreamScanner {
 
         return tokens;
     }
-
     /**
      * Attempts to parse a schema-conforming tag block starting at the '<' character.
      */
