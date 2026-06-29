@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const srcDir = path.resolve(__dirname, '../../resources/grammars');
-const destDir = path.resolve(__dirname, '../../out/extension/grammars');
+// Змінено: піднімаємося лише на один рівень вгору (../) замість двох
+const srcDir = path.resolve(__dirname, '../resources/grammars');
+const destDir = path.resolve(__dirname, '../out/extension/grammars');
 
 if (!fs.existsSync(destDir)) {
     fs.mkdirSync(destDir, { recursive: true });
