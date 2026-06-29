@@ -42,7 +42,8 @@ export class NormalizedMatchStrategy implements IMatchStrategy {
                 start: document.positionAt(s),
                 end: document.positionAt(e)
             },
-            confidence: 'fallback'
+            confidence: 'fallback',
+            strategy: this.name
         };
     }
 }

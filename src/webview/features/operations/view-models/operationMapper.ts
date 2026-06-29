@@ -19,6 +19,7 @@ export interface OperationRowViewModel {
     readonly originalPath?: string;
     readonly statusIcon: 'edit' | 'check' | 'revert' | 'error' | 'loading' | null;
     readonly isDirectory: boolean;
+    readonly matchStrategy?: string;
 }
 
 /**
@@ -74,6 +75,7 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
         isResilient: !!op.resolvedResiliently,
         originalPath: op.originalPath,
         statusIcon,
-        isDirectory: !!op.isDirectory
+        isDirectory: !!op.isDirectory,
+        matchStrategy: op.matchStrategy
     };
 }

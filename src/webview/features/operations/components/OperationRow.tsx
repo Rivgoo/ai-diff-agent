@@ -62,6 +62,23 @@ const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps
                         HEURISTIC
                     </span>
                 )}
+                {vm.matchStrategy && (
+                    <span 
+                        className={styles.resilientFlag} 
+                        style={{ 
+                            borderColor: vm.matchStrategy.includes('AST') 
+                                ? 'var(--vscode-symbolIcon-methodForeground, #b180d7)' 
+                                : 'var(--vscode-symbolIcon-classForeground, #4ec9b0)',
+                            color: vm.matchStrategy.includes('AST') 
+                                ? 'var(--vscode-symbolIcon-methodForeground, #b180d7)' 
+                                : 'var(--vscode-symbolIcon-classForeground, #4ec9b0)',
+                            fontWeight: vm.matchStrategy.includes('AST') ? 600 : 400
+                        }} 
+                        title={`Matched using: ${vm.matchStrategy}`}
+                    >
+                        {vm.matchStrategy.replace('_MATCH', '')}
+                    </span>
+                )}
             </div>
 
             <div className={styles.metricsContainer}>

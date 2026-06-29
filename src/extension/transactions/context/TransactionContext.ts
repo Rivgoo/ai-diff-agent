@@ -5,6 +5,7 @@ import type { ILogger } from '@/extension/transactions/core/ILogger';
 import type { SearchEngine } from '@/core/matcher/searchEngine';
 import type { ResilientPathResolver } from '@/core/resolver/resilientPathResolver';
 import type { SnapshotService } from '@/extension/transactions/services/SnapshotService';
+import type { SettingsManager } from '@/extension/settings/settingsManager';
 
 export class TransactionContext implements ITransactionContext {
     private readonly resolvedUris = new Map<string, vscode.Uri>();
@@ -17,7 +18,8 @@ export class TransactionContext implements ITransactionContext {
         public readonly searchEngine: SearchEngine,
         public readonly pathResolver: ResilientPathResolver,
         public readonly snapshotService: SnapshotService,
-        public readonly logger: ILogger
+        public readonly logger: ILogger,
+        public readonly settingsManager: SettingsManager
     ) {}
 
     public getResolvedUri(rawPath: string): vscode.Uri | undefined {

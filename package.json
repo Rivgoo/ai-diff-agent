@@ -96,13 +96,15 @@
             "strictParsing": { "type": "boolean", "default": false },
             "maxBackupRetentionDays": { "type": "number", "default": 7 },
             "autoFixSyntax": { "type": "boolean", "default": true },
-            "autoFormatOnApply": { "type": "boolean", "default": true, "description": "Automatically format files in the background after operations are applied." }
+            "autoFormatOnApply": { "type": "boolean", "default": true, "description": "Automatically format files in the background after operations are applied." },
+            "enableAstMatching": { "type": "boolean", "default": true, "description": "Enable structural Abstract Syntax Tree (AST) matching for extremely resilient code replacement. Disable to fallback to RegExp heuristics." }
           },
           "default": {
             "strictParsing": false,
             "maxBackupRetentionDays": 7,
             "autoFixSyntax": true,
-            "autoFormatOnApply": true
+            "autoFormatOnApply": true,
+            "enableAstMatching": true
           }
         }
       }
@@ -111,10 +113,10 @@
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build:webview": "vite build",
-    "build:extension": "npx esbuild src/extension/extension.ts --bundle --platform=node --target=node16 --external:vscode --outfile=out/extension/extension.js --sourcemap && node scripts/copy-wasm.js",
+    "build:extension": "npx esbuild src/extension/extension.ts --bundle --platform=node --target=node16 --external:vscode --external:web-tree-sitter --outfile=out/extension/extension.js --sourcemap && node scripts/copy-wasm.js",
     "build": "npm run build:webview && npm run build:extension",
     "watch:webview": "vite build --watch",
-    "watch:extension": "node scripts/copy-wasm.js && npx esbuild src/extension/extension.ts --bundle --platform=node --target=node16 --external:vscode --outfile=out/extension/extension.js --sourcemap --watch",
+    "watch:extension": "node scripts/copy-wasm.js && npx esbuild src/extension/extension.ts --bundle --platform=node --target=node16 --external:vscode --external:web-tree-sitter --outfile=out/extension/extension.js --sourcemap --watch",
     "lint": "eslint src --ext ts,tsx",
     "test": "mocha -r ts-node/register -r tests/setup.ts tests/**/*.spec.ts"
   },

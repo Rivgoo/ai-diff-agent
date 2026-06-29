@@ -6,6 +6,7 @@ export interface MatchContext {
     readonly searchBlock: string;
     readonly replaceBlock?: string;
     readonly fileExtension: string;
+    readonly enableAstMatching: boolean;
 }
 
 export interface IMatchStrategy {

@@ -59,11 +59,11 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
 
         const domainDoc = new VsCodeDocument(document);
 
+        const isAstEnabled = context.settingsManager.getSettings().engine.enableAstMatching;
         for (let i = 0; i < this.operation.changes.length; i++) {
             const change = this.operation.changes[i];
             
-            // Invoke the new async Matcher Pipeline, passing replacement string for AST verification
-            const match = await context.searchEngine.findMatch(domainDoc, change.search, change.replace);
+            const match = await context.searchEngine.findMatch(domainDoc, change.search, change.replace, isAstEnabled);
 
             if (match.status !== 'MATCHED') {
                 const reason = match.reason === 'AMBIGUOUS_MATCH' ? 'AMBIGUOUS_MATCH' : 
@@ -72,6 +72,7 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                 const excerpt = change.search.split(/\r?\n/).slice(0, 3).join('\n');
                 return Result.fail(this.buildConflict(reason as any, undefined, i + 1, this.operation.changes.length, excerpt));
             }
+            this.metadata.matchStrategy = match.strategy;
 
             this.matchedBlocks.push({
                 range: new vscode.Range(

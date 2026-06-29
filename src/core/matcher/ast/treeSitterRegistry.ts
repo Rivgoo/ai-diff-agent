@@ -1,12 +1,16 @@
 /// <reference types="node" />
-import * as _Parser from 'web-tree-sitter';
 import * as path from 'path';
 import * as fs from 'fs';
 
-// 1. Створюємо власні строгі інтерфейси
+// --- Строгі інтерфейси домену (Чиста Архітектура) ---
+
 export interface ISyntaxNode {
     hasError(): boolean;
     text: string;
+    type: string;
+    isNamed: boolean;
+    parent: ISyntaxNode | null;
+    childForFieldName(fieldName: string): ISyntaxNode | null;
     children: ISyntaxNode[];
     startIndex: number;
     endIndex: number;
@@ -22,21 +26,27 @@ export interface ITreeSitterParser {
     parse(input: string): IParserTree;
 }
 
+interface ITreeSitterLanguage {
+    load(wasmFilePath: string): Promise<unknown>;
+}
+
 interface ITreeSitterConstructor {
-    init(options?: object): Promise<void>;
-    Language: {
-        load(wasmFilePath: string): Promise<unknown>;
-    };
+    init(options?: { locateFile?: (scriptName: string) => string }): Promise<void>;
+    Language?: ITreeSitterLanguage;
     new (): ITreeSitterParser;
 }
 
-// 2. Ховаємо ключ 'default' у змінну
-const defaultKey = 'default';
-const ParserConstructor = (((_Parser as unknown) as Record<string, ITreeSitterConstructor>)[defaultKey] || _Parser) as ITreeSitterConstructor;
+// --- Універсальне завантаження бібліотеки (Обхід версійності) ---
 
-/**
- * Singleton Registry for loading and caching WebAssembly Tree-sitter parsers.
- */
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const WebTreeSitter = require('web-tree-sitter');
+
+// Безпечно витягуємо класи залежно від версії web-tree-sitter (v0.24 vs v0.26+)
+const ParserClass = (WebTreeSitter.Parser || WebTreeSitter.default || WebTreeSitter) as ITreeSitterConstructor;
+const LanguageClass = (WebTreeSitter.Language || ParserClass.Language) as ITreeSitterLanguage;
+
+// --- Реєстр Парсерів ---
+
 export class AstParserRegistry {
     private static initialized = false;
     private static parsers = new Map<string, ITreeSitterParser>();
@@ -46,7 +56,7 @@ export class AstParserRegistry {
             if (!this.initialized) {
                 const grammarsDir = path.join(__dirname, 'grammars');
                 
-                await ParserConstructor.init({
+                await ParserClass.init({
                     locateFile: (scriptName: string) => {
                         return path.join(grammarsDir, scriptName);
                     }
@@ -65,8 +75,8 @@ export class AstParserRegistry {
                 return null;
             }
 
-            const parser = new ParserConstructor();
-            const lang = await ParserConstructor.Language.load(wasmPath);
+            const parser = new ParserClass();
+            const lang = await LanguageClass.load(wasmPath);
             parser.setLanguage(lang);
             
             this.parsers.set(language, parser);

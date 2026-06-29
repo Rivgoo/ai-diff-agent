@@ -1,6 +1,6 @@
 import { VirtualWorkspace } from './virtualWorkspace';
-import { CreateFileOperation, DeletePathOperation, UpdateFileOperation, MovePathOperation } from '../models/operations';
-import { CompilerWarning } from './models';
+import type { CreateFileOperation, DeletePathOperation, UpdateFileOperation, MovePathOperation } from '../models/operations';
+import type { CompilerWarning } from './models';
 import { SearchEngine } from '../matcher/searchEngine';
 import { VirtualDocument } from './virtualDocument';
 
@@ -53,7 +53,7 @@ export class OperationReducer {
 
             for (const change of op.changes) {
                 const doc = new VirtualDocument(node.currentPath, currentContent);
-                const match = await searchEngine.findMatch(doc, change.search, change.replace);
+                const match = await searchEngine.findMatch(doc, change.search, change.replace, false);
                 
                 if (match.status === 'MATCHED') {
                     currentContent = doc.applyChange(match.range, change.replace);

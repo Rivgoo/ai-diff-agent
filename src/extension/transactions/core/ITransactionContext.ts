@@ -4,6 +4,7 @@ import type { ILogger } from '@/extension/transactions/core/ILogger';
 import type { SearchEngine } from '@/core/matcher/searchEngine';
 import type { ResilientPathResolver } from '@/core/resolver/resilientPathResolver';
 import type { SnapshotService } from '@/extension/transactions/services/SnapshotService';
+import type { SettingsManager } from '@/extension/settings/settingsManager';
 
 export interface ITransactionContext {
     readonly workspaceRoot: vscode.Uri;
@@ -13,6 +14,7 @@ export interface ITransactionContext {
     readonly pathResolver: ResilientPathResolver;
     readonly snapshotService: SnapshotService;
     readonly logger: ILogger;
+    readonly settingsManager: SettingsManager;
 
     getResolvedUri(rawPath: string): vscode.Uri | undefined;
     setResolvedUri(rawPath: string, actualUri: vscode.Uri): void;

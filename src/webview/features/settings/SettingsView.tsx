@@ -118,6 +118,16 @@ export const SettingsView = () => {
                         <p className={styles.description}>Silently format files in the background after AI modifications are applied.</p>
                     </div>
 
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.engine.enableAstMatching} 
+                            onChange={(e: any) => updateSetting('engine', 'enableAstMatching', e.target.checked)}
+                        >
+                            Enable Semantic AST Matching
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>Use structural syntax trees instead of plain text matching. Highly recommended for robustness.</p>
+                    </div>
+
                 </section>
             </div>
         </div>

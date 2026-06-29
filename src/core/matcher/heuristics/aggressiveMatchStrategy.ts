@@ -46,7 +46,8 @@ export class AggressiveMatchStrategy implements IMatchStrategy {
                 start: document.positionAt(s),
                 end: document.positionAt(e)
             },
-            confidence: 'fallback' // Позначаємо, що це був невпевнений пошук
+            confidence: 'fallback',
+            strategy: this.name
         };
     }
 }

@@ -62,7 +62,8 @@ export class TransactionPipeline {
             this.searchEngine,
             this.pathResolver,
             this.snapshotService,
-            this.logger
+            this.logger,
+            this.settingsManager
         );
 
         try {
@@ -246,7 +247,7 @@ export class TransactionPipeline {
         }
 
         this.onStatusUpdate({ operationId: opId, status: 'saved' });
-        this.store.clearTransaction(opId);
+        // this.store.clearTransaction(opId);
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
     }

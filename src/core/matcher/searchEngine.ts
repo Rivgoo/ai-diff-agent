@@ -6,7 +6,7 @@ import type { MatchContext } from './types';
 export class SearchEngine {
     private readonly pipeline = new MatchPipeline();
 
-    public async findMatch(document: IDocument, searchBlock: string, replaceBlock?: string): Promise<MatchResult> {
+    public async findMatch(document: IDocument, searchBlock: string, replaceBlock?: string, enableAstMatching: boolean = true): Promise<MatchResult> {
         const cleanSearchBlock = this.stripBOM(searchBlock).trim();
         
         if (!cleanSearchBlock) {
@@ -17,7 +17,8 @@ export class SearchEngine {
             document,
             searchBlock: cleanSearchBlock,
             replaceBlock,
-            fileExtension: this.getFileExtension(document.path)
+            fileExtension: this.getFileExtension(document.path),
+            enableAstMatching
         };
 
         return await this.pipeline.execute(context);

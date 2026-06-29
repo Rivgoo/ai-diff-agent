@@ -47,7 +47,8 @@ export class ExactMatchStrategy implements IMatchStrategy {
                 start: document.positionAt(targetMatch.index),
                 end: document.positionAt(targetMatch.index + targetMatch.length)
             },
-            confidence: 'exact'
+            confidence: 'exact',
+            strategy: this.name
         };
     }
 }

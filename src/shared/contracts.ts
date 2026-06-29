@@ -40,6 +40,7 @@ export interface MatchSuccess {
     readonly status: 'MATCHED';
     readonly range: Range;
     readonly confidence: 'exact' | 'fallback';
+    readonly strategy?: string;
 }
 
 export interface MatchFailure {

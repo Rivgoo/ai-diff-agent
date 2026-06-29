@@ -8,4 +8,5 @@ export interface OperationStatusUpdate {
     path?: string;
     conflict?: ConflictDetails;
     isDirectory?: boolean;
+    matchStrategy?: string;
 }
