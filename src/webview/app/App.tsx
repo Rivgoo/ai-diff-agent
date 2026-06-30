@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import { useAgentStore } from '@/webview/store/agentStore';
+import { useEffect, useRef, use } from 'react';
 import { useIPC } from '@/webview/hooks/useIPC';
+import { AgentContext } from '@/webview/store/AgentProvider';
 
 import { UserMessageCard } from '@/webview/features/message-feed/components/UserMessageCard';
 import { AgentMessageCard } from '@/webview/features/message-feed/components/AgentMessageCard';
@@ -13,20 +13,19 @@ import styles from './App.module.css';
 
 export const App = () => {
     const { sendEvent } = useIPC();
-
-    const activeSessionId = useAgentStore((state) => state.activeSessionId);
-    const messages = useAgentStore((state) => state.sessions[activeSessionId]?.messages) || [];
+    const context = use(AgentContext);
     
-    const isTyping = useAgentStore((state) => state.isAgentTyping);
-    const settings = useAgentStore((state) => state.settings);
-    const isSettingsOpen = useAgentStore((state) => state.isSettingsOpen);
+    if (!context) throw new Error('App must be wrapped in AgentProvider');
+    const { state } = context;
+
+    const messages = state.sessions[state.activeSessionId]?.messages || [];
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (settings.behavior.autoScroll && scrollRef.current) {
+        if (state.settings.behavior.autoScroll && scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [messages, isTyping, settings.behavior.autoScroll]);
+    }, [messages, state.isAgentTyping, state.settings.behavior.autoScroll]);
 
     const handleOpenFile = (opId: string) => {
         sendEvent({ type: 'OPEN_FILE', operationId: opId });
@@ -34,7 +33,7 @@ export const App = () => {
 
     return (
         <main className={styles.container}>
-            {isSettingsOpen ? (
+            {state.isSettingsOpen ? (
                 <SettingsView />
             ) : (
                 <>

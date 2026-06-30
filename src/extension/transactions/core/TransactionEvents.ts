@@ -9,4 +9,5 @@ export interface OperationStatusUpdate {
     conflict?: ConflictDetails;
     isDirectory?: boolean;
     matchStrategy?: string;
+    alreadyApplied?: boolean;
 }

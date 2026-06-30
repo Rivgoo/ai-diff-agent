@@ -1,78 +1,53 @@
-import * as vscode from 'vscode';
-import { Result } from '../../../shared/contracts';
-import type { ConflictDetails } from '../../../shared/models';
+import { Result } from '@/shared/contracts';
+import type { ConflictDetails } from '@/shared/models';
 import type { ITransactionContext } from '../core/ITransactionContext';
 import { BaseCommand } from './BaseCommand';
-import type { MovePathOperation } from '../../../core/models/operations';
-import { PathNormalizer } from '../../../core/workspace/pathNormalizer';
-import { PathSandbox } from '../../../vscode/workspace/pathSandbox';
+import type { MovePathOperation } from '@/core/models/operations';
+import { PathNormalizer } from '@/core/workspace/pathNormalizer';
 
 export class MovePathCommand extends BaseCommand<MovePathOperation> {
-    private destUri!: vscode.Uri;
+    private destPath!: string;
     private normalizedDestPath!: string;
 
     public async validate(context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
         this.normalizedPath = PathNormalizer.normalize(this.operation.path);
         this.normalizedDestPath = PathNormalizer.normalize(this.operation.destinationPath);
         
-        try {
-            const resolution = await context.pathResolver.resolvePath(this.normalizedPath);
-            if (resolution.status === 'AMBIGUOUS_MATCH') {
-                return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));
-            }
-            if (resolution.status === 'NOT_FOUND') {
-                return Result.fail(this.buildConflict('FILE_NOT_FOUND'));
-            }
-            
-            if (resolution.status === 'RESOLVED_RESILIENTLY') {
-                this.metadata = {
-                    resolvedResiliently: true,
-                    originalPath: this.operation.path,
-                    path: resolution.resolvedPath
-                };
-                this.normalizedPath = PathNormalizer.normalize(resolution.resolvedPath);
-            }
-            
-            this.targetUri = PathSandbox.validate(this.normalizedPath);
-            this.destUri = PathSandbox.validate(this.normalizedDestPath);
-
-            try {
-                await vscode.workspace.fs.stat(this.targetUri);
-            } catch {
-                return Result.fail(this.buildConflict('FILE_NOT_FOUND'));
-            }
-
-            // Path Chaining Resolution: Register alias so immediate next updates know the physical destination
-            context.setResolvedUri(this.normalizedPath, this.destUri);
-
-            return Result.ok(undefined);
-        } catch (e) {
-            return Result.fail(this.buildConflict('PATH_TRAVERSAL'));
+        const resolution = await context.pathResolver.resolvePath(this.normalizedPath);
+        if (resolution.status === 'AMBIGUOUS_MATCH') return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));
+        
+        if (resolution.status === 'RESOLVED_RESILIENTLY') {
+            this.metadata = { resolvedResiliently: true, originalPath: this.operation.path, path: resolution.resolvedPath };
+            this.normalizedPath = PathNormalizer.normalize(resolution.resolvedPath);
         }
-    }
+        
+        this.targetPath = this.normalizedPath;
+        this.destPath = this.normalizedDestPath;
 
-    public async prepareBackup(context: ITransactionContext): Promise<void> {
-        await context.snapshotService.createSnapshot(
-            this.operationId, 
-            this.normalizedPath, 
-            this.targetUri
-        );
+        const sourceExists = await context.fileExists(this.targetPath);
+        if (!sourceExists) {
+            const destExists = await context.fileExists(this.destPath);
+            if (destExists) {
+                // ІДЕМПОТЕНТНІСТЬ: Файл вже на новому місці.
+                context.logger.info(`[Idempotency] File already moved to ${this.destPath}. Marked as applied.`);
+                this.metadata.alreadyApplied = true;
+                context.setResolvedPath(this.normalizedPath, this.destPath);
+                return Result.ok(undefined);
+            }
+            return Result.fail(this.buildConflict('FILE_NOT_FOUND'));
+        }
+
+        context.setResolvedPath(this.normalizedPath, this.destPath);
+        return Result.ok(undefined);
     }
 
     public async apply(context: ITransactionContext): Promise<void> {
-        const parentDir = vscode.Uri.joinPath(this.destUri, '..');
-        const createdDirs = await context.ensureDirectoryExists(parentDir);
-        
-        for (const dir of createdDirs) {
-            this.antiActions.push({ type: 'delete_dir_if_empty', uri: dir });
-        }
+        if (this.metadata.alreadyApplied) return; // Блокуємо мутацію
+        context.uow.renameFile(this.targetPath, this.destPath, { overwrite: true });
+        this.antiActions.push({ type: 'restore_move', sourcePath: this.targetPath, destinationPath: this.destPath, relativeSourcePath: this.normalizedPath });
+    }
 
-        context.uow.renameFile(this.targetUri, this.destUri, { overwrite: true });
-        this.antiActions.push({
-            type: 'restore_move',
-            sourceUri: this.targetUri,
-            destinationUri: this.destUri,
-            relativeSourcePath: this.normalizedPath
-        });
+    public async prepareBackup(context: ITransactionContext): Promise<void> {
+        await context.createBackup(this.operationId, this.targetPath);
     }
 }

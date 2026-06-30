@@ -70,6 +70,7 @@ export interface DiffOperation {
   conflict?: ConflictDetails;
   isDirectory?: boolean;
   matchStrategy?: string;
+  alreadyApplied?: boolean;
 }
 
 export interface ChatMessage {

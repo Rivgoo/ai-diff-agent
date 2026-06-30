@@ -1,62 +1,61 @@
-import * as vscode from 'vscode';
-import { Result } from '../../../shared/contracts';
-import type { ConflictDetails } from '../../../shared/models';
+import { Result } from '@/shared/contracts';
+import type { ConflictDetails } from '@/shared/models';
 import type { ITransactionContext } from '../core/ITransactionContext';
 import { BaseCommand } from './BaseCommand';
-import type { CreateFileOperation } from '../../../core/models/operations';
-import { PathNormalizer } from '../../../core/workspace/pathNormalizer';
-import { PathSandbox } from '../../../vscode/workspace/pathSandbox';
+import type { CreateFileOperation } from '@/core/models/operations';
+import { PathNormalizer } from '@/core/workspace/pathNormalizer';
+import { TextNormalizerV2 } from '@/core/matcher/heuristics/textNormalizerV2';
 
 export class CreateFileCommand extends BaseCommand<CreateFileOperation> {
     private fileExistsOnDisk = false;
 
-    public async validate(_context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
-        this.normalizedPath = PathNormalizer.normalize(this.operation.path)
+    public async validate(context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
+        this.normalizedPath = PathNormalizer.normalize(this.operation.path);
+        this.targetPath = this.normalizedPath;
+
+        this.fileExistsOnDisk = await context.fileExists(this.targetPath);
         
-        try {
-            this.targetUri = PathSandbox.validate(this.normalizedPath);
-            try {
-                await vscode.workspace.fs.stat(this.targetUri);
-                this.fileExistsOnDisk = true;
-            } catch {
-                this.fileExistsOnDisk = false;
+        if (this.fileExistsOnDisk) {
+            const doc = await context.getDocument(this.targetPath);
+            const docText = doc.getText();
+            
+            const normDoc = TextNormalizerV2.normalizeSearchBlock(docText);
+            const normContent = TextNormalizerV2.normalizeSearchBlock(this.operation.content);
+
+            if (normDoc === normContent) {
+                context.logger.info(`[Idempotency] File ${this.targetPath} exists and is identical. Marked as already applied.`);
+                this.metadata.alreadyApplied = true;
             }
-            return Result.ok(undefined);
-        } catch (e) {
-            return Result.fail(this.buildConflict('PATH_TRAVERSAL'));
         }
+
+        return Result.ok(undefined);
     }
 
     public async prepareBackup(context: ITransactionContext): Promise<void> {
-        await context.snapshotService.createSnapshot(
-            this.operationId, 
-            this.normalizedPath, 
-            this.targetUri
-        );
+        if (this.metadata.alreadyApplied) return;
+        await context.createBackup(this.operationId, this.targetPath);
     }
 
     public async apply(context: ITransactionContext): Promise<void> {
-        const parentDir = vscode.Uri.joinPath(this.targetUri, '..');
-        const createdDirs = await context.ensureDirectoryExists(parentDir);
-        
-        for (const dir of createdDirs) {
-            this.antiActions.push({ type: 'delete_dir_if_empty', uri: dir });
-        }
+        if (this.metadata.alreadyApplied) return; // ІДЕМПОТЕНТНІСТЬ
 
         if (this.fileExistsOnDisk) {
-            const document = await context.getDocument(this.targetUri);
-            const fullRange = new vscode.Range(
-                document.positionAt(0),
-                document.positionAt(document.getText().length)
-            );
-            context.uow.replace(this.targetUri, fullRange, this.operation.content);
-            this.antiActions.push({ type: 'restore_file', uri: this.targetUri, relativePath: this.normalizedPath });
+            const document = await context.getDocument(this.targetPath);
+            const fullRange = {
+                start: { line: 0, character: 0 },
+                end: document.positionAt(document.getText().length)
+            };
+            context.uow.replace(this.targetPath, fullRange, this.operation.content);
+            this.antiActions.push({ type: 'restore_file', path: this.targetPath, relativePath: this.normalizedPath });
         } else {
-            context.uow.createFile(this.targetUri, this.operation.content, { ignoreIfExists: true });
-            this.antiActions.push({ type: 'delete_created', uri: this.targetUri });
+            context.uow.createFile(this.targetPath, this.operation.content, { ignoreIfExists: true });
+            this.antiActions.push({ type: 'delete_created', path: this.targetPath });
         }
 
         const lineCount = this.operation.content.split(/\r?\n/).length;
-        context.uow.addAppliedRange(this.operationId, this.targetUri, new vscode.Range(0, 0, lineCount, 999));
+        context.uow.addAppliedRange(this.operationId, this.targetPath, {
+            start: { line: 0, character: 0 },
+            end: { line: lineCount, character: 999 }
+        });
     }
 }

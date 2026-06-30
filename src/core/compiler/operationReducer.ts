@@ -48,15 +48,22 @@ export class OperationReducer {
 
         if (node.state === 'CREATED') {
             let currentContent = node.contentBuffer || '';
-            const searchEngine = new SearchEngine();
+            const searchEngine = new SearchEngine(); // БЕЗ КОНФІГУ
             let allApplied = true;
 
             for (const change of op.changes) {
                 const doc = new VirtualDocument(node.currentPath, currentContent);
-                const match = await searchEngine.findMatch(doc, change.search, change.replace, false);
+                // ПЕРЕДАЄМО FALSE для AST
+                const match = await searchEngine.findMatch(doc, change.search, change.replace, false, undefined);
                 
                 if (match.status === 'MATCHED') {
-                    currentContent = doc.applyChange(match.range, change.replace);
+                    const cleanReplacement = match.cleanReplaceBlock !== undefined ? match.cleanReplaceBlock : change.replace;
+                    currentContent = doc.applyChange(match.range, cleanReplacement);
+                    
+                    if (match.hoistedImports && match.hoistedImports.length > 0) {
+                        const importsText = match.hoistedImports.join('\n') + '\n';
+                        currentContent = importsText + currentContent;
+                    }
                 } else {
                     allApplied = false;
                 }

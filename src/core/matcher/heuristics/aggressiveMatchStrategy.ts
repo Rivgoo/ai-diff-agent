@@ -6,7 +6,7 @@ export class AggressiveMatchStrategy implements IMatchStrategy {
     public readonly name = 'AGGRESSIVE_PUNCTUATION_MATCH';
     public readonly tier = 4;
 
-    public async findMatch(context: MatchContext): Promise<MatchResult | null> {
+    public async findMatch(context: MatchContext): Promise<MatchResult> {
         const { document, searchBlock } = context;
         const docText = document.getText();
         
@@ -14,10 +14,10 @@ export class AggressiveMatchStrategy implements IMatchStrategy {
         const map = TextNormalizerV2.aggressiveNormalizeWithMap(docText);
         const normalizedSearch = TextNormalizerV2.aggressiveNormalizeSearchBlock(searchBlock);
 
-        if (normalizedSearch.length === 0) return null;
+        if (normalizedSearch.length === 0) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
         const matchIdx = map.normalizedText.indexOf(normalizedSearch);
-        if (matchIdx === -1) return null;
+        if (matchIdx === -1) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
         // Перевірка на унікальність (щоб не замінити випадково не той блок через втрату пунктуації)
         const nextMatchIdx = map.normalizedText.indexOf(normalizedSearch, matchIdx + 1);

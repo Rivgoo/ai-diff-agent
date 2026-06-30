@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 export interface LiveDocumentMetadata {
     readonly isDirty: boolean;
     readonly isOpen: boolean;
-    readonly liveContent: string;
+    readonly liveContent: string | null;
 }
 
 export interface ILiveDocumentRegistry {
@@ -17,10 +17,15 @@ export class LiveDocumentRegistry implements ILiveDocumentRegistry {
         );
 
         if (openedDoc) {
+            let text = openedDoc.getText();
+            if (openedDoc.eol === vscode.EndOfLine.CRLF && !text.includes('\r\n')) {
+                text = text.replace(/\n/g, '\r\n');
+            }
+
             return {
                 isDirty: openedDoc.isDirty,
                 isOpen: true,
-                liveContent: openedDoc.getText()
+                liveContent: text
             };
         }
 
@@ -36,7 +41,7 @@ export class LiveDocumentRegistry implements ILiveDocumentRegistry {
             return {
                 isDirty: false,
                 isOpen: false,
-                liveContent: ''
+                liveContent: null
             };
         }
     }

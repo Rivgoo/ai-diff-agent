@@ -14,46 +14,40 @@ export interface OperationRowViewModel {
     readonly isRealConflict: boolean;
     readonly isAborted: boolean;
     readonly wasValidated: boolean;
+    readonly alreadyApplied: boolean;
     readonly conflictDetails?: ConflictDetails;
     readonly isResilient: boolean;
     readonly originalPath?: string;
-    readonly statusIcon: 'edit' | 'check' | 'revert' | 'error' | 'loading' | null;
+    readonly statusIcon: 'edit' | 'check' | 'revert' | 'error' | 'loading' | 'warning' | null;
     readonly isDirectory: boolean;
     readonly matchStrategy?: string;
 }
 
-/**
- * Transforms raw core domain operations into presentation-ready ViewModels.
- * Decouples complex conditional rendering logic from the React UI components.
- */
 export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewModel {
     const isAborted = op.conflict?.reason === 'ABORTED';
     const isConflict = op.status === 'conflict' || op.status === 'error';
-    
-    // A file is a real conflict (culprit) if it failed, but wasn't purely aborted due to another failure
     const isRealConflict = isConflict && !isAborted;
-    
-    // Identifies victims that successfully passed validation before the overall transaction crashed
     const wasValidated = isAborted && op.conflict?.wasValidated === true;
-    
     const isProcessing = op.status === 'pending';
+    const alreadyApplied = !!op.alreadyApplied;
 
-    // File name and directory parsing
     const pathParts = op.path.split('/');
     const fileName = pathParts.pop() || op.path;
     const dirPath = pathParts.join('/');
 
-    // Centralised descriptors lookup replacing fragile inline conditionals
     const descriptor = OPERATION_DESCRIPTORS[op.type];
     const statusMarker = descriptor ? descriptor.prefix : '[ ]';
-    const markerColor = descriptor ? descriptor.themeColorVar : 'var(--vscode-descriptionForeground)';
+    
+    // Якщо файл вже містить ці зміни, фарбуємо маркер у жовтий
+    let markerColor = descriptor ? descriptor.themeColorVar : 'var(--vscode-descriptionForeground)';
+    if (alreadyApplied) markerColor = 'var(--vscode-editorWarning-foreground)';
 
-    // Determine trailing status icon
     let statusIcon: OperationRowViewModel['statusIcon'] = null;
     
     if (isProcessing) statusIcon = 'loading';
     else if (isRealConflict) statusIcon = 'error';
-    else if (isAborted) statusIcon = null; // Hide icons completely for safe victims to reduce visual noise
+    else if (alreadyApplied) statusIcon = 'warning'; // Жовтий значок
+    else if (isAborted) statusIcon = null;
     else if (op.status === 'applied_dirty') statusIcon = 'edit';
     else if (op.status === 'saved') statusIcon = 'check';
     else if (op.status === 'reverted') statusIcon = 'revert';
@@ -71,6 +65,7 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
         isRealConflict,
         isAborted,
         wasValidated,
+        alreadyApplied,
         conflictDetails: op.conflict,
         isResilient: !!op.resolvedResiliently,
         originalPath: op.originalPath,

@@ -3,11 +3,11 @@ import { SYSTEM_CONSTANTS } from '@/shared/constants';
 import type { TransactionSaga, CompensationAction } from '@/core/models/saga';
 
 export type AntiAction =
-    | { type: 'delete_created'; uri: vscode.Uri }
-    | { type: 'restore_file'; uri: vscode.Uri; relativePath: string }
-    | { type: 'restore_move'; sourceUri: vscode.Uri; destinationUri: vscode.Uri; relativeSourcePath: string }
-    | { type: 'delete_dir_if_empty'; uri: vscode.Uri }
-    | { type: 'restore_dir'; uri: vscode.Uri };
+    | { type: 'delete_created'; path: string }
+    | { type: 'restore_file'; path: string; relativePath: string }
+    | { type: 'restore_move'; sourcePath: string; destinationPath: string; relativeSourcePath: string }
+    | { type: 'delete_dir_if_empty'; path: string }
+    | { type: 'restore_dir'; path: string };
 
 export interface TransactionRecord {
     operationId: string;
@@ -38,26 +38,26 @@ export class CompensationStore {
     public addTransaction(record: TransactionRecord): void {
         const compensations: CompensationAction[] = record.antiActions.map(act => {
             if (act.type === 'delete_created') {
-                return { type: 'DELETE_FILE', uri: act.uri.toString() };
+                return { type: 'DELETE_FILE', uri: act.path };
             }
             if (act.type === 'restore_file') {
                 return {
                     type: 'RESTORE_FILE_CONTENT',
-                    uri: act.uri.toString(),
+                    uri: act.path,
                     transactionId: record.operationId,
                     relativeBackupPath: act.relativePath
                 };
             }
             if (act.type === 'delete_dir_if_empty') {
-                return { type: 'DELETE_DIRECTORY_IF_EMPTY', uri: act.uri.toString() };
+                return { type: 'DELETE_DIRECTORY_IF_EMPTY', uri: act.path };
             }
             if (act.type === 'restore_dir') {
-                return { type: 'RESTORE_DIRECTORY', uri: act.uri.toString() };
+                return { type: 'RESTORE_DIRECTORY', uri: act.path };
             }
             return {
                 type: 'RESTORE_MOVE',
-                sourceUri: act.sourceUri.toString(),
-                destinationUri: act.destinationUri.toString(),
+                sourceUri: act.sourcePath,
+                destinationUri: act.destinationPath,
                 transactionId: record.operationId,
                 relativeBackupPath: act.relativeSourcePath
             };
@@ -78,25 +78,25 @@ export class CompensationStore {
 
         const antiActions: AntiAction[] = saga.compensations.map(comp => {
             if (comp.type === 'DELETE_FILE') {
-                return { type: 'delete_created', uri: vscode.Uri.parse(comp.uri) };
+                return { type: 'delete_created', path: comp.uri };
             }
             if (comp.type === 'RESTORE_FILE_CONTENT') {
                 return {
                     type: 'restore_file',
-                    uri: vscode.Uri.parse(comp.uri),
+                    path: comp.uri,
                     relativePath: comp.relativeBackupPath
                 };
             }
             if (comp.type === 'DELETE_DIRECTORY_IF_EMPTY') {
-                return { type: 'delete_dir_if_empty', uri: vscode.Uri.parse(comp.uri) };
+                return { type: 'delete_dir_if_empty', path: comp.uri };
             }
             if (comp.type === 'RESTORE_DIRECTORY') {
-                return { type: 'restore_dir', uri: vscode.Uri.parse(comp.uri) };
+                return { type: 'restore_dir', path: comp.uri };
             }
             return {
                 type: 'restore_move',
-                sourceUri: vscode.Uri.parse(comp.sourceUri),
-                destinationUri: vscode.Uri.parse(comp.destinationUri),
+                sourcePath: comp.sourceUri,
+                destinationPath: comp.destinationUri,
                 relativeSourcePath: comp.relativeBackupPath
             };
         }) as AntiAction[];

@@ -6,12 +6,12 @@ export class AnchorMatchStrategy implements IMatchStrategy {
     public readonly name = 'ANCHOR_HEURISTIC_MATCH';
     public readonly tier = 3;
 
-    public async findMatch(context: MatchContext): Promise<MatchResult | null> {
+    public async findMatch(context: MatchContext): Promise<MatchResult> {
         const { document, searchBlock } = context;
         const docText = document.getText();
         
         const lines = searchBlock.split(/\r?\n/).filter(l => l.trim().length > 0);
-        if (lines.length <= 3) return null;
+        if (lines.length <= 3) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
         const headAnchor = lines.slice(0, 2).join('\n');
         const tailAnchor = lines.slice(-2).join('\n');
@@ -21,7 +21,7 @@ export class AnchorMatchStrategy implements IMatchStrategy {
         const normTail = TextNormalizerV2.normalizeSearchBlock(tailAnchor);
         const normSearchTotal = TextNormalizerV2.normalizeSearchBlock(searchBlock);
 
-        if (normHead.length === 0 || normTail.length === 0) return null;
+        if (normHead.length === 0 || normTail.length === 0) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
         const headIndices: number[] = [];
         let cursor = 0;
@@ -30,7 +30,7 @@ export class AnchorMatchStrategy implements IMatchStrategy {
             cursor++;
         }
 
-        if (headIndices.length === 0) return null;
+        if (headIndices.length === 0) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
         const validPairs: { start: number; end: number }[] = [];
         const expectedDistance = normSearchTotal.length;
@@ -49,7 +49,7 @@ export class AnchorMatchStrategy implements IMatchStrategy {
             }
         }
 
-        if (validPairs.length === 0) return null;
+        if (validPairs.length === 0) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
         if (validPairs.length > 1) {
             return { status: 'FAILED', reason: 'AMBIGUOUS_MATCH', matchesFound: validPairs.length };
         }

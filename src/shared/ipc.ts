@@ -54,6 +54,8 @@ export type ExtensionEvent =
       path?: string;
       conflict?: ConflictDetails;
       isDirectory?: boolean;
+      matchStrategy?: string;
+      alreadyApplied?: boolean;
     }
   | { type: "AGENT_TYPING"; isTyping: boolean }
   | {
@@ -74,5 +76,7 @@ export type ExtensionEvent =
         path?: string;
         conflict?: ConflictDetails;
         isDirectory?: boolean;
+        matchStrategy?: string;
+        alreadyApplied?: boolean;
       }>;
     };

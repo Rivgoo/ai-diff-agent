@@ -1,12 +1,12 @@
 import { Result } from '../../shared/contracts';
 import { 
-    AnyOperation, 
+    type AnyOperation, 
     isCreateFileOperation, 
     isDeletePathOperation, 
     isUpdateFileOperation, 
     isMovePathOperation 
 } from '../models/operations';
-import { ITransactionCompiler, CompilationResult, CompilerWarning } from './models';
+import type { ITransactionCompiler, CompilationResult, CompilerWarning } from './models';
 import { VirtualWorkspace } from './virtualWorkspace';
 import { OperationReducer } from './operationReducer';
 

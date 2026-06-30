@@ -22,6 +22,7 @@ export interface ConflictDetails {
     readonly matchesFound?: number;
     readonly candidatePaths?: string[];
     readonly wasValidated?: boolean;
+    readonly semanticDiagnostic?: string;
 }
 
 export interface BaseOperation {
@@ -41,12 +42,15 @@ export interface MatchSuccess {
     readonly range: Range;
     readonly confidence: 'exact' | 'fallback';
     readonly strategy?: string;
+    readonly hoistedImports?: string[];
+    readonly cleanReplaceBlock?: string;
 }
 
 export interface MatchFailure {
     readonly status: 'FAILED';
     readonly reason: MatchFailureReason;
     readonly matchesFound: number;
+    readonly semanticDiagnostic?: string;
 }
 
 export type MatchResult = MatchSuccess | MatchFailure;

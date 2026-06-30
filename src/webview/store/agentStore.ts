@@ -36,7 +36,8 @@ interface AgentState {
         path?: string,
         conflict?: ConflictDetails,
         isDirectory?: boolean,
-        matchStrategy?: string
+        matchStrategy?: string,
+        alreadyApplied?: boolean
     ) => void;
     updateLocalSetting: (category: 'behavior' | 'engine', key: string, value: any) => void;
 }
@@ -73,7 +74,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         }
     })),
 
-    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy) =>
+    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied) =>
         set((state) => {
             const activeSession = state.sessions[state.activeSessionId];
             if (!activeSession) return state;
@@ -92,7 +93,8 @@ export const useAgentStore = create<AgentState>((set) => ({
                     path: path ?? updatedOps[opIndex].path,
                     conflict: conflict ?? updatedOps[opIndex].conflict,
                     isDirectory: isDirectory ?? updatedOps[opIndex].isDirectory,
-                    matchStrategy: matchStrategy ?? updatedOps[opIndex].matchStrategy
+                    matchStrategy: matchStrategy ?? updatedOps[opIndex].matchStrategy,
+                    alreadyApplied: alreadyApplied ?? updatedOps[opIndex].alreadyApplied,
                 };
                 return { ...msg, operations: updatedOps };
             });

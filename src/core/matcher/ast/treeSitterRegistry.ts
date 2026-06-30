@@ -2,8 +2,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
 
-// --- Строгі інтерфейси домену (Чиста Архітектура) ---
-
 export interface ISyntaxNode {
     hasError(): boolean;
     text: string;
@@ -36,22 +34,17 @@ interface ITreeSitterConstructor {
     new (): ITreeSitterParser;
 }
 
-// --- Універсальне завантаження бібліотеки (Обхід версійності) ---
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const WebTreeSitter = require('web-tree-sitter');
 
-// Безпечно витягуємо класи залежно від версії web-tree-sitter (v0.24 vs v0.26+)
 const ParserClass = (WebTreeSitter.Parser || WebTreeSitter.default || WebTreeSitter) as ITreeSitterConstructor;
 const LanguageClass = (WebTreeSitter.Language || ParserClass.Language) as ITreeSitterLanguage;
 
-// --- Реєстр Парсерів ---
 
 export class AstParserRegistry {
     private static initialized = false;
     private static parsers = new Map<string, ITreeSitterParser>();
 
-    public static async getParser(language: string): Promise<ITreeSitterParser | null> {
+    public static async getParser(language: string, logger?: any): Promise<ITreeSitterParser | null> {
         try {
             if (!this.initialized) {
                 const grammarsDir = path.join(__dirname, 'grammars');
@@ -71,7 +64,7 @@ export class AstParserRegistry {
             const wasmPath = path.join(__dirname, 'grammars', `tree-sitter-${language}.wasm`);
             
             if (!fs.existsSync(wasmPath)) {
-                console.warn(`[AstParserRegistry] WASM file missing: ${wasmPath}`);
+                logger?.warn(`[AstParserRegistry] WASM file missing: ${wasmPath}`);
                 return null;
             }
 
@@ -82,7 +75,7 @@ export class AstParserRegistry {
             this.parsers.set(language, parser);
             return parser;
         } catch (e) {
-            console.warn(`[AstParserRegistry] Failed to load WASM grammar for ${language}:`, e);
+            logger?.warn(`[AstParserRegistry] Failed to load WASM grammar for ${language}: ${e}`);
             return null;
         }
     }

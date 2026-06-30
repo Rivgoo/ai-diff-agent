@@ -1,12 +1,15 @@
-import { useAgentStore } from '@/webview/store/agentStore';
+import { use } from 'react';
 import { useIPC } from '@/webview/hooks/useIPC';
+import { AgentContext } from '@/webview/store/AgentProvider';
 import { IconPlus, IconX } from '@tabler/icons-react';
 import styles from './SessionTabs.module.css';
 
 export const SessionTabs = () => {
     const { sendEvent } = useIPC();
-    const sessions = useAgentStore((state) => state.sessions);
-    const activeSessionId = useAgentStore((state) => state.activeSessionId);
+    const context = use(AgentContext);
+    
+    if (!context) throw new Error('SessionTabs must be inside AgentProvider');
+    const { sessions, activeSessionId } = context.state;
 
     const handleSwitch = (id: string) => {
         if (id !== activeSessionId) {
@@ -37,17 +40,13 @@ export const SessionTabs = () => {
                     title={session.title}
                 >
                     <span className={styles.tabTitle}>{session.title}</span>
-                    <button 
-                        className={styles.closeBtn} 
-                        onClick={(e) => handleDelete(e, session.id)}
-                        title="Close Task"
-                    >
+                    <button className={styles.closeBtn} onClick={(e) => handleDelete(e, session.id)} title="Close Task">
                         <IconX size={12} />
                     </button>
                 </div>
             ))}
             
-            <button className={styles.addBtn} onClick={handleNew} title="New Task (Session)">
+            <button className={styles.addBtn} onClick={handleNew} title="New Task">
                 <IconPlus size={14} />
             </button>
         </div>
