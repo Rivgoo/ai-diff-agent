@@ -33,9 +33,13 @@ export class ProcessPayloadUseCase {
         await new Promise(resolve => setTimeout(resolve, 0));
 
         try {
-            const isStrict = this.settingsManager.getSettings().engine.strictParsing;
+            const settings = this.settingsManager.getSettings().engine;
             
-            const parseResult = await this.parser.parse(payload, isStrict); 
+            const parseResult = await this.parser.parse(payload, {
+                strictParsing: settings.strictParsing,
+                allowCdataUnwrap: settings.allowCdataUnwrap
+            }); 
+
             if (!parseResult.success) {
                 const userFailMsg: ChatMessage = {
                     id: Date.now().toString(),
@@ -53,8 +57,10 @@ export class ProcessPayloadUseCase {
 
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'resolving', current: 0, total: parsedOperations.length });
             
-            // Compilation is now awaited to handle AST loading inside OperationReducer
-            const compilationResult = await this.compiler.compile(parsedOperations);
+            const compilationResult = await this.compiler.compile(parsedOperations, { 
+                enableAstMatching: this.settingsManager.getSettings().engine.enableAstMatching 
+            });
+            
             if (!compilationResult.success) {
                 throw new Error(`Transaction Compilation failed: ${compilationResult.error.message}`);
             }

@@ -178,6 +178,9 @@ export class TransactionPipeline {
         this.onStatusUpdate({ operationId: opId, status: 'saved' });
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
+        
+        this.store.clearTransaction(opId);
+        await this.snapshotService.purgeSnapshotForOp(opId);
     }
 
     public async revertOperation(opId: string): Promise<void> {

@@ -73,8 +73,15 @@ export class TransactionContext implements ITransactionContext {
     }
 
     public async fileExists(relativePath: string): Promise<boolean> {
+        const uri = this.getAbsoluteUri(relativePath);
+        
+        const isOpenInMemory = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString());
+        if (isOpenInMemory) {
+            return true;
+        }
+
         try {
-            await vscode.workspace.fs.stat(this.getAbsoluteUri(relativePath));
+            await vscode.workspace.fs.stat(uri);
             return true;
         } catch {
             return false;

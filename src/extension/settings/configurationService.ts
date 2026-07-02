@@ -24,6 +24,8 @@ export class ConfigurationService {
       autoFixSyntax: engine.autoFixSyntax ?? true,
       autoFormatOnApply: engine.autoFormatOnApply ?? true,
       enableAstMatching: engine.enableAstMatching ?? true,
+      respectGitIgnore: engine.respectGitIgnore ?? true,
+      allowCdataUnwrap: engine.allowCdataUnwrap ?? true,
     };
   }
 

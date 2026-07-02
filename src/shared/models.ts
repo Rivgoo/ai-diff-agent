@@ -42,6 +42,8 @@ export interface EngineSettings {
   autoFixSyntax: boolean;
   autoFormatOnApply: boolean;
   enableAstMatching: boolean;
+  respectGitIgnore: boolean;
+  allowCdataUnwrap: boolean;
 }
 
 export interface AgentSettings {

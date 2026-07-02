@@ -7,7 +7,8 @@ import { VirtualDocument } from './virtualDocument';
 export class OperationReducer {
     constructor(
         private readonly workspace: VirtualWorkspace,
-        private readonly warnings: CompilerWarning[]
+        private readonly warnings: CompilerWarning[],
+        private readonly enableAstMatching: boolean 
     ) {}
 
     public applyCreate(op: CreateFileOperation): void {
@@ -38,7 +39,7 @@ export class OperationReducer {
         node.stagedChanges = [];
     }
 
-    public async applyUpdate(op: UpdateFileOperation): Promise<void> {
+     public async applyUpdate(op: UpdateFileOperation): Promise<void> {
         const node = this.workspace.getNode(op.path);
 
         if (node.state === 'DELETED') {
@@ -48,13 +49,13 @@ export class OperationReducer {
 
         if (node.state === 'CREATED') {
             let currentContent = node.contentBuffer || '';
-            const searchEngine = new SearchEngine(); // БЕЗ КОНФІГУ
+            const searchEngine = new SearchEngine();
             let allApplied = true;
 
             for (const change of op.changes) {
                 const doc = new VirtualDocument(node.currentPath, currentContent);
-                // ПЕРЕДАЄМО FALSE для AST
-                const match = await searchEngine.findMatch(doc, change.search, change.replace, false, undefined);
+                
+                const match = await searchEngine.findMatch(doc, change.search, change.replace, this.enableAstMatching, undefined);
                 
                 if (match.status === 'MATCHED') {
                     const cleanReplacement = match.cleanReplaceBlock !== undefined ? match.cleanReplaceBlock : change.replace;

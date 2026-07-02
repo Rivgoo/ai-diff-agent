@@ -7,6 +7,7 @@ export interface IPathResolutionStrategy {
         rawPath: string,
         fs: IFileSystemPort,
         search: IWorkspaceSearchPort,
-        searchBlock?: string 
+        searchBlock?: string,
+        respectGitIgnore?: boolean
     ): Promise<ResolutionResult | null>;
 }

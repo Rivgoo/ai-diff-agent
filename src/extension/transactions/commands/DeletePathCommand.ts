@@ -9,7 +9,11 @@ export class DeletePathCommand extends BaseCommand<DeletePathOperation> {
     public async validate(context: ITransactionContext): Promise<Result<void, ConflictDetails>> {
         this.normalizedPath = PathNormalizer.normalize(this.operation.path);
         
-        const resolution = await context.pathResolver.resolvePath(this.normalizedPath);
+        const resolution = await context.pathResolver.resolvePath(
+                this.normalizedPath, 
+                undefined, 
+                { respectGitIgnore: context.settingsManager.getSettings().engine.respectGitIgnore }
+            );
         if (resolution.status === 'AMBIGUOUS_MATCH') return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));
         
         if (resolution.status === 'RESOLVED_RESILIENTLY') {

@@ -24,5 +24,5 @@ export interface CompilationResult {
 }
 
 export interface ITransactionCompiler {
-    compile(rawOperations: AnyOperation[]): Promise<Result<CompilationResult>>;
+    compile(rawOperations: AnyOperation[], options?: { enableAstMatching: boolean }): Promise<Result<CompilationResult>>;
 }

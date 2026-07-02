@@ -11,10 +11,19 @@ export class AnchorMatchStrategy implements IMatchStrategy {
         const docText = document.getText();
         
         const lines = searchBlock.split(/\r?\n/).filter(l => l.trim().length > 0);
-        if (lines.length <= 3) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
+        if (lines.length <= 2) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
-        const headAnchor = lines.slice(0, 2).join('\n');
-        const tailAnchor = lines.slice(-2).join('\n');
+        let headAnchor = '';
+        let tailAnchor = '';
+
+        // ВИПРАВЛЕНО: Запобігання перекриттю якорів у 3-рядкових блоках
+        if (lines.length === 3) {
+            headAnchor = lines[0];
+            tailAnchor = lines[2];
+        } else {
+            headAnchor = lines.slice(0, 2).join('\n');
+            tailAnchor = lines.slice(-2).join('\n');
+        }
 
         const map = TextNormalizerV2.normalizeWithMap(docText);
         const normHead = TextNormalizerV2.normalizeSearchBlock(headAnchor);

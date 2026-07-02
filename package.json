@@ -97,14 +97,18 @@
             "maxBackupRetentionDays": { "type": "number", "default": 7 },
             "autoFixSyntax": { "type": "boolean", "default": true },
             "autoFormatOnApply": { "type": "boolean", "default": true, "description": "Automatically format files in the background after operations are applied." },
-            "enableAstMatching": { "type": "boolean", "default": true, "description": "Enable structural Abstract Syntax Tree (AST) matching for extremely resilient code replacement. Disable to fallback to RegExp heuristics." }
+            "enableAstMatching": { "type": "boolean", "default": true, "description": "Enable structural Abstract Syntax Tree (AST) matching for extremely resilient code replacement. Disable to fallback to RegExp heuristics." },
+            "respectGitIgnore": { "type": "boolean", "default": true, "description": "If false, the agent will search for files even in ignored directories (like build/ or dist/)." },
+            "allowCdataUnwrap": { "type": "boolean", "default": true, "description": "Automatically unwrap and clean <![CDATA[ ... ]]> tags hallucinated by LLMs inside XML payloads." }
           },
           "default": {
             "strictParsing": false,
             "maxBackupRetentionDays": 7,
             "autoFixSyntax": true,
             "autoFormatOnApply": true,
-            "enableAstMatching": true
+            "enableAstMatching": true,
+            "respectGitIgnore": true,
+            "allowCdataUnwrap": true
           }
         }
       }

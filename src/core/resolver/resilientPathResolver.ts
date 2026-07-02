@@ -22,18 +22,17 @@ export class ResilientPathResolver {
         private readonly searchPort: IWorkspaceSearchPort
     ) {}
 
-    public async resolvePath(rawPath: string, searchBlock?: string): Promise<ResolutionResult> {
+    public async resolvePath(rawPath: string, searchBlock?: string, options?: { respectGitIgnore: boolean }): Promise<ResolutionResult> {
         if (!rawPath || rawPath.trim() === '') {
             throw PathResolutionException.emptyInputPath();
         }
 
         const cleanPath = rawPath.trim();
+        const respectGitIgnore = options?.respectGitIgnore ?? true;
 
-        // Process strategies in sequential priority
         for (const strategy of this.strategies) {
             try {
-                // Передаємо searchBlock в стратегію
-                const result = await strategy.resolve(cleanPath, this.fsPort, this.searchPort, searchBlock);
+                const result = await strategy.resolve(cleanPath, this.fsPort, this.searchPort, searchBlock, respectGitIgnore);
                 if (result !== null) {
                     return result;
                 }

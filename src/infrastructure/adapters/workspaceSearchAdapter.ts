@@ -7,14 +7,13 @@ import { PathNormalizer } from '../../core/workspace/pathNormalizer';
  * Integrates indexing with high-performance vscode.workspace.findFiles lookups.
  */
 export class VsCodeWorkspaceSearchAdapter implements IWorkspaceSearchPort {
-    public async findFiles(globPattern: string, excludePattern?: string): Promise<string[]> {
+    public async findFiles(globPattern: string, excludePattern?: string, respectGitIgnore: boolean = true): Promise<string[]> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
             return [];
         }
         
-        // Resolve target workspace exclusions globs securely
-        const excludeFilter = excludePattern ? excludePattern : undefined;
+        const excludeFilter = respectGitIgnore ? (excludePattern ? excludePattern : undefined) : null;
 
         try {
             const matches = await vscode.workspace.findFiles(globPattern, excludeFilter);

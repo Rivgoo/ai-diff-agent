@@ -31,7 +31,6 @@ export class MatchPipeline {
             if (!result) continue;
             
             if (result.status === 'MATCHED') {
-                // Post-Apply Syntax Verification
                 if (context.replaceBlock !== undefined) {
                     const isSane = await SyntaxSanityChecker.verify(
                         context.document.getText(),
@@ -47,9 +46,6 @@ export class MatchPipeline {
             }
             
             if (result.status === 'FAILED') {
-                if (result.reason === 'AMBIGUOUS_MATCH') {
-                    return result; 
-                }
                 bestFailure = result;
             }
         }

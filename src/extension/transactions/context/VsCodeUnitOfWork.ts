@@ -39,6 +39,10 @@ export class VsCodeUnitOfWork implements IUnitOfWork {
     }
 
     public async commit(): Promise<boolean> {
+        if (this.modifiedPathsList.length === 0) {
+            return true;
+        }
+        
         return vscode.workspace.applyEdit(this.edit);
     }
 

@@ -21,7 +21,11 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
 
         if (!currentPath) {
             const firstSearchBlock = this.operation.changes.length > 0 ? this.operation.changes[0].search : undefined;
-            const resolution = await context.pathResolver.resolvePath(this.normalizedPath, firstSearchBlock);
+            const resolution = await context.pathResolver.resolvePath(
+                this.normalizedPath, 
+                firstSearchBlock, 
+                { respectGitIgnore: context.settingsManager.getSettings().engine.respectGitIgnore }
+            );
             
             if (resolution.status === 'AMBIGUOUS_MATCH') return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));
             if (resolution.status === 'NOT_FOUND') return Result.fail(this.buildConflict('FILE_NOT_FOUND'));
@@ -53,17 +57,20 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
         for (let i = 0; i < this.operation.changes.length; i++) {
             const change = this.operation.changes[i];
             
+            // ВИПРАВЛЕННЯ 1: Абсолютна ідемпотентність ДО початку пошуку
+            const normDoc = TextNormalizerV2.aggressiveNormalizeSearchBlock(docText);
+            const normReplace = TextNormalizerV2.aggressiveNormalizeSearchBlock(change.replace);
+            
+            // Якщо блок має хоча б якусь вагу і він вже є у файлі - миттєво пропускаємо!
+            if (normReplace.length > 15 && normDoc.includes(normReplace)) {
+                context.logger.info(`[Idempotency] Block ${i + 1} already exists in ${this.targetPath}. Skipping.`);
+                continue; 
+            }
+
             const match = await context.searchEngine.findMatch(document, change.search, change.replace, isAstEnabled, context.logger);
 
+            // Якщо не знайшли, і ідемпотентність не врятувала - кидаємо конфлікт
             if (match.status !== 'MATCHED') {
-                const normDoc = TextNormalizerV2.normalizeSearchBlock(docText);
-                const normReplace = TextNormalizerV2.normalizeSearchBlock(change.replace);
-                
-                if (normReplace.length > 0 && normDoc.includes(normReplace)) {
-                    context.logger.info(`[Idempotency] Block ${i + 1} already exists in ${this.targetPath}. Skipping.`);
-                    continue; 
-                }
-
                 const reason = match.reason === 'AMBIGUOUS_MATCH' ? 'AMBIGUOUS_MATCH' : 
                                match.reason === 'SYNTAX_CORRUPTION_PREVENTED' ? 'SYNTAX_CORRUPTION_PREVENTED' : 'NOT_FOUND';
                 

@@ -184,22 +184,34 @@ export class AstMatchStrategy implements IMatchStrategy {
         
         if (sig) return sig;
 
-        let wrappedCode = '';
         if (['.cs', '.ts', '.tsx', '.js', '.jsx'].includes(extension)) {
-            wrappedCode = `class FakeWrapper {\n${code}\n}`;
-        } else if (extension === '.json') {
-            wrappedCode = `{ "fakeKey": ${code} }`;
-        }
-
-        if (wrappedCode) {
-            tree = parser.parse(wrappedCode);
+            // Спроба 1: Обгортка у клас (рятує розірвані методи)
+            const classWrapped = `class FakeWrapper {\n${code}\n}`;
+            tree = parser.parse(classWrapped);
             sig = this.extractSignature(tree.rootNode);
             tree.delete();
             if (sig) {
-                logger?.info(`[AST] Signature extracted via protective wrapper.`);
+                logger?.info(`[AST] Signature extracted via Class wrapper.`);
                 return sig;
             }
+
+            // Спроба 2: Обгортка у метод (рятує розірвані statement-блоки)
+            const methodWrapped = `class FakeWrapper { void FakeMethod() {\n${code}\n} }`;
+            tree = parser.parse(methodWrapped);
+            sig = this.extractSignature(tree.rootNode);
+            tree.delete();
+            if (sig) {
+                logger?.info(`[AST] Signature extracted via Method wrapper.`);
+                return sig;
+            }
+        } else if (extension === '.json') {
+            const jsonWrapped = `{ "fakeKey": ${code} }`;
+            tree = parser.parse(jsonWrapped);
+            sig = this.extractSignature(tree.rootNode);
+            tree.delete();
+            if (sig) return sig;
         }
+
         return null;
     }
 
