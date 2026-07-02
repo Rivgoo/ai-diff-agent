@@ -36,7 +36,8 @@ export type WebviewEvent =
   | { type: "DELETE_SESSION"; sessionId: string }
   | { type: "COPY_PROMPT" }
   | { type: "DOWNLOAD_INSTRUCTIONS" }
-  | { type: "SHOW_OUTPUT_LOG" };
+  | { type: "SHOW_OUTPUT_LOG" }
+  | { type: "OPEN_EXTERNAL_LINK"; url: string };
 
 export type ExtensionEvent =
   | {

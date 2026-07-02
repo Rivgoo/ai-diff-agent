@@ -152,6 +152,9 @@ export class MessageRouter {
             case 'COPY_PROMPT': this.handleCopyPrompt(); break;
             case 'DOWNLOAD_INSTRUCTIONS': this.handleDownloadInstructions(); break;
             case 'SHOW_OUTPUT_LOG': vscode.commands.executeCommand('ai-diff-agent.showLog'); break;
+            case 'OPEN_EXTERNAL_LINK':
+                vscode.env.openExternal(vscode.Uri.parse(event.url));
+                break;
         }
     }
 

@@ -55,7 +55,9 @@ export const useAgentStore = create<AgentState>((set) => ({
             autoFormatOnApply: true, 
             enableAstMatching: true,
             respectGitIgnore: true,
-            allowCdataUnwrap: true
+            allowCdataUnwrap: true,
+            allowFuzzyMatching: true,
+            allowSlidingWindow: true
         }
     },
     isSettingsOpen: false,

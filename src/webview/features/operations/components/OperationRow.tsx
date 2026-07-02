@@ -1,7 +1,8 @@
 import type { OperationRowViewModel } from '../view-models/operationMapper';
 import { useIPC } from '@/webview/hooks/useIPC';
-import { IconLoader2, IconEdit, IconCheck, IconArrowBackUp, IconX, IconGitCompare } from '@tabler/icons-react';
-import { IconAlertTriangle } from '@tabler/icons-react';
+import { useAgentStore } from '@/webview/store/agentStore';
+import { Badge } from '@/webview/shared/ui/Badge/Badge';
+import { IconLoader2, IconEdit, IconCheck, IconArrowBackUp, IconX, IconGitCompare, IconAlertTriangle } from '@tabler/icons-react';
 import styles from '../styles/row.module.css';
 
 interface OperationRowProps {
@@ -13,6 +14,7 @@ interface OperationRowProps {
 
 export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps) => {
     const { sendEvent } = useIPC();
+    const showConfidenceBadges = useAgentStore(s => s.settings.behavior?.showConfidenceBadges ?? true); 
     
     const classNames = [styles.row];
     if (isActive) classNames.push(styles.rowActive);
@@ -22,6 +24,19 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
     else if (vm.isAborted) classNames.push(styles.rowAborted);
     
     const rowClass = classNames.join(' ');
+
+    let confBadge = null;
+    if (showConfidenceBadges && !vm.isConflict) {
+        if (vm.confidenceScore === 'High') {
+            confBadge = <Badge backgroundColor="var(--vscode-testing-iconPassed)" color="#fff">HIGH</Badge>;
+        } else if (vm.confidenceScore === 'Medium') {
+            confBadge = <Badge backgroundColor="var(--vscode-editorWarning-foreground)" color="#000">MED</Badge>;
+        } else if (vm.confidenceScore === 'Low') {
+            confBadge = <Badge backgroundColor="#d97706" color="#fff">LOW</Badge>;
+        } else if (vm.alreadyApplied || vm.confidenceScore === 'Warning') {
+            confBadge = <Badge backgroundColor="var(--vscode-descriptionForeground)" color="#fff">SKIP</Badge>;
+        }
+    }
 
     const renderIcon = () => {
         const size = 12;
@@ -48,6 +63,9 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
 
             <div className={styles.pathContainer}>
                 <span className={styles.fileName}>{vm.fileName}</span>
+                
+                {confBadge}
+
                 {vm.dirPath && <span className={styles.dirPath} title={vm.dirPath}>&lrm;{vm.dirPath}</span>}
                 {vm.isResilient && <span className={styles.resilientFlag} title={`Resolved: ${vm.originalPath}`}>HEURISTIC</span>}
                 {vm.matchStrategy && (

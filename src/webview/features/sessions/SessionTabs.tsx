@@ -1,7 +1,7 @@
 import { use } from 'react';
 import { useIPC } from '@/webview/hooks/useIPC';
 import { AgentContext } from '@/webview/store/AgentProvider';
-import { IconPlus, IconX } from '@tabler/icons-react';
+import { IconPlus, IconX, IconBrandGithub, IconFolder } from '@tabler/icons-react';
 import styles from './SessionTabs.module.css';
 
 export const SessionTabs = () => {
@@ -32,6 +32,24 @@ export const SessionTabs = () => {
 
     return (
         <div className={styles.container}>
+            <div className={styles.topActions}>
+                <button 
+                    className={styles.iconBtn} 
+                    onClick={() => sendEvent({ type: 'OPEN_EXTERNAL_LINK', url: 'https://make1txt.vercel.app/' })} 
+                    title="Convert Repo to TXT (Make1txt)"
+                >
+                    <IconFolder size={14} />
+                </button>
+                <button 
+                    className={styles.iconBtn} 
+                    onClick={() => sendEvent({ type: 'OPEN_EXTERNAL_LINK', url: 'https://github.com/Rivgoo/ai-diff-agent' })} 
+                    title="AI Diff Agent GitHub"
+                >
+                    <IconBrandGithub size={14} />
+                </button>
+                <div className={styles.divider} />
+            </div>
+
             {sessionList.map((session) => (
                 <div 
                     key={session.id}

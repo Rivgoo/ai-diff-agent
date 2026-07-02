@@ -43,6 +43,7 @@ export class NormalizedMatchStrategy implements IMatchStrategy {
                 end: document.positionAt(e)
             },
             confidence: 'fallback',
+            confidenceScore: 'Medium',
             strategy: this.name
         };
     }

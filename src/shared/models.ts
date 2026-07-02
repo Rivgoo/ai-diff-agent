@@ -34,6 +34,7 @@ export interface BehaviorSettings {
   autoScroll: boolean;
   compactMode: boolean;
   storeChatInWorkspace: boolean;
+  showConfidenceBadges: boolean;
 }
 
 export interface EngineSettings {
@@ -44,8 +45,9 @@ export interface EngineSettings {
   enableAstMatching: boolean;
   respectGitIgnore: boolean;
   allowCdataUnwrap: boolean;
+  allowFuzzyMatching: boolean;
+  allowSlidingWindow: boolean; 
 }
-
 export interface AgentSettings {
   behavior: BehaviorSettings;
   engine: EngineSettings;
@@ -73,6 +75,7 @@ export interface DiffOperation {
   isDirectory?: boolean;
   matchStrategy?: string;
   alreadyApplied?: boolean;
+  confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning';
 }
 
 export interface ChatMessage {

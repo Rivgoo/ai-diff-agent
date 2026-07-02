@@ -13,6 +13,8 @@ export interface MatchContext {
     readonly replaceBlock?: string;
     readonly fileExtension: string;
     readonly enableAstMatching: boolean;
+    readonly allowFuzzyMatching: boolean;
+    readonly allowSlidingWindow: boolean; 
     readonly logger?: IMatcherLogger;
 }
 

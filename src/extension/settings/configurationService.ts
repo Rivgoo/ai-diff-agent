@@ -11,6 +11,7 @@ export class ConfigurationService {
       autoScroll: behavior.autoScroll ?? true,
       compactMode: behavior.compactMode ?? false,
       storeChatInWorkspace: behavior.storeChatInWorkspace ?? false,
+      showConfidenceBadges: behavior.showConfidenceBadges ?? true,
     };
   }
 
@@ -26,6 +27,8 @@ export class ConfigurationService {
       enableAstMatching: engine.enableAstMatching ?? true,
       respectGitIgnore: engine.respectGitIgnore ?? true,
       allowCdataUnwrap: engine.allowCdataUnwrap ?? true,
+      allowFuzzyMatching: engine.allowFuzzyMatching ?? true,
+      allowSlidingWindow: engine.allowSlidingWindow ?? true,
     };
   }
 

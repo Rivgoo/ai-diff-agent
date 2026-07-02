@@ -6,14 +6,15 @@ import type { MatchContext, IMatcherLogger } from './types';
 export class SearchEngine {
     private readonly pipeline = new MatchPipeline();
 
-    // Конструктор тепер порожній
     constructor() {}
 
     public async findMatch(
         document: IDocument, 
         searchBlock: string, 
         replaceBlock?: string,
-        enableAstMatching: boolean = true, // Читаємо "наживо"
+        enableAstMatching: boolean = true, 
+        allowFuzzyMatching: boolean = true, 
+        allowSlidingWindow: boolean = true, 
         logger?: IMatcherLogger
     ): Promise<MatchResult> {
         const cleanSearchBlock = this.stripBOM(searchBlock).trim();
@@ -28,6 +29,8 @@ export class SearchEngine {
             replaceBlock,
             fileExtension: this.getFileExtension(document.path),
             enableAstMatching,
+            allowFuzzyMatching,
+            allowSlidingWindow,
             logger
         };
 

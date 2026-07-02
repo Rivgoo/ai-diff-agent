@@ -69,6 +69,17 @@ export const SettingsView = () => {
                         </VSCodeCheckbox>
                         <p className={styles.description}>Save history in <code>.vscode/ai-chat-history.json</code> to persist and share prompts via Git.</p>
                     </div>
+
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.behavior.showConfidenceBadges} 
+                            onChange={(e: any) => updateSetting('behavior', 'showConfidenceBadges', e.target.checked)}
+                        >
+                            Show Confidence Badges
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>Show visual badges (HIGH, MED, LOW) indicating the reliability of the AST or regex match.</p>
+                    </div>
+                    
                 </section>
                 
                 <VSCodeDivider />

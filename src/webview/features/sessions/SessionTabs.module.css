@@ -9,8 +9,41 @@
     flex-shrink: 0;
 }
 
-/* Приховуємо скролбар для естетики */
 .container::-webkit-scrollbar { display: none; }
+
+.topActions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    height: 100%;
+    flex-shrink: 0;
+}
+
+.iconBtn {
+    background: none;
+    border: none;
+    color: var(--vscode-icon-foreground);
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.iconBtn:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+    color: var(--vscode-foreground);
+}
+
+.divider {
+    width: 1px;
+    height: 16px;
+    background-color: var(--vscode-editorGroupHeader-tabsBorder);
+    margin: 0 4px;
+}
+
 
 .tab {
     display: flex;

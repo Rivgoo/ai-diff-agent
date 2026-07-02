@@ -55,7 +55,10 @@ export class OperationReducer {
             for (const change of op.changes) {
                 const doc = new VirtualDocument(node.currentPath, currentContent);
                 
-                const match = await searchEngine.findMatch(doc, change.search, change.replace, this.enableAstMatching, undefined);
+                const match = await searchEngine.findMatch(
+                    doc, change.search, change.replace, 
+                    this.enableAstMatching, true, true, undefined
+                );
                 
                 if (match.status === 'MATCHED') {
                     const cleanReplacement = match.cleanReplaceBlock !== undefined ? match.cleanReplaceBlock : change.replace;

@@ -81,12 +81,17 @@
             "storeChatInWorkspace": {
               "type": "boolean",
               "default": false
+            },
+            "showConfidenceBadges": {
+              "type": "boolean",
+              "default": true
             }
           },
           "default": {
             "autoScroll": true,
             "compactMode": false,
-            "storeChatInWorkspace": false
+            "storeChatInWorkspace": false,
+            "showConfidenceBadges": true
           }
         },
         "aiDiffAgent.engine": {

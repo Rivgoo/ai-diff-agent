@@ -10,4 +10,5 @@ export interface OperationStatusUpdate {
     isDirectory?: boolean;
     matchStrategy?: string;
     alreadyApplied?: boolean;
+    confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning'; 
 }
