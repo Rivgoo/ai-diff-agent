@@ -1,55 +1,69 @@
 import * as vscode from 'vscode';
 import type { IUnitOfWork } from '../core/IUnitOfWork';
+import type { Range } from '@/shared/contracts';
 
 export class VsCodeUnitOfWork implements IUnitOfWork {
     private readonly edit = new vscode.WorkspaceEdit();
-    private readonly appliedRanges = new Map<string, { uri: vscode.Uri; ranges: vscode.Range[] }>();
-    private readonly modifiedUris = new Set<string>();
-    private readonly modifiedUrisList: vscode.Uri[] = [];
+    private readonly appliedRanges = new Map<string, { path: string; ranges: Range[] }>();
+    private readonly modifiedPaths = new Set<string>();
+    private readonly modifiedPathsList: string[] = [];
 
-    public createFile(uri: vscode.Uri, content: string, options?: { ignoreIfExists: boolean }): void {
+    constructor(private readonly workspaceRootUri: vscode.Uri) {}
+
+    public getAbsoluteUri(relativePath: string): vscode.Uri {
+        const cleanPath = relativePath.replace(/^[\/\\]+/, '');
+        return vscode.Uri.joinPath(this.workspaceRootUri, cleanPath);
+    }
+
+    public createFile(path: string, content: string, options?: { ignoreIfExists: boolean }): void {
+        const uri = this.getAbsoluteUri(path);
         this.edit.createFile(uri, options);
         this.edit.insert(uri, new vscode.Position(0, 0), content);
-        this.trackUri(uri);
+        this.trackPath(path);
     }
 
-    public replace(uri: vscode.Uri, range: vscode.Range, content: string): void {
-        this.edit.replace(uri, range, content);
-        this.trackUri(uri);
+    public replace(path: string, range: Range, content: string): void {
+        const uri = this.getAbsoluteUri(path);
+        const vsRange = new vscode.Range(range.start.line, range.start.character, range.end.line, range.end.character);
+        this.edit.replace(uri, vsRange, content);
+        this.trackPath(path);
     }
 
-    public deleteFile(uri: vscode.Uri, options?: { recursive: boolean; ignoreIfNotExists: boolean }): void {
-        this.edit.deleteFile(uri, options);
+    public deleteFile(path: string, options?: { recursive: boolean; ignoreIfNotExists: boolean }): void {
+        this.edit.deleteFile(this.getAbsoluteUri(path), options);
     }
 
-    public renameFile(oldUri: vscode.Uri, newUri: vscode.Uri, options?: { overwrite: boolean }): void {
-        this.edit.renameFile(oldUri, newUri, options);
-        this.trackUri(newUri);
+    public renameFile(oldPath: string, newPath: string, options?: { overwrite: boolean }): void {
+        this.edit.renameFile(this.getAbsoluteUri(oldPath), this.getAbsoluteUri(newPath), options);
+        this.trackPath(newPath);
     }
 
     public async commit(): Promise<boolean> {
+        if (this.modifiedPathsList.length === 0) {
+            return true;
+        }
+        
         return vscode.workspace.applyEdit(this.edit);
     }
 
-    public addAppliedRange(operationId: string, uri: vscode.Uri, range: vscode.Range): void {
-        const existing = this.appliedRanges.get(operationId) || { uri, ranges: [] };
+    public addAppliedRange(operationId: string, path: string, range: Range): void {
+        const existing = this.appliedRanges.get(operationId) || { path, ranges: [] };
         existing.ranges.push(range);
         this.appliedRanges.set(operationId, existing);
     }
 
-    public getAppliedRanges(operationId: string): { uri: vscode.Uri; ranges: vscode.Range[] } | undefined {
+    public getAppliedRanges(operationId: string): { path: string; ranges: Range[] } | undefined {
         return this.appliedRanges.get(operationId);
     }
 
-    public getModifiedUris(): vscode.Uri[] {
-        return this.modifiedUrisList;
+    public getModifiedPaths(): string[] {
+        return this.modifiedPathsList;
     }
 
-    private trackUri(uri: vscode.Uri): void {
-        const key = uri.toString();
-        if (!this.modifiedUris.has(key)) {
-            this.modifiedUris.add(key);
-            this.modifiedUrisList.push(uri);
+    private trackPath(path: string): void {
+        if (!this.modifiedPaths.has(path)) {
+            this.modifiedPaths.add(path);
+            this.modifiedPathsList.push(path);
         }
     }
 }

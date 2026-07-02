@@ -41,6 +41,9 @@ export interface EngineSettings {
   maxBackupRetentionDays: number;
   autoFixSyntax: boolean;
   autoFormatOnApply: boolean;
+  enableAstMatching: boolean;
+  respectGitIgnore: boolean;
+  allowCdataUnwrap: boolean;
 }
 
 export interface AgentSettings {
@@ -68,6 +71,8 @@ export interface DiffOperation {
   stats?: ChangeStats;
   conflict?: ConflictDetails;
   isDirectory?: boolean;
+  matchStrategy?: string;
+  alreadyApplied?: boolean;
 }
 
 export interface ChatMessage {

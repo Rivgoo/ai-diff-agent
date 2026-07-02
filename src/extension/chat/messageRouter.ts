@@ -56,9 +56,10 @@ export class MessageRouter {
         
         this.store = new CompensationStore(context.workspaceState);
 
-        // Instantiate Dependencies for Pipeline Context
         const logger = new LoggerAdapter();
+        // ВИПРАВЛЕННЯ: Порожній конструктор. Налаштування будуть читатися динамічно.
         const searchEngine = new SearchEngine();
+
         const pathResolver = new ResilientPathResolver(new VsCodeFileSystemAdapter(), new VsCodeWorkspaceSearchAdapter());
         const editorService = new EditorService();
         const directoryCleanupService = new DirectoryCleanupService();
@@ -76,13 +77,10 @@ export class MessageRouter {
             logger,
             this.settingsManager,
             (update: OperationStatusUpdate) => {
-                // Оновлюємо внутрішній стейт розширення миттєво
                 this.sessionManager.updateOperationStatus(update.operationId, update.status);
                 
-                // Додаємо оновлення в чергу для UI
                 this.statusUpdateQueue.push(update);
 
-                // Запускаємо таймер на 50мс, якщо він ще не запущений
                 if (!this.updateTimer) {
                     this.updateTimer = setTimeout(() => {
                         this.flushStatusUpdates();
@@ -108,7 +106,6 @@ export class MessageRouter {
         const batch = [...this.statusUpdateQueue];
         this.statusUpdateQueue = [];
 
-        // Відправляємо єдиний пакет в UI
         this.postMessageCallback({
             type: 'OPERATION_BATCH_UPDATED',
             updates: batch
@@ -136,10 +133,12 @@ export class MessageRouter {
                 this.syncState();
                 break;
             case 'DELETE_SESSION':
+                this.revertActiveSessionOperations(event.sessionId);
                 this.sessionManager.deleteSession(event.sessionId);
                 this.syncState();
                 break;
             case 'CLEAR_SESSION': 
+                this.revertActiveSessionOperations(this.sessionManager.getActiveSessionId());
                 this.sessionManager.clearSession();
                 this.pendingOperations.clear();
                 this.syncState();
@@ -153,6 +152,20 @@ export class MessageRouter {
             case 'COPY_PROMPT': this.handleCopyPrompt(); break;
             case 'DOWNLOAD_INSTRUCTIONS': this.handleDownloadInstructions(); break;
             case 'SHOW_OUTPUT_LOG': vscode.commands.executeCommand('ai-diff-agent.showLog'); break;
+        }
+    }
+
+    private revertActiveSessionOperations(sessionId: string): void {
+        const session = this.sessionManager.getAllSessions()[sessionId];
+        if (!session) return;
+
+        const opsToRevert = session.messages
+            .flatMap(m => m.operations || [])
+            .filter(op => op.status === 'applied_dirty')
+            .reverse(); 
+
+        for (const op of opsToRevert) {
+            this.transactionPipeline.revertOperation(op.id);
         }
     }
 

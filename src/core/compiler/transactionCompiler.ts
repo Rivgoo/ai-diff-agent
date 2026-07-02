@@ -1,22 +1,24 @@
 import { Result } from '../../shared/contracts';
 import { 
-    AnyOperation, 
+    type AnyOperation, 
     isCreateFileOperation, 
     isDeletePathOperation, 
     isUpdateFileOperation, 
     isMovePathOperation 
 } from '../models/operations';
-import { ITransactionCompiler, CompilationResult, CompilerWarning } from './models';
+import type { ITransactionCompiler, CompilationResult, CompilerWarning } from './models';
 import { VirtualWorkspace } from './virtualWorkspace';
 import { OperationReducer } from './operationReducer';
 
 export class TransactionCompiler implements ITransactionCompiler {
     
-    public async compile(rawOperations: AnyOperation[]): Promise<Result<CompilationResult>> {
+    public async compile(rawOperations: AnyOperation[], options?: { enableAstMatching: boolean }): Promise<Result<CompilationResult>> {
         try {
             const workspace = new VirtualWorkspace();
             const warnings: CompilerWarning[] = [];
-            const reducer = new OperationReducer(workspace, warnings);
+            
+            const isAstEnabled = options?.enableAstMatching ?? true;
+            const reducer = new OperationReducer(workspace, warnings, isAstEnabled);
 
             for (const op of rawOperations) {
                 if (isCreateFileOperation(op)) {
@@ -96,6 +98,9 @@ export class TransactionCompiler implements ITransactionCompiler {
     }
 
     private generateId(): string {
-        return 'cmp-' + Math.random().toString(36).substring(2, 9);
+        if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.randomUUID) {
+            return globalThis.crypto.randomUUID();
+        }
+        return 'cmp-' + Math.random().toString(36).substring(2, 15);
     }
 }

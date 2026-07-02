@@ -1,12 +1,21 @@
 import type { IDocument } from '@/core/matcher/documentPort';
 import type { MatchResult } from '@/shared/contracts';
 import { MatchPipeline } from './orchestrator/matchPipeline';
-import type { MatchContext } from './types';
+import type { MatchContext, IMatcherLogger } from './types';
 
 export class SearchEngine {
     private readonly pipeline = new MatchPipeline();
 
-    public async findMatch(document: IDocument, searchBlock: string, replaceBlock?: string): Promise<MatchResult> {
+    // Конструктор тепер порожній
+    constructor() {}
+
+    public async findMatch(
+        document: IDocument, 
+        searchBlock: string, 
+        replaceBlock?: string,
+        enableAstMatching: boolean = true, // Читаємо "наживо"
+        logger?: IMatcherLogger
+    ): Promise<MatchResult> {
         const cleanSearchBlock = this.stripBOM(searchBlock).trim();
         
         if (!cleanSearchBlock) {
@@ -17,7 +26,9 @@ export class SearchEngine {
             document,
             searchBlock: cleanSearchBlock,
             replaceBlock,
-            fileExtension: this.getFileExtension(document.path)
+            fileExtension: this.getFileExtension(document.path),
+            enableAstMatching,
+            logger
         };
 
         return await this.pipeline.execute(context);

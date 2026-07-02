@@ -14,7 +14,8 @@ export class DirectMatchStrategy implements IPathResolutionStrategy {
         rawPath: string,
         fs: IFileSystemPort,
         _search: IWorkspaceSearchPort,
-        _searchBlock?: string
+        _searchBlock?: string,
+        _respectGitIgnore?: boolean
     ): Promise<ResolutionResult | null> {
         const pathExists = await fs.exists(rawPath);
         if (pathExists) {

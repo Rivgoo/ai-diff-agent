@@ -118,6 +118,36 @@ export const SettingsView = () => {
                         <p className={styles.description}>Silently format files in the background after AI modifications are applied.</p>
                     </div>
 
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.engine.enableAstMatching} 
+                            onChange={(e: any) => updateSetting('engine', 'enableAstMatching', e.target.checked)}
+                        >
+                            Enable Semantic AST Matching
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>Use structural syntax trees instead of plain text matching. Highly recommended for robustness.</p>
+                    </div>
+
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.engine.respectGitIgnore} 
+                            onChange={(e: any) => updateSetting('engine', 'respectGitIgnore', e.target.checked)}
+                        >
+                            Respect .gitignore rules
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>If disabled, the search engine will find files inside ignored directories (e.g. dist, build, .env).</p>
+                    </div>
+
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.engine.allowCdataUnwrap} 
+                            onChange={(e: any) => updateSetting('engine', 'allowCdataUnwrap', e.target.checked)}
+                        >
+                            Auto-Unwrap CDATA tags
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>Automatically cleans up {'<![CDATA['} ... {']]>'} wrappers if hallucinated by the LLM.</p>
+                    </div>
+
                 </section>
             </div>
         </div>

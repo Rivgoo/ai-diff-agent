@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import { Result } from '@/shared/contracts';
 import type { ConflictDetails, ConflictReason } from '@/shared/models';
 import type { ITransactionCommand, CommandMetadata } from '@/extension/transactions/core/ITransactionCommand';
@@ -11,7 +10,7 @@ export abstract class BaseCommand<T extends AnyOperation> implements ITransactio
     public metadata: CommandMetadata = {};
     
     protected antiActions: AntiAction[] = [];
-    protected targetUri!: vscode.Uri;
+    protected targetPath!: string;
     protected normalizedPath!: string;
 
     constructor(public readonly operation: T) {
@@ -31,7 +30,8 @@ export abstract class BaseCommand<T extends AnyOperation> implements ITransactio
         candidatePaths?: string[], 
         blockIndex = 0, 
         totalBlocks = 0, 
-        searchExcerpt = 'N/A'
+        searchExcerpt = 'N/A',
+        semanticDiagnostic?: string
     ): ConflictDetails {
         return {
             reason,
@@ -39,7 +39,8 @@ export abstract class BaseCommand<T extends AnyOperation> implements ITransactio
             totalBlocks,
             searchExcerpt,
             originalSearchBlock: '',
-            candidatePaths
+            candidatePaths,
+            semanticDiagnostic 
         };
     }
 }

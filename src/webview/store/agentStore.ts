@@ -35,7 +35,9 @@ interface AgentState {
         originalPath?: string,
         path?: string,
         conflict?: ConflictDetails,
-        isDirectory?: boolean
+        isDirectory?: boolean,
+        matchStrategy?: string,
+        alreadyApplied?: boolean
     ) => void;
     updateLocalSetting: (category: 'behavior' | 'engine', key: string, value: any) => void;
 }
@@ -46,7 +48,15 @@ export const useAgentStore = create<AgentState>((set) => ({
     isAgentTyping: false,
     settings: { 
         behavior: { autoScroll: true, compactMode: false, storeChatInWorkspace: false }, 
-        engine: { strictParsing: false, maxBackupRetentionDays: 7, autoFixSyntax: true, autoFormatOnApply: true }
+        engine: { 
+            strictParsing: false, 
+            maxBackupRetentionDays: 7, 
+            autoFixSyntax: true, 
+            autoFormatOnApply: true, 
+            enableAstMatching: true,
+            respectGitIgnore: true,
+            allowCdataUnwrap: true
+        }
     },
     isSettingsOpen: false,
     isPromptCopied: false,
@@ -72,7 +82,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         }
     })),
 
-    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory) =>
+    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied) =>
         set((state) => {
             const activeSession = state.sessions[state.activeSessionId];
             if (!activeSession) return state;
@@ -90,7 +100,9 @@ export const useAgentStore = create<AgentState>((set) => ({
                     originalPath: originalPath ?? updatedOps[opIndex].originalPath,
                     path: path ?? updatedOps[opIndex].path,
                     conflict: conflict ?? updatedOps[opIndex].conflict,
-                    isDirectory: isDirectory ?? updatedOps[opIndex].isDirectory
+                    isDirectory: isDirectory ?? updatedOps[opIndex].isDirectory,
+                    matchStrategy: matchStrategy ?? updatedOps[opIndex].matchStrategy,
+                    alreadyApplied: alreadyApplied ?? updatedOps[opIndex].alreadyApplied,
                 };
                 return { ...msg, operations: updatedOps };
             });
@@ -126,7 +138,8 @@ export const useAgentStore = create<AgentState>((set) => ({
                     originalPath: update.originalPath ?? updatedOps[opIndex].originalPath,
                     path: update.path ?? updatedOps[opIndex].path,
                     conflict: update.conflict ?? updatedOps[opIndex].conflict,
-                    isDirectory: update.isDirectory ?? updatedOps[opIndex].isDirectory
+                    isDirectory: update.isDirectory ?? updatedOps[opIndex].isDirectory,
+                    matchStrategy: update.matchStrategy ?? updatedOps[opIndex].matchStrategy
                 };
                 return { ...msg, operations: updatedOps };
             });

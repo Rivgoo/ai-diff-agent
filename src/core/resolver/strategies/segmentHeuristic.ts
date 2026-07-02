@@ -28,7 +28,8 @@ export class SegmentHeuristicStrategy implements IPathResolutionStrategy {
         rawPath: string,
         _fs: IFileSystemPort,
         search: IWorkspaceSearchPort,
-        _searchBlock?: string
+        _searchBlock?: string,
+        respectGitIgnore?: boolean
     ): Promise<ResolutionResult | null> {
         const requestedSegments = rawPath.replace(/\\/g, '/').split('/').filter(Boolean);
         if (requestedSegments.length === 0) {
@@ -41,7 +42,8 @@ export class SegmentHeuristicStrategy implements IPathResolutionStrategy {
         // Locate all files matching the target filename globally using a case-insensitive glob class
         const candidates = await search.findFiles(
             caseInsensitivePattern,
-            RESOLVER_CONSTANTS.DEFAULT_EXCLUSIONS
+            RESOLVER_CONSTANTS.DEFAULT_EXCLUSIONS,
+            respectGitIgnore
         );
 
         if (candidates.length === 0) {

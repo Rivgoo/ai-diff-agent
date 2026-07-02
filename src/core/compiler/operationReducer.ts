@@ -1,13 +1,14 @@
 import { VirtualWorkspace } from './virtualWorkspace';
-import { CreateFileOperation, DeletePathOperation, UpdateFileOperation, MovePathOperation } from '../models/operations';
-import { CompilerWarning } from './models';
+import type { CreateFileOperation, DeletePathOperation, UpdateFileOperation, MovePathOperation } from '../models/operations';
+import type { CompilerWarning } from './models';
 import { SearchEngine } from '../matcher/searchEngine';
 import { VirtualDocument } from './virtualDocument';
 
 export class OperationReducer {
     constructor(
         private readonly workspace: VirtualWorkspace,
-        private readonly warnings: CompilerWarning[]
+        private readonly warnings: CompilerWarning[],
+        private readonly enableAstMatching: boolean 
     ) {}
 
     public applyCreate(op: CreateFileOperation): void {
@@ -38,7 +39,7 @@ export class OperationReducer {
         node.stagedChanges = [];
     }
 
-    public async applyUpdate(op: UpdateFileOperation): Promise<void> {
+     public async applyUpdate(op: UpdateFileOperation): Promise<void> {
         const node = this.workspace.getNode(op.path);
 
         if (node.state === 'DELETED') {
@@ -53,10 +54,17 @@ export class OperationReducer {
 
             for (const change of op.changes) {
                 const doc = new VirtualDocument(node.currentPath, currentContent);
-                const match = await searchEngine.findMatch(doc, change.search, change.replace);
+                
+                const match = await searchEngine.findMatch(doc, change.search, change.replace, this.enableAstMatching, undefined);
                 
                 if (match.status === 'MATCHED') {
-                    currentContent = doc.applyChange(match.range, change.replace);
+                    const cleanReplacement = match.cleanReplaceBlock !== undefined ? match.cleanReplaceBlock : change.replace;
+                    currentContent = doc.applyChange(match.range, cleanReplacement);
+                    
+                    if (match.hoistedImports && match.hoistedImports.length > 0) {
+                        const importsText = match.hoistedImports.join('\n') + '\n';
+                        currentContent = importsText + currentContent;
+                    }
                 } else {
                     allApplied = false;
                 }

@@ -3,20 +3,28 @@ import type { AnyOperation, ChangeBlock } from '../models/operations';
 import { StreamScanner, type Token } from '../lexer/scanner';
 import { PathSanitizer } from '../workspace/pathSanitizer';
 
+export interface ParserOptions {
+    strictParsing: boolean;
+    allowCdataUnwrap: boolean;
+}
+
 /**
  * Main AST DSL Parser.
  * Orchestrates the flat token stream into structured executable Domain operations.
- * Implements loose-recovery mechanics to strip redundant markdown wraps.
+ * Implements loose-recovery mechanics to strip redundant markdown and CDATA wraps.
  */
 export class DSLParser {
     private readonly scanner = new StreamScanner();
-    private isStrict = false;
+    private options: ParserOptions = { strictParsing: false, allowCdataUnwrap: true };
 
     /**
      * Parses raw input instructions and generates executable file operations.
      */
-    public async parse(rawInput: string, isStrict: boolean = false): Promise<Result<AnyOperation[]>> {
-        this.isStrict = isStrict; 
+    public async parse(rawInput: string, options?: Partial<ParserOptions>): Promise<Result<AnyOperation[]>> {
+        if (options) {
+            this.options = { ...this.options, ...options };
+        }
+        
         try {
             const cleanedInput = this.stripMarkdownFences(rawInput);
             const tokens = await this.scanner.tokenize(cleanedInput);
@@ -93,7 +101,6 @@ export class DSLParser {
 
     /**
      * Evaluates a single operation block (create, update, delete, move, create_dir).
-     * Integrates Ingestion Path Sanitization to eliminate control characters and whitespace immediately.
      */
     private tryParseOperation(tokens: Token[], startIdx: number): { operation: AnyOperation; nextIndex: number } | null {
         const token = tokens[startIdx];
@@ -113,7 +120,7 @@ export class DSLParser {
                     id,
                     type: 'create_file',
                     path,
-                    content: this.stripMarkdownFences(contentResult.content),
+                    content: this.stripMarkdownFences(this.stripCdata(contentResult.content)),
                     status: 'pending'
                 },
                 nextIndex: contentResult.nextIndex
@@ -221,11 +228,11 @@ export class DSLParser {
 
             if (token.type === 'OPEN_TAG' && token.name === 'search') {
                 const res = this.consumeContentUntilClose(tokens, index, 'search');
-                search = res.content;
+                search = this.stripCdata(res.content);
                 index = res.nextIndex;
             } else if (token.type === 'OPEN_TAG' && token.name === 'replace') {
                 const res = this.consumeContentUntilClose(tokens, index, 'replace');
-                replace = res.content;
+                replace = this.stripCdata(res.content);
                 index = res.nextIndex;
             } else {
                 index++;
@@ -235,9 +242,6 @@ export class DSLParser {
         return { change: null, nextIndex: index };
     }
 
-    /**
-     * Aggregates textual block segments, reconstructing literal embedded code blocks.
-     */
     private consumeContentUntilClose(tokens: Token[], startIdx: number, tagName: string): { content: string; nextIndex: number } {
         let index = startIdx + 1;
         const builder: string[] = [];
@@ -252,7 +256,6 @@ export class DSLParser {
             if (token.type === 'TEXT_CONTENT') {
                 builder.push(token.content);
             } else {
-                // Reconstruct literal code structures that look like non-schema XML tags
                 builder.push(this.reconstructTagLiteral(token));
             }
             index++;
@@ -261,9 +264,6 @@ export class DSLParser {
         return { content: this.stripMarkdownFences(builder.join('')), nextIndex: index };
     }
 
-    /**
-     * Safely reconstructs raw structural formatting of non-schema HTML tag tokens.
-     */
     private reconstructTagLiteral(token: Token): string {
         const attributes = Object.entries(token.attributes)
             .map(([k, v]) => ` ${k}="${v}"`)
@@ -278,27 +278,49 @@ export class DSLParser {
         return `<${token.name}${attributes} />`;
     }
 
-    /**
-     * Recursively and safely strips markdown block wrappers surrounding raw text nodes.
-     */
     private stripMarkdownFences(content: string): string {
         let cleaned = content.trim();
         
-        if (this.isStrict) {
+        if (this.options.strictParsing) {
             return cleaned;
         }
         
         cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\r?\n/g, '');
         cleaned = cleaned.replace(/\r?\n```$/g, '');
-        cleaned = cleaned.replace(/^[ \t]*(code|Code)\r?\n/gm, '');
+        
+        // ВИПРАВЛЕНО: Видалено жорсткий /^[ \t]*(code|Code)\r?\n/gm, який міг знищити реальний код!
 
         return cleaned.trim();
     }
 
     /**
-     * Generates a lightweight unique execution identifier.
+     * Safely extracts code from CDATA if the LLM hallucinated it.
      */
+    private stripCdata(content: string): string {
+        if (!this.options.allowCdataUnwrap) {
+            return content;
+        }
+
+        let cleaned = content.trim();
+        const cdataStart = '<![CDATA[';
+        const cdataEnd = ']]>';
+
+        if (cleaned.startsWith(cdataStart) && cleaned.endsWith(cdataEnd)) {
+            cleaned = cleaned.substring(cdataStart.length, cleaned.length - cdataEnd.length).trim();
+        }
+
+        return cleaned;
+    }
+
     private generateId(): string {
-        return Math.random().toString(36).substring(2, 9);
+        if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.randomUUID) {
+            return globalThis.crypto.randomUUID();
+        }
+        // Polyfill fallback for environments without crypto.randomUUID
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
     }
 }

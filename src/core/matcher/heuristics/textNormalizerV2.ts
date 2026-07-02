@@ -66,13 +66,19 @@ export class TextNormalizerV2 {
      */
     public static expandToWhitespaceBoundaries(docText: string, realStart: number, realEnd: number): { s: number, e: number } {
         let s = realStart;
-        while (s > 0 && (docText[s - 1] === ' ' || docText[s - 1] === '\t')) {
-            s--;
-        }
-        
         let e = realEnd;
+        
         while (e < docText.length && (docText[e] === ' ' || docText[e] === '\t')) {
             e++;
+        }
+        
+        let tempS = s;
+        while (tempS > 0 && (docText[tempS - 1] === ' ' || docText[tempS - 1] === '\t')) {
+            tempS--;
+        }
+
+        if (tempS > 0 && docText[tempS - 1] !== '\n') {
+            s = tempS;
         }
         
         return { s, e };

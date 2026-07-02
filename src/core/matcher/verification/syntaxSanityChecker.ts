@@ -14,7 +14,7 @@ export class SyntaxSanityChecker {
     ): Promise<boolean> {
         const newText = this.applyChange(originalText, matchRange, replaceBlock);
 
-        // 1. AST Validation
+        // 1. AST Validation for strictly structured data formats (like JSON)
         if (fileExtension === '.json') {
             const parser = await AstParserRegistry.getParser('json');
             if (parser) {
@@ -25,8 +25,7 @@ export class SyntaxSanityChecker {
             }
         }
 
-        // 2. Universal Heuristic Validation (Bracket Balance)
-        return this.checkBracketBalance(newText);
+        return true;
     }
 
     private static applyChange(text: string, range: Range, replaceWith: string): string {
@@ -40,30 +39,5 @@ export class SyntaxSanityChecker {
         const after = endLineAfter + (afterLines.length > 0 ? '\n' : '') + afterLines.join('\n');
 
         return before + replaceWith + after;
-    }
-
-    private static checkBracketBalance(text: string): boolean {
-        let round = 0, square = 0, curly = 0;
-        
-        // Strip string literals and comments safely
-        const stripped = text
-            .replace(/(["'`])(?:(?=(\\?))\2.)*?\1/g, '')
-            .replace(/\/\*[\s\S]*?\*\//g, '')
-            .replace(/\/\/.*$/gm, '');
-
-        for (let i = 0; i < stripped.length; i++) {
-            const char = stripped[i];
-            if (char === '(') round++;
-            else if (char === ')') round--;
-            else if (char === '[') square++;
-            else if (char === ']') square--;
-            else if (char === '{') curly++;
-            else if (char === '}') curly--;
-            
-            // Hard fail if we ever drop below zero (closing bracket without opening)
-            if (round < 0 || square < 0 || curly < 0) return false;
-        }
-        
-        return round === 0 && square === 0 && curly === 0;
     }
 }

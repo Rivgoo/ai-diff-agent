@@ -9,6 +9,8 @@ export interface CommandMetadata {
     originalPath?: string;
     path?: string;
     isDirectory?: boolean;
+    matchStrategy?: string;
+    alreadyApplied?: boolean;
 }
 
 export interface ITransactionCommand {

@@ -5,62 +5,91 @@ import type { ILogger } from '@/extension/transactions/core/ILogger';
 import type { SearchEngine } from '@/core/matcher/searchEngine';
 import type { ResilientPathResolver } from '@/core/resolver/resilientPathResolver';
 import type { SnapshotService } from '@/extension/transactions/services/SnapshotService';
+import type { SettingsManager } from '@/extension/settings/settingsManager';
+import type { IDocument } from '@/core/matcher/documentPort';
+import { VsCodeDocument } from '@/infrastructure/adapters/vsCodeDocument';
 
 export class TransactionContext implements ITransactionContext {
-    private readonly resolvedUris = new Map<string, vscode.Uri>();
-    private readonly documentCache = new Map<string, vscode.TextDocument>();
+    private readonly resolvedPaths = new Map<string, string>();
+    private readonly documentCache = new Map<string, IDocument>();
 
     constructor(
-        public readonly workspaceRoot: vscode.Uri,
+        private readonly workspaceRootUri: vscode.Uri, // Використовуємо Uri для безпеки
         public readonly rootName: string,
         public readonly uow: IUnitOfWork,
         public readonly searchEngine: SearchEngine,
         public readonly pathResolver: ResilientPathResolver,
-        public readonly snapshotService: SnapshotService,
-        public readonly logger: ILogger
+        private readonly snapshotService: SnapshotService,
+        public readonly logger: ILogger,
+        public readonly settingsManager: SettingsManager
     ) {}
 
-    public getResolvedUri(rawPath: string): vscode.Uri | undefined {
-        return this.resolvedUris.get(rawPath);
+    // ГАРАНТОВАНО БЕЗПЕЧНИЙ МЕТОД ДЛЯ WINDOWS ТА UNIX
+    public getAbsoluteUri(relativePath: string): vscode.Uri {
+        const cleanPath = relativePath.replace(/^[\/\\]+/, '');
+        return vscode.Uri.joinPath(this.workspaceRootUri, cleanPath);
     }
 
-    public setResolvedUri(rawPath: string, actualUri: vscode.Uri): void {
-        this.resolvedUris.set(rawPath, actualUri);
+    public getResolvedPath(rawPath: string): string | undefined {
+        return this.resolvedPaths.get(rawPath);
     }
 
-    public async getDocument(uri: vscode.Uri): Promise<vscode.TextDocument> {
-        const key = uri.toString();
-        if (this.documentCache.has(key)) {
-            return this.documentCache.get(key)!;
+    public setResolvedPath(rawPath: string, actualPath: string): void {
+        this.resolvedPaths.set(rawPath, actualPath);
+    }
+
+    public async getDocument(relativePath: string): Promise<IDocument> {
+        if (this.documentCache.has(relativePath)) {
+            return this.documentCache.get(relativePath)!;
         }
-        const doc = await vscode.workspace.openTextDocument(uri);
-        this.documentCache.set(key, doc);
-        return doc;
+        const uri = this.getAbsoluteUri(relativePath);
+        const vsDoc = await vscode.workspace.openTextDocument(uri);
+        const domainDoc = new VsCodeDocument(vsDoc);
+        this.documentCache.set(relativePath, domainDoc);
+        return domainDoc;
     }
 
-    public async ensureDirectoryExists(targetDir: vscode.Uri): Promise<vscode.Uri[]> {
-        const rootFsPath = this.workspaceRoot.fsPath;
+    public async ensureDirectoryExists(targetRelativeDirPath: string): Promise<string[]> {
+        const targetDir = this.getAbsoluteUri(targetRelativeDirPath);
+        const rootFsPath = this.workspaceRootUri.fsPath;
         let currentDir = targetDir;
-        const missingDirs: vscode.Uri[] = [];
+        const missingDirs: string[] = [];
 
         while (currentDir.fsPath.length > rootFsPath.length) {
             try {
                 await vscode.workspace.fs.stat(currentDir);
                 break;
             } catch {
-                missingDirs.push(currentDir);
+                missingDirs.push(currentDir.fsPath);
                 currentDir = vscode.Uri.joinPath(currentDir, '..');
             }
         }
 
         for (let i = missingDirs.length - 1; i >= 0; i--) {
-            const dirUri = missingDirs[i];
-            try {
-                await vscode.workspace.fs.createDirectory(dirUri);
-            } catch {
-                // Fail gracefully, rely on FS cascading
-            }
+            try { await vscode.workspace.fs.createDirectory(vscode.Uri.file(missingDirs[i])); } 
+            catch { /* Ignore */ }
         }
         return missingDirs;
+    }
+
+    public async fileExists(relativePath: string): Promise<boolean> {
+        const uri = this.getAbsoluteUri(relativePath);
+        
+        const isOpenInMemory = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString());
+        if (isOpenInMemory) {
+            return true;
+        }
+
+        try {
+            await vscode.workspace.fs.stat(uri);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    public async createBackup(operationId: string, relativePath: string): Promise<void> {
+        const absoluteUri = this.getAbsoluteUri(relativePath);
+        await this.snapshotService.createSnapshot(operationId, relativePath, absoluteUri);
     }
 }

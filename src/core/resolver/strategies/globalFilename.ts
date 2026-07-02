@@ -20,7 +20,8 @@ export class GlobalFilenameStrategy implements IPathResolutionStrategy {
         rawPath: string,
         fs: IFileSystemPort,
         search: IWorkspaceSearchPort,
-        searchBlock?: string
+        searchBlock?: string,
+        respectGitIgnore?: boolean
     ): Promise<ResolutionResult | null> {
         const segments = rawPath.replace(/\\/g, '/').split('/').filter(Boolean);
         if (segments.length === 0) return null;
@@ -30,7 +31,8 @@ export class GlobalFilenameStrategy implements IPathResolutionStrategy {
         
         const candidates = await search.findFiles(
             caseInsensitivePattern,
-            RESOLVER_CONSTANTS.DEFAULT_EXCLUSIONS
+            RESOLVER_CONSTANTS.DEFAULT_EXCLUSIONS,
+            respectGitIgnore
         );
 
         if (candidates.length === 0) return null;

@@ -1,14 +1,14 @@
-import * as vscode from 'vscode';
+import type { Range } from '@/shared/contracts';
 
 export interface IUnitOfWork {
-    createFile(uri: vscode.Uri, content: string, options?: { ignoreIfExists: boolean }): void;
-    replace(uri: vscode.Uri, range: vscode.Range, content: string): void;
-    deleteFile(uri: vscode.Uri, options?: { recursive: boolean; ignoreIfNotExists: boolean }): void;
-    renameFile(oldUri: vscode.Uri, newUri: vscode.Uri, options?: { overwrite: boolean }): void;
+    createFile(path: string, content: string, options?: { ignoreIfExists: boolean }): void;
+    replace(path: string, range: Range, content: string): void;
+    deleteFile(path: string, options?: { recursive: boolean; ignoreIfNotExists: boolean }): void;
+    renameFile(oldPath: string, newPath: string, options?: { overwrite: boolean }): void;
     
     commit(): Promise<boolean>;
     
-    addAppliedRange(operationId: string, uri: vscode.Uri, range: vscode.Range): void;
-    getAppliedRanges(operationId: string): { uri: vscode.Uri; ranges: vscode.Range[] } | undefined;
-    getModifiedUris(): vscode.Uri[];
+    addAppliedRange(operationId: string, path: string, range: Range): void;
+    getAppliedRanges(operationId: string): { path: string; ranges: Range[] } | undefined;
+    getModifiedPaths(): string[];
 }

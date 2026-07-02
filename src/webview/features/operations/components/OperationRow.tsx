@@ -1,7 +1,7 @@
-import { memo } from 'react';
 import type { OperationRowViewModel } from '../view-models/operationMapper';
 import { useIPC } from '@/webview/hooks/useIPC';
 import { IconLoader2, IconEdit, IconCheck, IconArrowBackUp, IconX, IconGitCompare } from '@tabler/icons-react';
+import { IconAlertTriangle } from '@tabler/icons-react';
 import styles from '../styles/row.module.css';
 
 interface OperationRowProps {
@@ -11,17 +11,17 @@ interface OperationRowProps {
     readonly onClick: () => void;
 }
 
-const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps) => {
+export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps) => {
     const { sendEvent } = useIPC();
     
     const classNames = [styles.row];
     if (isActive) classNames.push(styles.rowActive);
     if (vm.isRealConflict) classNames.push(styles.rowConflict);
+    else if (vm.alreadyApplied) classNames.push(styles.rowWarning);
     else if (vm.wasValidated) classNames.push(styles.rowAbortedValidated);
     else if (vm.isAborted) classNames.push(styles.rowAborted);
     
     const rowClass = classNames.join(' ');
-
 
     const renderIcon = () => {
         const size = 12;
@@ -31,6 +31,7 @@ const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps
             case 'check': return <IconCheck size={size} color="var(--vscode-testing-iconPassed)" />;
             case 'revert': return <IconArrowBackUp size={size} />;
             case 'error': return <IconX size={size} color="var(--vscode-editorError-foreground)" />;
+            case 'warning': return <IconAlertTriangle size={size} color="var(--vscode-editorWarning-foreground)" />;
             default: return null;
         }
     };
@@ -40,26 +41,24 @@ const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps
     const canDiff = isDirty || isSaved; 
 
     return (
-        <div 
-            className={rowClass} 
-            onMouseEnter={onMouseEnter}
-            onClick={onClick}
-            role="gridcell"
-        >
+        <div className={rowClass} onMouseEnter={onMouseEnter} onClick={onClick} role="gridcell">
             <span className={styles.statusMarker} style={{ color: vm.markerColor }}>
                 {vm.statusMarker}
             </span>
 
             <div className={styles.pathContainer}>
                 <span className={styles.fileName}>{vm.fileName}</span>
-                {vm.dirPath && (
-                    <span className={styles.dirPath} title={vm.dirPath}>
-                        &lrm;{vm.dirPath}
-                    </span>
-                )}
-                {vm.isResilient && (
-                    <span className={styles.resilientFlag} title={`Resolved heuristically from: ${vm.originalPath}`}>
-                        HEURISTIC
+                {vm.dirPath && <span className={styles.dirPath} title={vm.dirPath}>&lrm;{vm.dirPath}</span>}
+                {vm.isResilient && <span className={styles.resilientFlag} title={`Resolved: ${vm.originalPath}`}>HEURISTIC</span>}
+                {vm.matchStrategy && (
+                    <span 
+                        className={styles.resilientFlag} 
+                        style={{ 
+                            borderColor: vm.matchStrategy.includes('AST') ? '#b180d7' : '#4ec9b0',
+                            color: vm.matchStrategy.includes('AST') ? '#b180d7' : '#4ec9b0'
+                        }} 
+                    >
+                        {vm.matchStrategy.replace('_MATCH', '')}
                     </span>
                 )}
             </div>
@@ -70,44 +69,26 @@ const RowComponent = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps
                 <div className={styles.statusIcon}>{renderIcon()}</div>
             </div>
 
-            {/* ACTION MENU OVERLAY */}
             <div className={styles.actionOverlay}>
                 {canDiff && (
-                    <button 
-                        type="button" 
-                        className={`${styles.actionBtn} ${styles.btnDiff}`} 
-                        onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'OPEN_DIFF', operationId: vm.id }); }} 
-                        title="Compare changes (Diff)"
-                    >
+                    <button type="button" className={`${styles.actionBtn} ${styles.btnDiff}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'OPEN_DIFF', operationId: vm.id }); }}>
                         <IconGitCompare size={12} />
                     </button>
                 )}
                 {isDirty && (
                     <>
-                        <button 
-                            type="button" 
-                            className={`${styles.actionBtn} ${styles.btnAccept}`} 
-                            onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_ACCEPT_OPERATION', operationId: vm.id }); }} 
-                            title="Accept this file"
-                        >
+                        <button type="button" className={`${styles.actionBtn} ${styles.btnAccept}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_ACCEPT_OPERATION', operationId: vm.id }); }}>
                             <IconCheck size={12} />
                         </button>
-                        <button 
-                            type="button" 
-                            className={`${styles.actionBtn} ${styles.btnReject}`} 
-                            onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_REVERT_OPERATION', operationId: vm.id }); }} 
-                            title="Reject this file"
-                        >
+                        <button type="button" className={`${styles.actionBtn} ${styles.btnReject}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_REVERT_OPERATION', operationId: vm.id }); }}>
                             <IconX size={12} />
                         </button>
                     </>
                 )}
-                <button type="button" className={styles.openBtn} onClick={(e) => { e.stopPropagation(); onClick(); }} title="Open file">
+                <button type="button" className={styles.openBtn} onClick={(e) => { e.stopPropagation(); onClick(); }}>
                     Open
                 </button>
             </div>
         </div>
     );
 };
-
-export const OperationRow = memo(RowComponent);

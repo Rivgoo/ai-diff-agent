@@ -6,17 +6,17 @@ export class NormalizedMatchStrategy implements IMatchStrategy {
     public readonly name = 'NORMALIZED_MATCH';
     public readonly tier = 2;
 
-    public async findMatch(context: MatchContext): Promise<MatchResult | null> {
+    public async findMatch(context: MatchContext): Promise<MatchResult> {
         const { document, searchBlock } = context;
         const docText = document.getText();
         
         const map = TextNormalizerV2.normalizeWithMap(docText);
         const normalizedSearch = TextNormalizerV2.normalizeSearchBlock(searchBlock);
 
-        if (normalizedSearch.length === 0) return null;
+        if (normalizedSearch.length === 0) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
         const matchIdx = map.normalizedText.indexOf(normalizedSearch);
-        if (matchIdx === -1) return null;
+        if (matchIdx === -1) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
         const nextMatchIdx = map.normalizedText.indexOf(normalizedSearch, matchIdx + 1);
         if (nextMatchIdx !== -1) {
@@ -42,7 +42,8 @@ export class NormalizedMatchStrategy implements IMatchStrategy {
                 start: document.positionAt(s),
                 end: document.positionAt(e)
             },
-            confidence: 'fallback'
+            confidence: 'fallback',
+            strategy: this.name
         };
     }
 }
