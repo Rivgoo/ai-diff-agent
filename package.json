@@ -104,7 +104,8 @@
             "autoFormatOnApply": { "type": "boolean", "default": true, "description": "Automatically format files in the background after operations are applied." },
             "enableAstMatching": { "type": "boolean", "default": true, "description": "Enable structural Abstract Syntax Tree (AST) matching for extremely resilient code replacement. Disable to fallback to RegExp heuristics." },
             "respectGitIgnore": { "type": "boolean", "default": true, "description": "If false, the agent will search for files even in ignored directories (like build/ or dist/)." },
-            "allowCdataUnwrap": { "type": "boolean", "default": true, "description": "Automatically unwrap and clean <![CDATA[ ... ]]> tags hallucinated by LLMs inside XML payloads." }
+            "allowCdataUnwrap": { "type": "boolean", "default": true, "description": "Automatically unwrap and clean <![CDATA[ ... ]]> tags hallucinated by LLMs inside XML payloads." },
+            "blockOnSyntaxErrors": { "type": "boolean", "default": false, "description": "If true, strictly blocks the transaction if the AI introduces syntax errors (missing brackets, semicolons). If false, allows insertion so you can fix it manually via LSP." }
           },
           "default": {
             "strictParsing": false,
@@ -113,7 +114,8 @@
             "autoFormatOnApply": true,
             "enableAstMatching": true,
             "respectGitIgnore": true,
-            "allowCdataUnwrap": true
+            "allowCdataUnwrap": true,
+            "blockOnSyntaxErrors": false
           }
         }
       }

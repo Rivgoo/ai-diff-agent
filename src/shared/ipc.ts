@@ -34,10 +34,12 @@ export type WebviewEvent =
   | { type: "NEW_SESSION" }
   | { type: "SWITCH_SESSION"; sessionId: string }
   | { type: "DELETE_SESSION"; sessionId: string }
-  | { type: "COPY_PROMPT" }
+  | { type: "COPY_PROMPT"; mode?: 'stable' | 'experimental' }
   | { type: "DOWNLOAD_INSTRUCTIONS" }
   | { type: "SHOW_OUTPUT_LOG" }
-  | { type: "OPEN_EXTERNAL_LINK"; url: string };
+  | { type: "OPEN_EXTERNAL_LINK"; url: string }
+  | { type: "SMART_RETRY_CONTEXT"; operationId: string };
+   
 
 export type ExtensionEvent =
   | {

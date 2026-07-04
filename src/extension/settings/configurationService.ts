@@ -29,6 +29,7 @@ export class ConfigurationService {
       allowCdataUnwrap: engine.allowCdataUnwrap ?? true,
       allowFuzzyMatching: engine.allowFuzzyMatching ?? true,
       allowSlidingWindow: engine.allowSlidingWindow ?? true,
+      blockOnSyntaxErrors: engine.blockOnSyntaxErrors ?? false,
     };
   }
 

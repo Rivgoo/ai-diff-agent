@@ -47,6 +47,7 @@ export interface EngineSettings {
   allowCdataUnwrap: boolean;
   allowFuzzyMatching: boolean;
   allowSlidingWindow: boolean; 
+  blockOnSyntaxErrors: boolean
 }
 export interface AgentSettings {
   behavior: BehaviorSettings;

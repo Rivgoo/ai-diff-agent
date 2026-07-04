@@ -15,6 +15,7 @@ export class SearchEngine {
         enableAstMatching: boolean = true, 
         allowFuzzyMatching: boolean = true, 
         allowSlidingWindow: boolean = true, 
+        blockOnSyntaxErrors: boolean = false,
         logger?: IMatcherLogger
     ): Promise<MatchResult> {
         const cleanSearchBlock = this.stripBOM(searchBlock).trim();
@@ -31,6 +32,7 @@ export class SearchEngine {
             enableAstMatching,
             allowFuzzyMatching,
             allowSlidingWindow,
+            blockOnSyntaxErrors,
             logger
         };
 

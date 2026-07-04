@@ -15,6 +15,7 @@ export interface MatchContext {
     readonly enableAstMatching: boolean;
     readonly allowFuzzyMatching: boolean;
     readonly allowSlidingWindow: boolean; 
+    readonly blockOnSyntaxErrors: boolean;
     readonly logger?: IMatcherLogger;
 }
 

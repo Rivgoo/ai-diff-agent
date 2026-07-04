@@ -57,7 +57,7 @@ export class OperationReducer {
                 
                 const match = await searchEngine.findMatch(
                     doc, change.search, change.replace, 
-                    this.enableAstMatching, true, true, undefined
+                    this.enableAstMatching, true, true, false, undefined
                 );
                 
                 if (match.status === 'MATCHED') {

@@ -46,7 +46,8 @@ export class MatchPipeline {
                         context.document.getText(),
                         result.range,
                         context.replaceBlock,
-                        context.fileExtension
+                        context.fileExtension,
+                        context.blockOnSyntaxErrors
                     );
                     if (!isSane) {
                         return { status: 'FAILED', reason: 'SYNTAX_CORRUPTION_PREVENTED', matchesFound: 1 };

@@ -73,6 +73,7 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                 engineSettings.enableAstMatching, 
                 engineSettings.allowFuzzyMatching, 
                 engineSettings.allowSlidingWindow, 
+                engineSettings.blockOnSyntaxErrors,
                 context.logger
             );
 

@@ -136,7 +136,10 @@ export class ProcessPayloadUseCase {
 
             await this.transactionPipeline.applyBatch(operations);
 
-            const hasConflicts = operations.some(op => op.status === 'conflict');
+            const currentSession = this.sessionManager.getActiveSession();
+            const lastMessage = currentSession.messages[currentSession.messages.length - 1];
+            const hasConflicts = lastMessage.operations?.some(op => op.status === 'conflict' || op.status === 'error');
+            
             if (hasConflicts) {
                 this.sessionManager.addMessage({
                     id: Date.now().toString(),

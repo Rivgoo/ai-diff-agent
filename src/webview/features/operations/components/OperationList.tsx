@@ -46,7 +46,7 @@ export const OperationList = ({ operations, onOpenFile }: OperationListProps) =>
                             />
                             {/* Render detailed Conflict Gutter ONLY for the active culprit causing the transaction abort */}
                             {vm.isRealConflict && vm.conflictDetails && (
-                                <ConflictGutter details={vm.conflictDetails} />
+                                <ConflictGutter details={vm.conflictDetails} operationId={vm.id} />
                             )}
                         </div>
                     );

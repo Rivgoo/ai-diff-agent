@@ -159,6 +159,16 @@ export const SettingsView = () => {
                         <p className={styles.description}>Automatically cleans up {'<![CDATA['} ... {']]>'} wrappers if hallucinated by the LLM.</p>
                     </div>
 
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.engine.blockOnSyntaxErrors} 
+                            onChange={(e: any) => updateSetting('engine', 'blockOnSyntaxErrors', e.target.checked)}
+                        >
+                            Strict Syntax Blocking (AST)
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>Blocks file updates if AST detects missing semicolons or brackets. Disable to let VS Code's native LSP handle minor typos.</p>
+                    </div>
+
                 </section>
             </div>
         </div>

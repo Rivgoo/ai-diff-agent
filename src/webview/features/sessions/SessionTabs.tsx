@@ -11,60 +11,44 @@ export const SessionTabs = () => {
     if (!context) throw new Error('SessionTabs must be inside AgentProvider');
     const { sessions, activeSessionId } = context.state;
 
-    const handleSwitch = (id: string) => {
-        if (id !== activeSessionId) {
-            sendEvent({ type: 'SWITCH_SESSION', sessionId: id });
-        }
-    };
-
-    const handleDelete = (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
-        sendEvent({ type: 'DELETE_SESSION', sessionId: id });
-    };
-
-    const handleNew = () => {
-        sendEvent({ type: 'NEW_SESSION' });
-    };
-
     const sessionList = Object.values(sessions).sort((a, b) => Number(a.id) - Number(b.id));
-
     if (sessionList.length === 0) return null;
 
     return (
         <div className={styles.container}>
-            <div className={styles.topActions}>
+            <div className={styles.topActions} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0 8px' }}>
                 <button 
-                    className={styles.iconBtn} 
+                    className={styles.iconBtn} style={{ background: 'none', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer' }}
                     onClick={() => sendEvent({ type: 'OPEN_EXTERNAL_LINK', url: 'https://make1txt.vercel.app/' })} 
                     title="Convert Repo to TXT (Make1txt)"
                 >
                     <IconFolder size={14} />
                 </button>
                 <button 
-                    className={styles.iconBtn} 
+                    className={styles.iconBtn} style={{ background: 'none', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer' }}
                     onClick={() => sendEvent({ type: 'OPEN_EXTERNAL_LINK', url: 'https://github.com/Rivgoo/ai-diff-agent' })} 
                     title="AI Diff Agent GitHub"
                 >
                     <IconBrandGithub size={14} />
                 </button>
-                <div className={styles.divider} />
+                <div style={{ width: '1px', height: '16px', backgroundColor: 'var(--vscode-editorGroupHeader-tabsBorder)', margin: '0 4px' }} />
             </div>
 
             {sessionList.map((session) => (
                 <div 
                     key={session.id}
                     className={`${styles.tab} ${session.id === activeSessionId ? styles.tabActive : ''}`}
-                    onClick={() => handleSwitch(session.id)}
+                    onClick={() => sendEvent({ type: 'SWITCH_SESSION', sessionId: session.id })}
                     title={session.title}
                 >
                     <span className={styles.tabTitle}>{session.title}</span>
-                    <button className={styles.closeBtn} onClick={(e) => handleDelete(e, session.id)} title="Close Task">
+                    <button className={styles.closeBtn} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'DELETE_SESSION', sessionId: session.id }); }}>
                         <IconX size={12} />
                     </button>
                 </div>
             ))}
             
-            <button className={styles.addBtn} onClick={handleNew} title="New Task">
+            <button className={styles.addBtn} onClick={() => sendEvent({ type: 'NEW_SESSION' })}>
                 <IconPlus size={14} />
             </button>
         </div>
