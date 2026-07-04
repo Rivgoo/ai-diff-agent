@@ -47,7 +47,7 @@ export const useAgentStore = create<AgentState>((set) => ({
     activeSessionId: '',
     isAgentTyping: false,
     settings: { 
-        behavior: { autoScroll: true, compactMode: false, storeChatInWorkspace: false }, 
+        behavior: { autoScroll: true, compactMode: false, storeChatInWorkspace: false, showConfidenceBadges: true }, 
         engine: { 
             strictParsing: false, 
             maxBackupRetentionDays: 7, 
@@ -55,7 +55,10 @@ export const useAgentStore = create<AgentState>((set) => ({
             autoFormatOnApply: true, 
             enableAstMatching: true,
             respectGitIgnore: true,
-            allowCdataUnwrap: true
+            allowCdataUnwrap: true,
+            allowFuzzyMatching: true,
+            allowSlidingWindow: true,
+            blockOnSyntaxErrors: false
         }
     },
     isSettingsOpen: false,
@@ -103,6 +106,8 @@ export const useAgentStore = create<AgentState>((set) => ({
                     isDirectory: isDirectory ?? updatedOps[opIndex].isDirectory,
                     matchStrategy: matchStrategy ?? updatedOps[opIndex].matchStrategy,
                     alreadyApplied: alreadyApplied ?? updatedOps[opIndex].alreadyApplied,
+                    // ВИПРАВЛЕНО: Додано збереження score
+                    confidenceScore: updatedOps[opIndex].confidenceScore
                 };
                 return { ...msg, operations: updatedOps };
             });
@@ -139,7 +144,8 @@ export const useAgentStore = create<AgentState>((set) => ({
                     path: update.path ?? updatedOps[opIndex].path,
                     conflict: update.conflict ?? updatedOps[opIndex].conflict,
                     isDirectory: update.isDirectory ?? updatedOps[opIndex].isDirectory,
-                    matchStrategy: update.matchStrategy ?? updatedOps[opIndex].matchStrategy
+                    matchStrategy: update.matchStrategy ?? updatedOps[opIndex].matchStrategy,
+                    confidenceScore: update.confidenceScore ?? updatedOps[opIndex].confidenceScore
                 };
                 return { ...msg, operations: updatedOps };
             });

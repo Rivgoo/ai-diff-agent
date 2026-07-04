@@ -69,6 +69,17 @@ export const SettingsView = () => {
                         </VSCodeCheckbox>
                         <p className={styles.description}>Save history in <code>.vscode/ai-chat-history.json</code> to persist and share prompts via Git.</p>
                     </div>
+
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.behavior.showConfidenceBadges} 
+                            onChange={(e: any) => updateSetting('behavior', 'showConfidenceBadges', e.target.checked)}
+                        >
+                            Show Confidence Badges
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>Show visual badges (HIGH, MED, LOW) indicating the reliability of the AST or regex match.</p>
+                    </div>
+                    
                 </section>
                 
                 <VSCodeDivider />
@@ -146,6 +157,16 @@ export const SettingsView = () => {
                             Auto-Unwrap CDATA tags
                         </VSCodeCheckbox>
                         <p className={styles.description}>Automatically cleans up {'<![CDATA['} ... {']]>'} wrappers if hallucinated by the LLM.</p>
+                    </div>
+
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.engine.blockOnSyntaxErrors} 
+                            onChange={(e: any) => updateSetting('engine', 'blockOnSyntaxErrors', e.target.checked)}
+                        >
+                            Strict Syntax Blocking (AST)
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>Blocks file updates if AST detects missing semicolons or brackets. Disable to let VS Code's native LSP handle minor typos.</p>
                     </div>
 
                 </section>

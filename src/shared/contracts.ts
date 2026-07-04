@@ -37,10 +37,12 @@ export interface BaseOperation {
 
 export type MatchFailureReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'EMPTY_SEARCH_BLOCK' | 'SYNTAX_CORRUPTION_PREVENTED';
 
+export type ConfidenceScore = 'High' | 'Medium' | 'Low' | 'Warning';
 export interface MatchSuccess {
     readonly status: 'MATCHED';
     readonly range: Range;
     readonly confidence: 'exact' | 'fallback';
+    readonly confidenceScore: ConfidenceScore; 
     readonly strategy?: string;
     readonly hoistedImports?: string[];
     readonly cleanReplaceBlock?: string;

@@ -43,3 +43,52 @@
   font-weight: 500;
   font-size: 11px;
 }
+
+.splitButtonGroup {
+  display: flex;
+  width: 100%;
+}
+
+.splitBtnMain {
+  flex: 1;
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-right: 1px solid var(--vscode-panel-border) !important;
+}
+
+.splitBtnDrop {
+  width: 24px !important;
+  padding: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  position: relative;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background-color: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+}
+
+.dropdownItem {
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  color: var(--vscode-dropdown-foreground);
+  text-align: left;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dropdownItem:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}

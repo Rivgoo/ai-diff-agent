@@ -76,6 +76,7 @@ export class AnchorMatchStrategy implements IMatchStrategy {
                 end: document.positionAt(e)
             },
             confidence: 'fallback',
+            confidenceScore: 'Low',
             strategy: this.name
         };
     }

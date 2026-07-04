@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { ChatSession, ChatMessage, OperationStatus, DiffOperation } from '../../shared/models';
+import type { ChatSession, ChatMessage, DiffOperation } from '../../shared/models';
 import { SYSTEM_CONSTANTS } from '../../shared/constants';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
 
@@ -105,13 +105,19 @@ export class ChatSessionManager {
         this.saveSessions();
     }
 
-    public updateOperationStatus(operationId: string, status: OperationStatus): void {
+    public updateOperationFromEvent(update: any): void {
         const session = this.getActiveSession();
         for (const msg of session.messages) {
             if (msg.operations) {
-                const op = msg.operations.find(o => o.id === operationId);
+                const op = msg.operations.find(o => o.id === update.operationId);
                 if (op) {
-                    op.status = status;
+                    op.status = update.status;
+                    if (update.conflict !== undefined) op.conflict = update.conflict;
+                    if (update.matchStrategy !== undefined) op.matchStrategy = update.matchStrategy;
+                    if (update.confidenceScore !== undefined) op.confidenceScore = update.confidenceScore;
+                    if (update.resolvedResiliently !== undefined) op.resolvedResiliently = update.resolvedResiliently;
+                    if (update.path !== undefined) op.path = update.path;
+                    
                     this.saveSessions();
                     return;
                 }

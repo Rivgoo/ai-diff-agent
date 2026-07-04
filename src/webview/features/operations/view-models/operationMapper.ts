@@ -21,6 +21,7 @@ export interface OperationRowViewModel {
     readonly statusIcon: 'edit' | 'check' | 'revert' | 'error' | 'loading' | 'warning' | null;
     readonly isDirectory: boolean;
     readonly matchStrategy?: string;
+    readonly confidenceScore?: string;
 }
 
 export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewModel {
@@ -71,6 +72,7 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
         originalPath: op.originalPath,
         statusIcon,
         isDirectory: !!op.isDirectory,
-        matchStrategy: op.matchStrategy
+        matchStrategy: op.matchStrategy,
+        confidenceScore: op.confidenceScore 
     };
 }

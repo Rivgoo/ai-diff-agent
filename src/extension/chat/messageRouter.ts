@@ -77,7 +77,7 @@ export class MessageRouter {
             logger,
             this.settingsManager,
             (update: OperationStatusUpdate) => {
-                this.sessionManager.updateOperationStatus(update.operationId, update.status);
+                this.sessionManager.updateOperationFromEvent(update);
                 
                 this.statusUpdateQueue.push(update);
 
@@ -149,11 +149,69 @@ export class MessageRouter {
             case 'ACTION_REVERT_OPERATION': this.transactionPipeline.revertOperation(event.operationId); break;
             case 'OPEN_FILE': this.handleOpenFile(event.operationId); break;
             case 'OPEN_DIFF': this.handleOpenDiff(event.operationId); break;
-            case 'COPY_PROMPT': this.handleCopyPrompt(); break;
+            case 'COPY_PROMPT': this.handleCopyPrompt(event.mode || 'stable'); break; 
             case 'DOWNLOAD_INSTRUCTIONS': this.handleDownloadInstructions(); break;
             case 'SHOW_OUTPUT_LOG': vscode.commands.executeCommand('ai-diff-agent.showLog'); break;
+            case 'OPEN_EXTERNAL_LINK': 
+                vscode.env.openExternal(vscode.Uri.parse(event.url));
+                break;
+            case 'SMART_RETRY_CONTEXT': this.handleSmartRetry(event.operationId); break; 
+            case 'COPY_PROMPT': this.handleCopyPrompt(event.mode || 'stable'); break;
+            case 'OPEN_EXTERNAL_LINK': 
+                vscode.env.openExternal(vscode.Uri.parse(event.url));
+                break;
+            case 'SMART_RETRY_CONTEXT': this.handleSmartRetry(event.operationId); break;
         }
     }
+
+    private async handleSmartRetry(operationId: string): Promise<void> {
+        const sessionOp = this.sessionManager.getActiveSession().messages
+            .flatMap(m => m.operations || [])
+            .find(o => o.id === operationId);
+
+        if (!sessionOp || !sessionOp.conflict) return;
+
+        try {
+            const targetPath = sessionOp.path;
+            const normalized = PathNormalizer.normalize(targetPath);
+            const uri = PathSandbox.validate(normalized);
+            
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const currentContent = doc.getText();
+
+            const conflict = sessionOp.conflict;
+            let explanation = '';
+            if (conflict.reason === 'AMBIGUOUS_MATCH') {
+                explanation = `But this pattern exists multiple times in the file. I don't know which one to replace.`;
+            } else if (conflict.reason === 'NOT_FOUND') {
+                explanation = `But this pattern was not found. The context may have changed.`;
+            } else if (conflict.reason === 'SYNTAX_CORRUPTION_PREVENTED') {
+                explanation = `But applying this change would cause a critical syntax error (corruption).`;
+            }
+
+            const prompt = `I tried to apply your changes to \`${targetPath}\`, but it failed with: **${conflict.reason}**.
+
+You tried to search for:
+\`\`\`
+${conflict.searchExcerpt}
+\`\`\`
+
+${explanation}
+
+Here is the CURRENT state of the file:
+\`\`\`${targetPath.split('.').pop() || 'text'}
+${currentContent}
+\`\`\`
+
+Please rewrite the \`<update_file>\` block with more specific or correct context lines.`;
+
+            await vscode.env.clipboard.writeText(prompt);
+            this.postMessageCallback({ type: 'PROMPT_COPIED' }); 
+        } catch (e) {
+            OutputLogger.log(`Failed to generate smart retry context: ${e}`, 'ERROR');
+        }
+    }
+
 
     private revertActiveSessionOperations(sessionId: string): void {
         const session = this.sessionManager.getAllSessions()[sessionId];
@@ -258,12 +316,21 @@ export class MessageRouter {
         }
     }
 
-    private async handleCopyPrompt(): Promise<void> {
+    private async handleCopyPrompt(mode: 'stable' | 'experimental'): Promise<void> {
         try {
-            const instructionsPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'prompt-instructions.md');
-            const fileBytes = await vscode.workspace.fs.readFile(instructionsPath);
-            await vscode.env.clipboard.writeText(new TextDecoder().decode(fileBytes));
-            this.postMessageCallback({ type: 'PROMPT_COPIED' });
+            const fileName = mode === 'stable' ? 'prompt-stable.md' : 'prompt-experimental.md';
+            const instructionsPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', fileName);
+            
+            try {
+                const fileBytes = await vscode.workspace.fs.readFile(instructionsPath);
+                await vscode.env.clipboard.writeText(new TextDecoder().decode(fileBytes));
+                this.postMessageCallback({ type: 'PROMPT_COPIED' });
+            } catch {
+                const fallbackPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'prompt-instructions.md');
+                const fallbackBytes = await vscode.workspace.fs.readFile(fallbackPath);
+                await vscode.env.clipboard.writeText(new TextDecoder().decode(fallbackBytes));
+                this.postMessageCallback({ type: 'PROMPT_COPIED' });
+            }
         } catch (e) {
             OutputLogger.log(`Copy prompt operation failed: ${e}`, 'ERROR');
         }

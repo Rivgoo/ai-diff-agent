@@ -57,8 +57,19 @@ export class AstMatchStrategy implements IMatchStrategy {
 
             context.logger?.info(`[AST] Extracted semantic target: [${signature.type}] named '${signature.name}'`);
 
-            const candidates = this.findNodesBySignature(documentTree.rootNode, signature);
+            let candidates = this.findNodesBySignature(documentTree.rootNode, signature);
+            let confidenceScore: 'High' | 'Medium' | 'Low' | 'Warning' = 'High';
             
+            // ВПРОВАДЖЕННЯ FUZZY MATCHING (План Б)
+            if (candidates.length === 0 && context.allowFuzzyMatching) {
+                context.logger?.warn(`[AST] Target '${signature.name}' not found. Attempting Fuzzy Node Matching...`);
+                const fuzzyNode = this.fuzzyFindNode(documentTree.rootNode, signature, context.logger);
+                if (fuzzyNode) {
+                    candidates = [fuzzyNode];
+                    confidenceScore = 'Medium'; // Знижуємо довіру, бо це наближений пошук
+                }
+            }
+
             if (candidates.length === 0) {
                 context.logger?.error(`[AST] Target '${signature.name}' not found in the original document.`);
                 this.cleanup(documentTree);
@@ -110,6 +121,7 @@ export class AstMatchStrategy implements IMatchStrategy {
                 status: 'MATCHED',
                 range: { start, end },
                 confidence: 'exact',
+                confidenceScore,
                 strategy: this.name,
                 hoistedImports,
                 cleanReplaceBlock
@@ -120,6 +132,67 @@ export class AstMatchStrategy implements IMatchStrategy {
             this.cleanup(documentTree);
             return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
         }
+    }
+
+    private fuzzyFindNode(rootNode: ISyntaxNode, signature: SemanticSignature, logger?: IMatcherLogger): ISyntaxNode | null {
+        let bestMatch: ISyntaxNode | null = null;
+        let bestScore = 0;
+
+        const walk = (node: ISyntaxNode) => {
+            if (node.type === signature.type) {
+                const nameNode = node.childForFieldName('name');
+                if (nameNode && nameNode.text) {
+                    const score = this.calculateSimilarity(nameNode.text, signature.name);
+                    if (score > bestScore && score >= 0.85) { // Поріг впевненості 85%
+                        bestScore = score;
+                        bestMatch = node;
+                    }
+                }
+            }
+            for (const child of node.children) walk(child);
+        };
+
+        walk(rootNode);
+
+        if (bestMatch) {
+            const matchedName = (bestMatch as ISyntaxNode).childForFieldName('name')?.text;
+            logger?.info(`[AST] Fuzzy matched node '${signature.name}' to existing '${matchedName}' (Confidence: ${(bestScore * 100).toFixed(1)}%)`);
+        }
+
+        return bestMatch;
+    }
+
+    private calculateSimilarity(s1: string, s2: string): number {
+        const longer = s1.length > s2.length ? s1 : s2;
+        const shorter = s1.length > s2.length ? s2 : s1;
+        const longerLength = longer.length;
+        if (longerLength === 0) return 1.0;
+        
+        const distance = this.levenshteinDistance(longer, shorter);
+        return (longerLength - distance) / parseFloat(longerLength.toString());
+    }
+
+    private levenshteinDistance(s1: string, s2: string): number {
+        const costs = [];
+        for (let i = 0; i <= s1.length; i++) {
+            let lastValue = i;
+            for (let j = 0; j <= s2.length; j++) {
+                if (i === 0) {
+                    costs[j] = j;
+                } else {
+                    if (j > 0) {
+                        let newValue = costs[j - 1];
+                        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
+                            newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+                        }
+                        costs[j - 1] = lastValue;
+                        lastValue = newValue;
+                    }
+                }
+            }
+            if (i > 0) costs[s2.length] = lastValue;
+        }
+        return costs[s2.length];
     }
 
     private extractImports(parser: ITreeSitterParser, code: string): { cleanCode: string, imports: string[] } {

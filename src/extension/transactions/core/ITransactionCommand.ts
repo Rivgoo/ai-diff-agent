@@ -11,6 +11,7 @@ export interface CommandMetadata {
     isDirectory?: boolean;
     matchStrategy?: string;
     alreadyApplied?: boolean;
+    confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning';
 }
 
 export interface ITransactionCommand {
