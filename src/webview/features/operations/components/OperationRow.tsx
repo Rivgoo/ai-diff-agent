@@ -66,6 +66,12 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
                 
                 {confBadge}
 
+                {vm.isPartiallyResolved && (
+                    <Badge backgroundColor="var(--vscode-editorInfo-background)" color="#fff">PARTIAL</Badge>
+                )}
+
+                {vm.dirPath && <span className={styles.dirPath} title={vm.dirPath}>&lrm;{vm.dirPath}</span>}
+
                 {vm.dirPath && <span className={styles.dirPath} title={vm.dirPath}>&lrm;{vm.dirPath}</span>}
                 {vm.isResilient && <span className={styles.resilientFlag} title={`Resolved: ${vm.originalPath}`}>HEURISTIC</span>}
                 {vm.matchStrategy && (

@@ -22,6 +22,7 @@ export interface OperationRowViewModel {
     readonly isDirectory: boolean;
     readonly matchStrategy?: string;
     readonly confidenceScore?: string;
+    readonly isPartiallyResolved: boolean;
 }
 
 export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewModel {
@@ -73,6 +74,7 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
         statusIcon,
         isDirectory: !!op.isDirectory,
         matchStrategy: op.matchStrategy,
-        confidenceScore: op.confidenceScore 
+        confidenceScore: op.confidenceScore,
+        isPartiallyResolved: !!op.isPartiallyResolved
     };
 }

@@ -37,7 +37,8 @@ interface AgentState {
         conflict?: ConflictDetails,
         isDirectory?: boolean,
         matchStrategy?: string,
-        alreadyApplied?: boolean
+        alreadyApplied?: boolean,
+        isPartiallyResolved?: boolean,
     ) => void;
     updateLocalSetting: (category: 'behavior' | 'engine', key: string, value: any) => void;
 }
@@ -47,7 +48,7 @@ export const useAgentStore = create<AgentState>((set) => ({
     activeSessionId: '',
     isAgentTyping: false,
     settings: { 
-        behavior: { autoScroll: true, compactMode: false, storeChatInWorkspace: false, showConfidenceBadges: true }, 
+        behavior: { autoScroll: true, compactMode: false, storeChatInWorkspace: false, showConfidenceBadges: true, enableCodeLens: true }, 
         engine: { 
             strictParsing: false, 
             maxBackupRetentionDays: 7, 
@@ -85,7 +86,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         }
     })),
 
-    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied) =>
+    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied, isPartiallyResolved) =>
         set((state) => {
             const activeSession = state.sessions[state.activeSessionId];
             if (!activeSession) return state;
@@ -106,8 +107,8 @@ export const useAgentStore = create<AgentState>((set) => ({
                     isDirectory: isDirectory ?? updatedOps[opIndex].isDirectory,
                     matchStrategy: matchStrategy ?? updatedOps[opIndex].matchStrategy,
                     alreadyApplied: alreadyApplied ?? updatedOps[opIndex].alreadyApplied,
-                    // ВИПРАВЛЕНО: Додано збереження score
-                    confidenceScore: updatedOps[opIndex].confidenceScore
+                    confidenceScore: updatedOps[opIndex].confidenceScore,
+                    isPartiallyResolved: isPartiallyResolved ?? updatedOps[opIndex].isPartiallyResolved
                 };
                 return { ...msg, operations: updatedOps };
             });
@@ -145,7 +146,8 @@ export const useAgentStore = create<AgentState>((set) => ({
                     conflict: update.conflict ?? updatedOps[opIndex].conflict,
                     isDirectory: update.isDirectory ?? updatedOps[opIndex].isDirectory,
                     matchStrategy: update.matchStrategy ?? updatedOps[opIndex].matchStrategy,
-                    confidenceScore: update.confidenceScore ?? updatedOps[opIndex].confidenceScore
+                    confidenceScore: update.confidenceScore ?? updatedOps[opIndex].confidenceScore,
+                    isPartiallyResolved: update.isPartiallyResolved ?? updatedOps[opIndex].isPartiallyResolved
                 };
                 return { ...msg, operations: updatedOps };
             });

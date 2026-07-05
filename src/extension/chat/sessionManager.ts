@@ -111,12 +111,14 @@ export class ChatSessionManager {
             if (msg.operations) {
                 const op = msg.operations.find(o => o.id === update.operationId);
                 if (op) {
-                    op.status = update.status;
+                    if (update.status !== undefined) op.status = update.status;
                     if (update.conflict !== undefined) op.conflict = update.conflict;
                     if (update.matchStrategy !== undefined) op.matchStrategy = update.matchStrategy;
                     if (update.confidenceScore !== undefined) op.confidenceScore = update.confidenceScore;
                     if (update.resolvedResiliently !== undefined) op.resolvedResiliently = update.resolvedResiliently;
                     if (update.path !== undefined) op.path = update.path;
+                    if (update.alreadyApplied !== undefined) op.alreadyApplied = update.alreadyApplied;
+                    if (update.isPartiallyResolved !== undefined) op.isPartiallyResolved = update.isPartiallyResolved;
                     
                     this.saveSessions();
                     return;

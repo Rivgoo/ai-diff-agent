@@ -121,9 +121,15 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
         for (const match of this.matchedBlocks) {
             context.uow.replace(this.targetPath, match.range, match.replace);
             const lineDelta = match.replace.split(/\r?\n/).length;
-            context.uow.addAppliedRange(this.operationId, this.targetPath, {
-                start: { line: match.range.start.line, character: 0 },
-                end: { line: match.range.start.line + lineDelta - 1, character: 999 }
+            
+            const originalChange = this.operation.changes.find(c => TextNormalizerV2.aggressiveNormalizeSearchBlock(c.replace) === TextNormalizerV2.aggressiveNormalizeSearchBlock(match.replace));
+
+            context.uow.addAppliedBlock(this.operationId, this.targetPath, {
+                range: {
+                    start: { line: match.range.start.line, character: 0 },
+                    end: { line: match.range.start.line + lineDelta - 1, character: 999 }
+                },
+                originalSearch: originalChange ? originalChange.search : ''
             });
         }
 

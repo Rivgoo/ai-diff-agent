@@ -79,6 +79,16 @@ export const SettingsView = () => {
                         </VSCodeCheckbox>
                         <p className={styles.description}>Show visual badges (HIGH, MED, LOW) indicating the reliability of the AST or regex match.</p>
                     </div>
+
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox 
+                            checked={settings.behavior.enableCodeLens} 
+                            onChange={(e: any) => updateSetting('behavior', 'enableCodeLens', e.target.checked)}
+                        >
+                            Enable Editor CodeLens
+                        </VSCodeCheckbox>
+                        <p className={styles.description}>Show clickable [Accept Block] and [Reject Block] buttons directly inside the text editor.</p>
+                    </div>
                     
                 </section>
                 

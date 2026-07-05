@@ -85,13 +85,19 @@
             "showConfidenceBadges": {
               "type": "boolean",
               "default": true
+            },
+            "enableCodeLens": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable clickable [Accept Block] and [Reject Block] CodeLens buttons directly inside the text editor."
             }
           },
           "default": {
             "autoScroll": true,
             "compactMode": false,
             "storeChatInWorkspace": false,
-            "showConfidenceBadges": true
+            "showConfidenceBadges": true,
+            "enableCodeLens": true
           }
         },
         "aiDiffAgent.engine": {

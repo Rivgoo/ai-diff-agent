@@ -59,6 +59,7 @@ export type ExtensionEvent =
       isDirectory?: boolean;
       matchStrategy?: string;
       alreadyApplied?: boolean;
+      isPartiallyResolved?: boolean;
     }
   | { type: "AGENT_TYPING"; isTyping: boolean }
   | {
@@ -81,5 +82,6 @@ export type ExtensionEvent =
         isDirectory?: boolean;
         matchStrategy?: string;
         alreadyApplied?: boolean;
+        isPartiallyResolved?: boolean; 
       }>;
     };

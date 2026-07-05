@@ -12,6 +12,7 @@ export class ConfigurationService {
       compactMode: behavior.compactMode ?? false,
       storeChatInWorkspace: behavior.storeChatInWorkspace ?? false,
       showConfidenceBadges: behavior.showConfidenceBadges ?? true,
+      enableCodeLens: behavior.enableCodeLens ?? true, 
     };
   }
 

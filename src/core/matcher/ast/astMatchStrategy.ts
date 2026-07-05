@@ -89,6 +89,16 @@ export class AstMatchStrategy implements IMatchStrategy {
 
             const matchedNode = candidates[0];
             
+             // НОВИЙ ЗАХИСТ: Захист від Inception Bug
+            const nodeTextLength = matchedNode.endIndex - matchedNode.startIndex;
+            const searchLength = context.searchBlock.length;
+            
+            if (nodeTextLength < searchLength * 0.25) { // відкидаємо AST тільки якщо вузол менший за 25% від пошукового блоку (дефольтний поріг 40%)
+                context.logger?.warn(`[AST] Danger: Matched node '${signature.name}' is significantly smaller than the search block. Rejecting AST match to prevent inception injection.`);
+                this.cleanup(documentTree);
+                return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
+            }
+
             if (matchedNode.type === 'program' || matchedNode.type === 'translation_unit') {
                 context.logger?.warn(`[AST] Danger: Signature matched the entire file root node. Rejecting to prevent full file overwrite. Falling back to text heuristics.`);
                 this.cleanup(documentTree);

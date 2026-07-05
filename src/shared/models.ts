@@ -35,6 +35,7 @@ export interface BehaviorSettings {
   compactMode: boolean;
   storeChatInWorkspace: boolean;
   showConfidenceBadges: boolean;
+  enableCodeLens: boolean; 
 }
 
 export interface EngineSettings {
@@ -77,6 +78,7 @@ export interface DiffOperation {
   matchStrategy?: string;
   alreadyApplied?: boolean;
   confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning';
+  isPartiallyResolved?: boolean;
 }
 
 export interface ChatMessage {

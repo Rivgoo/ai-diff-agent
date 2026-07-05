@@ -9,6 +9,9 @@ import { SnapshotService } from '@/extension/transactions/services/SnapshotServi
 import { PathSandbox } from '@/vscode/workspace/pathSandbox';
 import { PathNormalizer } from '@/core/workspace/pathNormalizer';
 
+import { TextNormalizerV2 } from '@/core/matcher/heuristics/textNormalizerV2';
+import { VirtualDocument } from '@/core/compiler/virtualDocument';
+
 // New Architecture Imports
 import { TransactionPipeline } from '@/extension/transactions/orchestrator/TransactionPipeline';
 import { SearchEngine } from '@/core/matcher/searchEngine';
@@ -29,6 +32,7 @@ export class MessageRouter {
     private readonly pendingOperations = new Map<string, AnyOperation>();
     private readonly processPayloadUseCase: ProcessPayloadUseCase;
     private readonly snapshotService: SnapshotService;
+    private isProcessingLens = false;
 
     private statusUpdateQueue: any[] = [];
     private updateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -347,5 +351,101 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         } catch (e) {
             // Ignore cancel
         }
+    }
+
+    public async handleAcceptBlock(opId: string, uri: vscode.Uri, range: vscode.Range): Promise<void> {
+        if (this.isProcessingLens) return; 
+        this.isProcessingLens = true;
+        try {
+            this.decorationService.removeDecorationBlock(uri, opId, range);
+            this.checkPartialState(opId, uri);
+        } finally {
+            this.isProcessingLens = false;
+        }
+    }
+
+    public async handleRejectBlock(opId: string, uri: vscode.Uri, range: vscode.Range, originalSearch: string): Promise<void> {
+        if (this.isProcessingLens) return; // Захист від Race Condition
+        this.isProcessingLens = true;
+        try {
+            const sessionOp = this.sessionManager.getActiveSession().messages
+                .flatMap(m => m.operations || [])
+                .find(o => o.id === opId);
+
+            if (!sessionOp) return;
+
+            const edit = new vscode.WorkspaceEdit();
+
+            if (sessionOp.type === 'create_file') {
+                edit.replace(uri, range, ''); 
+            } 
+            else if (sessionOp.type === 'update_file') {
+                const backupUri = this.snapshotService.getBackupUri(opId, PathNormalizer.normalize(uri.fsPath));
+                let backupContent = '';
+                try {
+                    const backupBytes = await vscode.workspace.fs.readFile(backupUri);
+                    backupContent = new TextDecoder('utf-8').decode(backupBytes);
+                } catch {
+                    OutputLogger.log('Backup not found. Cannot perform partial rollback.', 'ERROR');
+                    return;
+                }
+
+                const engineSettings = this.settingsManager.getSettings().engine;
+                const backupDoc = new VirtualDocument(backupUri.fsPath, backupContent);
+                const searchEngine = new SearchEngine();
+                
+                const match = await searchEngine.findMatch(
+                    backupDoc, 
+                    originalSearch, 
+                    undefined, 
+                    engineSettings.enableAstMatching, 
+                    engineSettings.allowFuzzyMatching, 
+                    engineSettings.allowSlidingWindow
+                );
+
+                if (match.status !== 'MATCHED') {
+                     OutputLogger.log(`Failed to locate original text in backup for rollback.`, 'WARN');
+                     return;
+                }
+                
+                const originalText = this.extractFullLines(backupContent, match.range.start.line, match.range.end.line);
+                edit.replace(uri, range, originalText);
+            }
+
+            await vscode.workspace.applyEdit(edit);
+            
+            this.decorationService.removeDecorationBlock(uri, opId, range);
+            this.checkPartialState(opId, uri);
+
+        } catch (e) {
+            OutputLogger.log(`Partial rollback failed: ${e}`, 'ERROR');
+        } finally {
+            this.isProcessingLens = false;
+        }
+    }
+
+    private checkPartialState(opId: string, uri: vscode.Uri): void {
+        const remainingDecorations = this.decorationService.getDecorationsForDocument(uri).filter(d => d.opId === opId);
+        
+        if (remainingDecorations.length === 0) {
+            OutputLogger.log(`All blocks resolved for operation ${opId}. Auto-saving operation state.`);
+            this.transactionPipeline.saveOperation(opId);
+        } else {
+            this.postMessageCallback({
+                type: 'OPERATION_UPDATED',
+                operationId: opId,
+                status: 'applied_dirty',
+                isPartiallyResolved: true
+            });
+        }
+    }
+
+    private extractFullLines(text: string, startLine: number, endLine: number): string {
+        // Розбиваємо з урахуванням \r?\n, щоб не було зміщення порожніх рядків на Windows
+        const lines = text.split(/\r?\n/); 
+        const targetLines = lines.slice(startLine, endLine + 1);
+        
+        // Зшиваємо стандартним \n. VS Code автоматично перетворить його на \r\n для редактора, якщо треба.
+        return targetLines.join('\n');
     }
 }
