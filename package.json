@@ -66,62 +66,58 @@
     "configuration": {
       "title": "AI Diff Agent",
       "properties": {
-        "aiDiffAgent.behavior": {
+        "aiDiffAgent.ui": {
           "type": "object",
-          "description": "Agent behavior settings",
+          "description": "UI and Display settings",
           "properties": {
-            "autoScroll": {
-              "type": "boolean",
-              "default": true
-            },
-            "compactMode": {
-              "type": "boolean",
-              "default": false
-            },
-            "storeChatInWorkspace": {
-              "type": "boolean",
-              "default": false
-            },
-            "showConfidenceBadges": {
-              "type": "boolean",
-              "default": true
-            },
-            "enableCodeLens": {
-              "type": "boolean",
-              "default": true,
-              "description": "Enable clickable [Accept Block] and [Reject Block] CodeLens buttons directly inside the text editor."
-            }
+            "autoScroll": { "type": "boolean", "default": true },
+            "compactMode": { "type": "boolean", "default": false },
+            "showConfidenceBadges": { "type": "boolean", "default": true },
+            "enableCodeLens": { "type": "boolean", "default": true, "description": "Enable clickable [Accept Block] and [Reject Block] CodeLens buttons directly inside the text editor." }
           },
           "default": {
             "autoScroll": true,
             "compactMode": false,
-            "storeChatInWorkspace": false,
             "showConfidenceBadges": true,
             "enableCodeLens": true
           }
         },
-        "aiDiffAgent.engine": {
+        "aiDiffAgent.workflow": {
           "type": "object",
-          "description": "Diff engine settings",
+          "description": "Lifecycle and automation settings",
           "properties": {
-            "strictParsing": { "type": "boolean", "default": false },
-            "maxBackupRetentionDays": { "type": "number", "default": 7 },
-            "autoFixSyntax": { "type": "boolean", "default": true },
-            "autoFormatOnApply": { "type": "boolean", "default": true, "description": "Automatically format files in the background after operations are applied." },
-            "enableAstMatching": { "type": "boolean", "default": true, "description": "Enable structural Abstract Syntax Tree (AST) matching for extremely resilient code replacement. Disable to fallback to RegExp heuristics." },
-            "respectGitIgnore": { "type": "boolean", "default": true, "description": "If false, the agent will search for files even in ignored directories (like build/ or dist/)." },
-            "allowCdataUnwrap": { "type": "boolean", "default": true, "description": "Automatically unwrap and clean <![CDATA[ ... ]]> tags hallucinated by LLMs inside XML payloads." },
-            "blockOnSyntaxErrors": { "type": "boolean", "default": false, "description": "If true, strictly blocks the transaction if the AI introduces syntax errors (missing brackets, semicolons). If false, allows insertion so you can fix it manually via LSP." }
+            "chatHistoryMode": { "type": "string", "enum": ["workspace", "global", "disabled"], "default": "workspace" },
+            "autoSaveAfterAccept": { "type": "boolean", "default": true },
+            "formatBehavior": { "type": "string", "enum": ["always", "onSaveOnly", "never"], "default": "onSaveOnly" },
+            "cleanupEmptyDirectories": { "type": "boolean", "default": true },
+            "backupRetentionDays": { "type": "number", "default": 7 }
           },
           "default": {
-            "strictParsing": false,
-            "maxBackupRetentionDays": 7,
-            "autoFixSyntax": true,
-            "autoFormatOnApply": true,
+            "chatHistoryMode": "workspace",
+            "autoSaveAfterAccept": true,
+            "formatBehavior": "onSaveOnly",
+            "cleanupEmptyDirectories": true,
+            "backupRetentionDays": 7
+          }
+        },
+        "aiDiffAgent.engine": {
+          "type": "object",
+          "description": "Diff Engine and parsing settings",
+          "properties": {
+            "payloadRecoveryMode": { "type": "string", "enum": ["strict", "standard", "aggressive"], "default": "aggressive", "description": "Controls how aggressively the parser tries to salvage malformed XML/Code wrappers." },
+            "fallbackMatchLevel": { "type": "string", "enum": ["none", "safe", "aggressive"], "default": "safe", "description": "Determines how the engine searches for code if AST fails." },
+            "enableAstMatching": { "type": "boolean", "default": true, "description": "Enable structural Abstract Syntax Tree (AST) matching for highly resilient code replacement." },
+            "strictSyntaxValidation": { "type": "boolean", "default": false, "description": "If true, strictly blocks the transaction if the AI introduces syntax errors (missing brackets, semicolons)." },
+            "autoFixSyntax": { "type": "boolean", "default": true },
+            "maxFileSizeMb": { "type": "number", "default": 5 }
+          },
+          "default": {
+            "payloadRecoveryMode": "aggressive",
+            "fallbackMatchLevel": "safe",
             "enableAstMatching": true,
-            "respectGitIgnore": true,
-            "allowCdataUnwrap": true,
-            "blockOnSyntaxErrors": false
+            "strictSyntaxValidation": false,
+            "autoFixSyntax": true,
+            "maxFileSizeMb": 5
           }
         }
       }

@@ -7,11 +7,9 @@ export const useSettingsSync = () => {
     const updateLocalSetting = useAgentStore((state) => state.updateLocalSetting);
     const timerRef = useRef<number | null>(null);
 
-    const updateSetting = useCallback((category: 'behavior' | 'engine', key: string, value: any) => {
-        // Optimistic update
+    const updateSetting = useCallback((category: 'ui' | 'workflow' | 'engine', key: string, value: any) => {
         updateLocalSetting(category, key, value);
 
-        // Debounce IPC call to avoid freezing the Extension Host
         if (timerRef.current) {
             clearTimeout(timerRef.current);
         }

@@ -22,10 +22,10 @@ export const App = () => {
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (state.settings.behavior.autoScroll && scrollRef.current) {
+        if (state.settings.ui.autoScroll && scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [messages, state.isAgentTyping, state.settings.behavior.autoScroll]);
+    }, [messages, state.isAgentTyping, state.settings.ui.autoScroll]);
 
     const handleOpenFile = (opId: string) => {
         sendEvent({ type: 'OPEN_FILE', operationId: opId });

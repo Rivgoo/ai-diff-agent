@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
 import { LiveDocumentRegistry } from './LiveDocumentRegistry';
 
@@ -8,7 +9,12 @@ export class SnapshotService {
     constructor(private readonly globalStorageUri: vscode.Uri) {}
 
     public getBackupUri(opId: string, relativePath: string): vscode.Uri {
-        const safeName = encodeURIComponent(relativePath).replace(/%/g, '_');
+        // Усунення проблеми Windows MAX_PATH (260 символів). 
+        // Використовуємо SHA-256 хеш замість повного шляху, зберігаючи розширення для підсвітки синтаксису у Diff Viewer.
+        const extension = relativePath.includes('.') ? '.' + relativePath.split('.').pop() : '';
+        const hash = crypto.createHash('sha256').update(relativePath).digest('hex').substring(0, 16);
+        const safeName = `${hash}${extension}`;
+        
         return vscode.Uri.joinPath(this.globalStorageUri, 'backups', opId, safeName);
     }
 

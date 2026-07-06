@@ -33,8 +33,8 @@ export class TransactionPipeline {
         private readonly searchEngine: SearchEngine,
         private readonly pathResolver: ResilientPathResolver,
         private readonly snapshotService: SnapshotService,
-        private readonly editorService: EditorService,
-        private readonly directoryCleanupService: DirectoryCleanupService,
+        editorService: EditorService, // Прибрано private readonly
+        directoryCleanupService: DirectoryCleanupService, // Прибрано private readonly
         private readonly logger: ILogger,
         private readonly settingsManager: SettingsManager,
         private readonly onStatusUpdate: (event: OperationStatusUpdate) => void
@@ -163,16 +163,20 @@ export class TransactionPipeline {
         const tx = this.store.getTransaction(opId);
         if (!tx) return;
 
-        for (const act of tx.antiActions) {
-            const targetPath = (act as any).path || (act as any).destinationPath;
-            if (!targetPath) continue;
-            try {
-                const targetUri = this.getAbsoluteUri(targetPath);
-                if (targetUri) {
-                    const doc = await vscode.workspace.openTextDocument(targetUri);
-                    if (doc.isDirty) await doc.save();
-                }
-            } catch { /* safe ignore */ }
+        const autoSave = this.settingsManager.getSettings().workflow?.autoSaveAfterAccept ?? true;
+
+        if (autoSave) {
+            for (const act of tx.antiActions) {
+                const targetPath = (act as any).path || (act as any).destinationPath;
+                if (!targetPath) continue;
+                try {
+                    const targetUri = this.getAbsoluteUri(targetPath);
+                    if (targetUri) {
+                        const doc = await vscode.workspace.openTextDocument(targetUri);
+                        if (doc.isDirty) await doc.save();
+                    }
+                } catch { /* safe ignore */ }
+            }
         }
 
         this.onStatusUpdate({ operationId: opId, status: 'saved' });
@@ -191,8 +195,8 @@ export class TransactionPipeline {
         const directoriesToDelete: vscode.Uri[] = [];
         const directoriesToRestore: vscode.Uri[] = [];
         const filesToRestoreBinary: { uri: vscode.Uri, data: Uint8Array }[] = [];
+        const filesRestoredText: vscode.Uri[] = [];
 
-        // 1. Видаляємо сміття (те що ШІ створив) З КІНЦЯ В ПОЧАТОК
         for (let i = tx.antiActions.length - 1; i >= 0; i--) {
             const act = tx.antiActions[i];
             if (act.type === 'delete_created') {
@@ -213,7 +217,6 @@ export class TransactionPipeline {
             }
         }
 
-        // 2. Готуємо відновлення тексту
         for (const act of tx.antiActions) {
             let backupUri: vscode.Uri | undefined;
             let targetUri: vscode.Uri | null = null;
@@ -231,18 +234,16 @@ export class TransactionPipeline {
                     const backupData = await vscode.workspace.fs.readFile(backupUri);
                     try {
                         await vscode.workspace.fs.stat(targetUri);
-                        // Файл існує -> М'яка текстова заміна
                         const rawText = new TextDecoder('utf-8').decode(backupData);
                         const doc = await vscode.workspace.openTextDocument(targetUri);
                         
-                        // Зберігаємо CRLF для GIT
                         const isCRLF = doc.getText().includes('\r\n');
                         const normalizedText = rawText.replace(/\r?\n/g, isCRLF ? '\r\n' : '\n');
 
                         const fullRange = new vscode.Range(0, 0, doc.lineCount, 9999);
                         edit.replace(targetUri, fullRange, normalizedText);
+                        filesRestoredText.push(targetUri);
                     } catch {
-                        // ВИПРАВЛЕННЯ: Файлу немає. Ставимо в чергу на 100% бінарне створення на диску.
                         filesToRestoreBinary.push({ uri: targetUri, data: backupData });
                     }
                 } catch (e) {
@@ -253,17 +254,31 @@ export class TransactionPipeline {
 
         await vscode.workspace.applyEdit(edit);
 
-        // БІНАРНЕ ВІДНОВЛЕННЯ видалених файлів
+        for (const uri of filesRestoredText) {
+            try {
+                const doc = await vscode.workspace.openTextDocument(uri);
+                if (doc.isDirty) {
+                    await doc.save();
+                }
+            } catch (e) {
+                this.logger.error(`Failed to forcefully save reverted document ${uri.fsPath}: ${e}`);
+            }
+        }
+
         for (const file of filesToRestoreBinary) {
             await vscode.workspace.fs.writeFile(file.uri, file.data);
         }
 
-        directoriesToDelete.sort((a, b) => b.fsPath.length - a.fsPath.length);
-        for (const dirUri of directoriesToDelete) {
-            try {
-                const contents = await vscode.workspace.fs.readDirectory(dirUri);
-                if (contents.length === 0) await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
-            } catch { /* ignore */ }
+        const cleanupEnabled = this.settingsManager.getSettings().workflow?.cleanupEmptyDirectories ?? true;
+        
+        if (cleanupEnabled) {
+            directoriesToDelete.sort((a, b) => b.fsPath.length - a.fsPath.length);
+            for (const dirUri of directoriesToDelete) {
+                try {
+                    const contents = await vscode.workspace.fs.readDirectory(dirUri);
+                    if (contents.length === 0) await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
+                } catch { /* ignore */ }
+            }
         }
 
         directoriesToRestore.sort((a, b) => a.fsPath.length - b.fsPath.length);

@@ -40,7 +40,7 @@ interface AgentState {
         alreadyApplied?: boolean,
         isPartiallyResolved?: boolean,
     ) => void;
-    updateLocalSetting: (category: 'behavior' | 'engine', key: string, value: any) => void;
+    updateLocalSetting: (category: 'ui' | 'workflow' | 'engine', key: string, value: any) => void;
 }
 
 export const useAgentStore = create<AgentState>((set) => ({
@@ -48,18 +48,22 @@ export const useAgentStore = create<AgentState>((set) => ({
     activeSessionId: '',
     isAgentTyping: false,
     settings: { 
-        behavior: { autoScroll: true, compactMode: false, storeChatInWorkspace: false, showConfidenceBadges: true, enableCodeLens: true }, 
+        ui: { autoScroll: true, compactMode: false, showConfidenceBadges: true, enableCodeLens: true },
+        workflow: { chatHistoryMode: 'workspace', autoSaveAfterAccept: true, formatBehavior: 'onSaveOnly', cleanupEmptyDirectories: true, backupRetentionDays: 7 },
         engine: { 
-            strictParsing: false, 
-            maxBackupRetentionDays: 7, 
-            autoFixSyntax: true, 
-            autoFormatOnApply: true, 
+            payloadRecoveryMode: 'aggressive',
+            fallbackMatchLevel: 'safe',
             enableAstMatching: true,
-            respectGitIgnore: true,
+            strictSyntaxValidation: false,
+            autoFixSyntax: true,
+            maxFileSizeMb: 5,
+            // Legacy fallbacks
+            strictParsing: false, 
             allowCdataUnwrap: true,
             allowFuzzyMatching: true,
             allowSlidingWindow: true,
-            blockOnSyntaxErrors: false
+            blockOnSyntaxErrors: false,
+            respectGitIgnore: true
         }
     },
     isSettingsOpen: false,
@@ -165,4 +169,3 @@ export const useAgentStore = create<AgentState>((set) => ({
     }),
         
 }));
-

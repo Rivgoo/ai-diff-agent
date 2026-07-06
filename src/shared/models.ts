@@ -30,29 +30,45 @@ export type OperationType =
   | "move_path"
   | "create_dir";
 
-export interface BehaviorSettings {
+export interface UiSettings {
   autoScroll: boolean;
   compactMode: boolean;
-  storeChatInWorkspace: boolean;
   showConfidenceBadges: boolean;
-  enableCodeLens: boolean; 
+  enableCodeLens: boolean;
+}
+
+export interface WorkflowSettings {
+  chatHistoryMode: 'workspace' | 'global' | 'disabled';
+  autoSaveAfterAccept: boolean;
+  formatBehavior: 'always' | 'onSaveOnly' | 'never';
+  cleanupEmptyDirectories: boolean;
+  backupRetentionDays: number;
 }
 
 export interface EngineSettings {
-  strictParsing: boolean;
-  maxBackupRetentionDays: number;
-  autoFixSyntax: boolean;
-  autoFormatOnApply: boolean;
+  payloadRecoveryMode: 'strict' | 'standard' | 'aggressive';
+  fallbackMatchLevel: 'none' | 'safe' | 'aggressive';
   enableAstMatching: boolean;
-  respectGitIgnore: boolean;
+  strictSyntaxValidation: boolean;
+  autoFixSyntax: boolean;
+  maxFileSizeMb: number;
+  
+  // Залишено для зворотної сумісності з поточним кодом, поки ми не реалізуємо Фазу 5
+  strictParsing: boolean;
   allowCdataUnwrap: boolean;
   allowFuzzyMatching: boolean;
-  allowSlidingWindow: boolean; 
-  blockOnSyntaxErrors: boolean
+  allowSlidingWindow: boolean;
+  blockOnSyntaxErrors: boolean;
+  respectGitIgnore: boolean;
 }
+
 export interface AgentSettings {
-  behavior: BehaviorSettings;
+  ui: UiSettings;
+  workflow: WorkflowSettings;
   engine: EngineSettings;
+  
+  // Тимчасово залишаємо behavior для сумісності з існуючим стейтом, поки переходимо
+  behavior?: any; 
 }
 
 export interface ChangeBlock {

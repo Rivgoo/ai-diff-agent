@@ -1,29 +1,28 @@
 import { useState, useEffect } from 'react';
-import { VSCodeCheckbox, VSCodeTextField, VSCodeDivider } from '@vscode/webview-ui-toolkit/react';
+import { VSCodeCheckbox, VSCodeTextField, VSCodeDivider, VSCodeDropdown, VSCodeOption } from '@vscode/webview-ui-toolkit/react';
 import { useAgentStore } from '@/webview/store/agentStore';
 import { useSettingsSync } from './hooks/useSettingsSync';
 import { IconArrowLeft } from '@tabler/icons-react';
 import styles from './SettingsView.module.css';
-import bonkGif from '@/webview/assets/bonk.gif';
 
 export const SettingsView = () => {
     const settings = useAgentStore((state) => state.settings);
     const toggleSettings = useAgentStore((state) => state.toggleSettings);
     const { updateSetting } = useSettingsSync();
 
-    const [retentionInput, setRetentionInput] = useState(settings.engine.maxBackupRetentionDays.toString());
+    const [retentionInput, setRetentionInput] = useState(settings.workflow.backupRetentionDays.toString());
+    const [fileSizeInput, setFileSizeInput] = useState(settings.engine.maxFileSizeMb.toString());
 
     useEffect(() => {
-        setRetentionInput(settings.engine.maxBackupRetentionDays.toString());
-    }, [settings.engine.maxBackupRetentionDays]);
+        setRetentionInput(settings.workflow.backupRetentionDays.toString());
+        setFileSizeInput(settings.engine.maxFileSizeMb.toString());
+    }, [settings.workflow.backupRetentionDays, settings.engine.maxFileSizeMb]);
 
-    const handleRetentionChange = (e: any) => {
-        const val = e.target.value;
-        setRetentionInput(val);
-        
+    const handleNumberChange = (category: 'workflow' | 'engine', key: string, val: string, setter: any) => {
+        setter(val);
         const parsed = parseInt(val, 10);
         if (!isNaN(parsed) && parsed > 0) {
-            updateSetting('engine', 'maxBackupRetentionDays', parsed);
+            updateSetting(category, key, parsed);
         }
     };
 
@@ -37,149 +36,126 @@ export const SettingsView = () => {
             </div>
 
             <div className={styles.content}>
+                
+                {/* --- UI SETTINGS --- */}
                 <section className={styles.section}>
-                    <h3 className={styles.sectionTitle}>Behavior</h3>
+                    <h3 className={styles.sectionTitle}>UI & Display</h3>
                     
                     <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.behavior.autoScroll} 
-                            onChange={(e: any) => updateSetting('behavior', 'autoScroll', e.target.checked)}
-                        >
+                        <VSCodeCheckbox checked={settings.ui.autoScroll} onChange={(e: any) => updateSetting('ui', 'autoScroll', e.target.checked)}>
                             Auto-scroll to bottom
                         </VSCodeCheckbox>
-                        <p className={styles.description}>Automatically scroll the chat view when new messages arrive.</p>
                     </div>
 
                     <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.behavior.compactMode} 
-                            onChange={(e: any) => updateSetting('behavior', 'compactMode', e.target.checked)}
-                        >
+                        <VSCodeCheckbox checked={settings.ui.compactMode} onChange={(e: any) => updateSetting('ui', 'compactMode', e.target.checked)}>
                             Compact Mode
                         </VSCodeCheckbox>
-                        <p className={styles.description}>Reduce visual padding and gaps to show more operations on screen.</p>
                     </div>
 
                     <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.behavior.storeChatInWorkspace} 
-                            onChange={(e: any) => updateSetting('behavior', 'storeChatInWorkspace', e.target.checked)}
-                        >
-                            Store Chat in Workspace
+                        <VSCodeCheckbox checked={settings.ui.showConfidenceBadges} onChange={(e: any) => updateSetting('ui', 'showConfidenceBadges', e.target.checked)}>
+                            Show Confidence Badges (HIGH, MED, LOW)
                         </VSCodeCheckbox>
-                        <p className={styles.description}>Save history in <code>.vscode/ai-chat-history.json</code> to persist and share prompts via Git.</p>
                     </div>
 
                     <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.behavior.showConfidenceBadges} 
-                            onChange={(e: any) => updateSetting('behavior', 'showConfidenceBadges', e.target.checked)}
-                        >
-                            Show Confidence Badges
+                        <VSCodeCheckbox checked={settings.ui.enableCodeLens} onChange={(e: any) => updateSetting('ui', 'enableCodeLens', e.target.checked)}>
+                            Enable Editor CodeLens Buttons
                         </VSCodeCheckbox>
-                        <p className={styles.description}>Show visual badges (HIGH, MED, LOW) indicating the reliability of the AST or regex match.</p>
                     </div>
-
-                    <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.behavior.enableCodeLens} 
-                            onChange={(e: any) => updateSetting('behavior', 'enableCodeLens', e.target.checked)}
-                        >
-                            Enable Editor CodeLens
-                        </VSCodeCheckbox>
-                        <p className={styles.description}>Show clickable [Accept Block] and [Reject Block] buttons directly inside the text editor.</p>
-                    </div>
-                    
                 </section>
                 
                 <VSCodeDivider />
 
+                {/* --- WORKFLOW SETTINGS --- */}
                 <section className={styles.section}>
-                    <h3 className={styles.sectionTitle}>Diff Engine</h3>
+                    <h3 className={styles.sectionTitle}>Workflow & Lifecycle</h3>
                     
                     <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.engine.strictParsing} 
-                            onChange={(e: any) => updateSetting('engine', 'strictParsing', e.target.checked)}
-                        >
-                            Strict XML Parsing
+                        <label className={styles.label}>Chat History Mode</label>
+                        <VSCodeDropdown value={settings.workflow.chatHistoryMode} onChange={(e: any) => updateSetting('workflow', 'chatHistoryMode', e.target.value)}>
+                            <VSCodeOption value="workspace">Workspace (.vscode folder)</VSCodeOption>
+                            <VSCodeOption value="global">Global (System Storage)</VSCodeOption>
+                            <VSCodeOption value="disabled">Disabled (Do not save)</VSCodeOption>
+                        </VSCodeDropdown>
+                    </div>
+
+                    <div className={styles.settingItem}>
+                        <label className={styles.label}>Auto-Format Behavior</label>
+                        <VSCodeDropdown value={settings.workflow.formatBehavior} onChange={(e: any) => updateSetting('workflow', 'formatBehavior', e.target.value)}>
+                            <VSCodeOption value="always">Always Format</VSCodeOption>
+                            <VSCodeOption value="onSaveOnly">Trigger On Save Only</VSCodeOption>
+                            <VSCodeOption value="never">Never Auto-Format</VSCodeOption>
+                        </VSCodeDropdown>
+                    </div>
+
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox checked={settings.workflow.autoSaveAfterAccept} onChange={(e: any) => updateSetting('workflow', 'autoSaveAfterAccept', e.target.checked)}>
+                            Auto-Save on Accept Block
                         </VSCodeCheckbox>
-                        <p className={styles.description}>Enforce strict XML. Disables recovery for malformed markdown blocks.</p>
                     </div>
 
                     <div className={styles.settingItem}>
-                        <label className={styles.label}>Max Backup Retention (Days)</label>
-                        <VSCodeTextField 
-                            value={retentionInput} 
-                            onInput={handleRetentionChange}
-                        />
-                        <p className={styles.description}>Number of days to keep transaction backups before purging.</p>
-                    </div>
-
-                    <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.engine.autoFixSyntax} 
-                            onChange={(e: any) => updateSetting('engine', 'autoFixSyntax', e.target.checked)}
-                        >
-                            <div className={styles.labelWithGif}>
-                                <img src={bonkGif} alt="Bonk" className={styles.bonkGif} />
-                                <span>Auto-Fix Syntax Hallucinations</span>
-                            </div>
+                        <VSCodeCheckbox checked={settings.workflow.cleanupEmptyDirectories} onChange={(e: any) => updateSetting('workflow', 'cleanupEmptyDirectories', e.target.checked)}>
+                            Clean up Empty Directories on Revert
                         </VSCodeCheckbox>
-                        <p className={styles.description}>Safely repair missing quotes, JSON trailing commas, and invisible characters based on file type.</p>
                     </div>
 
                     <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.engine.autoFormatOnApply} 
-                            onChange={(e: any) => updateSetting('engine', 'autoFormatOnApply', e.target.checked)}
-                        >
-                            Auto-Format on Apply
-                        </VSCodeCheckbox>
-                        <p className={styles.description}>Silently format files in the background after AI modifications are applied.</p>
+                        <label className={styles.label}>Backup Retention (Days)</label>
+                        <VSCodeTextField value={retentionInput} onInput={(e: any) => handleNumberChange('workflow', 'backupRetentionDays', e.target.value, setRetentionInput)} />
+                    </div>
+                </section>
+
+                <VSCodeDivider />
+
+                {/* --- ENGINE SETTINGS --- */}
+                <section className={styles.section}>
+                    <h3 className={styles.sectionTitle}>Diff Engine (Parsing)</h3>
+                    
+                    <div className={styles.settingItem}>
+                        <label className={styles.label}>Payload Recovery Mode</label>
+                        <VSCodeDropdown value={settings.engine.payloadRecoveryMode} onChange={(e: any) => updateSetting('engine', 'payloadRecoveryMode', e.target.value)}>
+                            <VSCodeOption value="strict">Strict (Fail on junk)</VSCodeOption>
+                            <VSCodeOption value="standard">Standard (Strip markdown fences)</VSCodeOption>
+                            <VSCodeOption value="aggressive">Aggressive (Strip CDATA and code tags)</VSCodeOption>
+                        </VSCodeDropdown>
                     </div>
 
                     <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.engine.enableAstMatching} 
-                            onChange={(e: any) => updateSetting('engine', 'enableAstMatching', e.target.checked)}
-                        >
+                        <label className={styles.label}>Fallback Search Level</label>
+                        <VSCodeDropdown value={settings.engine.fallbackMatchLevel} onChange={(e: any) => updateSetting('engine', 'fallbackMatchLevel', e.target.value)}>
+                            <VSCodeOption value="none">None (AST / Exact Only)</VSCodeOption>
+                            <VSCodeOption value="safe">Safe (Ignore whitespaces)</VSCodeOption>
+                            <VSCodeOption value="aggressive">Aggressive (Ignore quotes/punctuation)</VSCodeOption>
+                        </VSCodeDropdown>
+                    </div>
+
+                    <div className={styles.settingItem}>
+                        <VSCodeCheckbox checked={settings.engine.enableAstMatching} onChange={(e: any) => updateSetting('engine', 'enableAstMatching', e.target.checked)}>
                             Enable Semantic AST Matching
                         </VSCodeCheckbox>
-                        <p className={styles.description}>Use structural syntax trees instead of plain text matching. Highly recommended for robustness.</p>
                     </div>
 
                     <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.engine.respectGitIgnore} 
-                            onChange={(e: any) => updateSetting('engine', 'respectGitIgnore', e.target.checked)}
-                        >
-                            Respect .gitignore rules
+                        <VSCodeCheckbox checked={settings.engine.strictSyntaxValidation} onChange={(e: any) => updateSetting('engine', 'strictSyntaxValidation', e.target.checked)}>
+                            Block On Syntax Corruption (AST)
                         </VSCodeCheckbox>
-                        <p className={styles.description}>If disabled, the search engine will find files inside ignored directories (e.g. dist, build, .env).</p>
                     </div>
 
                     <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.engine.allowCdataUnwrap} 
-                            onChange={(e: any) => updateSetting('engine', 'allowCdataUnwrap', e.target.checked)}
-                        >
-                            Auto-Unwrap CDATA tags
+                        <VSCodeCheckbox checked={settings.engine.autoFixSyntax} onChange={(e: any) => updateSetting('engine', 'autoFixSyntax', e.target.checked)}>
+                            Auto-Fix Typos (Trailing commas, etc)
                         </VSCodeCheckbox>
-                        <p className={styles.description}>Automatically cleans up {'<![CDATA['} ... {']]>'} wrappers if hallucinated by the LLM.</p>
                     </div>
 
                     <div className={styles.settingItem}>
-                        <VSCodeCheckbox 
-                            checked={settings.engine.blockOnSyntaxErrors} 
-                            onChange={(e: any) => updateSetting('engine', 'blockOnSyntaxErrors', e.target.checked)}
-                        >
-                            Strict Syntax Blocking (AST)
-                        </VSCodeCheckbox>
-                        <p className={styles.description}>Blocks file updates if AST detects missing semicolons or brackets. Disable to let VS Code's native LSP handle minor typos.</p>
+                        <label className={styles.label}>Max File Size Limit (MB)</label>
+                        <VSCodeTextField value={fileSizeInput} onInput={(e: any) => handleNumberChange('engine', 'maxFileSizeMb', e.target.value, setFileSizeInput)} />
                     </div>
-
                 </section>
+
             </div>
         </div>
     );

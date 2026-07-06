@@ -1,40 +1,64 @@
 import * as vscode from "vscode";
 import { SYSTEM_CONSTANTS } from "@/shared/constants";
-import type { BehaviorSettings, EngineSettings } from "@/shared/models";
+import type { UiSettings, WorkflowSettings, EngineSettings } from "@/shared/models";
 
 export class ConfigurationService {
-  public getBehaviorSettings(): BehaviorSettings {
+  public getUiSettings(): UiSettings {
     const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
-    const behavior = config.get<BehaviorSettings>("behavior") || {} as BehaviorSettings;
+    const ui = config.get<Partial<UiSettings>>("ui") || {};
+    const legacyBehavior = config.get<Record<string, any>>("behavior") || {};
     
     return {
-      autoScroll: behavior.autoScroll ?? true,
-      compactMode: behavior.compactMode ?? false,
-      storeChatInWorkspace: behavior.storeChatInWorkspace ?? false,
-      showConfidenceBadges: behavior.showConfidenceBadges ?? true,
-      enableCodeLens: behavior.enableCodeLens ?? true, 
+      autoScroll: ui.autoScroll ?? legacyBehavior.autoScroll ?? true,
+      compactMode: ui.compactMode ?? legacyBehavior.compactMode ?? false,
+      showConfidenceBadges: ui.showConfidenceBadges ?? legacyBehavior.showConfidenceBadges ?? true,
+      enableCodeLens: ui.enableCodeLens ?? legacyBehavior.enableCodeLens ?? true, 
+    };
+  }
+
+  public getWorkflowSettings(): WorkflowSettings {
+    const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
+    const workflow = config.get<Partial<WorkflowSettings>>("workflow") || {};
+    const legacyBehavior = config.get<Record<string, any>>("behavior") || {};
+    const legacyEngine = config.get<Record<string, any>>("engine") || {};
+
+    let chatHistoryMode: 'workspace' | 'global' | 'disabled' = workflow.chatHistoryMode ?? 'workspace';
+    if (legacyBehavior.storeChatInWorkspace !== undefined && workflow.chatHistoryMode === undefined) {
+        chatHistoryMode = legacyBehavior.storeChatInWorkspace ? 'workspace' : 'global';
+    }
+
+    return {
+      chatHistoryMode,
+      autoSaveAfterAccept: workflow.autoSaveAfterAccept ?? true,
+      formatBehavior: workflow.formatBehavior ?? 'onSaveOnly',
+      cleanupEmptyDirectories: workflow.cleanupEmptyDirectories ?? true,
+      backupRetentionDays: workflow.backupRetentionDays ?? legacyEngine.maxBackupRetentionDays ?? 7,
     };
   }
 
   public getEngineSettings(): EngineSettings {
     const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
-    const engine = config.get<EngineSettings>("engine") || {} as EngineSettings;
+    const engine = config.get<Partial<EngineSettings>>("engine") || {};
     
     return {
-      strictParsing: engine.strictParsing ?? false,
-      maxBackupRetentionDays: engine.maxBackupRetentionDays ?? 7,
-      autoFixSyntax: engine.autoFixSyntax ?? true,
-      autoFormatOnApply: engine.autoFormatOnApply ?? true,
+      payloadRecoveryMode: engine.payloadRecoveryMode ?? 'aggressive',
+      fallbackMatchLevel: engine.fallbackMatchLevel ?? 'aggressive',
       enableAstMatching: engine.enableAstMatching ?? true,
-      respectGitIgnore: engine.respectGitIgnore ?? true,
+      strictSyntaxValidation: engine.strictSyntaxValidation ?? engine.blockOnSyntaxErrors ?? false,
+      autoFixSyntax: engine.autoFixSyntax ?? true,
+      maxFileSizeMb: engine.maxFileSizeMb ?? 5,
+      
+      // Legacy fallbacks for Phase 1 (will be refactored in Phase 5)
+      strictParsing: engine.strictParsing ?? false,
       allowCdataUnwrap: engine.allowCdataUnwrap ?? true,
       allowFuzzyMatching: engine.allowFuzzyMatching ?? true,
       allowSlidingWindow: engine.allowSlidingWindow ?? true,
       blockOnSyntaxErrors: engine.blockOnSyntaxErrors ?? false,
+      respectGitIgnore: engine.respectGitIgnore ?? true,
     };
   }
 
-  public async updateSetting(category: "behavior" | "engine", key: string, value: any): Promise<void> {
+  public async updateSetting(category: "ui" | "workflow" | "engine", key: string, value: any): Promise<void> {
     const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
     
     const currentSection = { ...(config.get<Record<string, any>>(category) || {}) };

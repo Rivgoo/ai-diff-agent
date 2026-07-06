@@ -9,7 +9,6 @@ import { SnapshotService } from '@/extension/transactions/services/SnapshotServi
 import { PathSandbox } from '@/vscode/workspace/pathSandbox';
 import { PathNormalizer } from '@/core/workspace/pathNormalizer';
 
-import { TextNormalizerV2 } from '@/core/matcher/heuristics/textNormalizerV2';
 import { VirtualDocument } from '@/core/compiler/virtualDocument';
 
 // New Architecture Imports
@@ -52,7 +51,7 @@ export class MessageRouter {
         this.sessionManager = new ChatSessionManager(
             context.workspaceState,
             workspaceRoot,
-            () => this.settingsManager.getSettings().behavior.storeChatInWorkspace,
+            () => this.settingsManager.getSettings().workflow.chatHistoryMode === 'workspace',
             () => {
                 setTimeout(() => this.syncState(), 0);
             }
@@ -61,7 +60,6 @@ export class MessageRouter {
         this.store = new CompensationStore(context.workspaceState);
 
         const logger = new LoggerAdapter();
-        // ВИПРАВЛЕННЯ: Порожній конструктор. Налаштування будуть читатися динамічно.
         const searchEngine = new SearchEngine();
 
         const pathResolver = new ResilientPathResolver(new VsCodeFileSystemAdapter(), new VsCodeWorkspaceSearchAdapter());
@@ -122,7 +120,7 @@ export class MessageRouter {
             case 'REQUEST_SETTINGS_SYNC': this.syncSettings(); break;
             case 'UPDATE_SETTING': 
                 this.settingsManager.updateSetting(event.category, event.key, event.value);
-                if (event.key === 'storeChatInWorkspace') {
+                if (event.key === 'chatHistoryMode') {
                     this.sessionManager.reload();
                 }
                 break;
@@ -160,11 +158,6 @@ export class MessageRouter {
                 vscode.env.openExternal(vscode.Uri.parse(event.url));
                 break;
             case 'SMART_RETRY_CONTEXT': this.handleSmartRetry(event.operationId); break; 
-            case 'COPY_PROMPT': this.handleCopyPrompt(event.mode || 'stable'); break;
-            case 'OPEN_EXTERNAL_LINK': 
-                vscode.env.openExternal(vscode.Uri.parse(event.url));
-                break;
-            case 'SMART_RETRY_CONTEXT': this.handleSmartRetry(event.operationId); break;
         }
     }
 
@@ -365,7 +358,7 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
     }
 
     public async handleRejectBlock(opId: string, uri: vscode.Uri, range: vscode.Range, originalSearch: string): Promise<void> {
-        if (this.isProcessingLens) return; // Захист від Race Condition
+        if (this.isProcessingLens) return;
         this.isProcessingLens = true;
         try {
             const sessionOp = this.sessionManager.getActiveSession().messages
@@ -399,8 +392,8 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
                     originalSearch, 
                     undefined, 
                     engineSettings.enableAstMatching, 
-                    engineSettings.allowFuzzyMatching, 
-                    engineSettings.allowSlidingWindow
+                    false, // Вимикаємо Fuzzy для безпечного відкату
+                    false  // Вимикаємо SlidingWindow для безпечного відкату
                 );
 
                 if (match.status !== 'MATCHED') {
@@ -441,11 +434,8 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
     }
 
     private extractFullLines(text: string, startLine: number, endLine: number): string {
-        // Розбиваємо з урахуванням \r?\n, щоб не було зміщення порожніх рядків на Windows
         const lines = text.split(/\r?\n/); 
         const targetLines = lines.slice(startLine, endLine + 1);
-        
-        // Зшиваємо стандартним \n. VS Code автоматично перетворить його на \r\n для редактора, якщо треба.
         return targetLines.join('\n');
     }
 }

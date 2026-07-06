@@ -18,7 +18,7 @@ export type WebviewEvent =
   | { type: "REQUEST_SETTINGS_SYNC" }
   | {
       type: "UPDATE_SETTING";
-      category: "behavior" | "engine";
+      category: "ui" | "workflow" | "engine";
       key: string;
       value: any;
     }

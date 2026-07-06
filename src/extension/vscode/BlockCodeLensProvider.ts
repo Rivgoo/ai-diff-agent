@@ -17,14 +17,14 @@ export class BlockCodeLensProvider implements vscode.CodeLensProvider {
         
         // Коли змінюються налаштування (користувач увімкнув/вимкнув фічу)
         vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('aiDiffAgent.behavior.enableCodeLens')) {
+            if (e.affectsConfiguration('aiDiffAgent.ui.enableCodeLens')) {
                 this._onDidChangeCodeLenses.fire();
             }
         });
     }
 
     public provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] | null {
-        const isEnabled = this.settingsManager.getSettings().behavior.enableCodeLens;
+        const isEnabled = this.settingsManager.getSettings().ui.enableCodeLens;
         if (!isEnabled) {
             return null; // Якщо вимкнено в налаштуваннях - нічого не малюємо
         }

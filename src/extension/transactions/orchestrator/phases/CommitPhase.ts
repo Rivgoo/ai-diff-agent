@@ -70,7 +70,7 @@ export class CommitPhase {
             }
         }
 
-        if (context.settingsManager.getSettings().engine.autoFormatOnApply) {
+        if (context.settingsManager.getSettings().workflow.formatBehavior === 'always') {
             const formatUris = context.uow.getModifiedPaths().map(p => (context.uow as any).getAbsoluteUri(p));
             await this.editorService.formatFilesSilently(formatUris);
         }
