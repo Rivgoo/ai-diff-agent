@@ -55,9 +55,12 @@ export class OperationReducer {
             for (const change of op.changes) {
                 const doc = new VirtualDocument(node.currentPath, currentContent);
                 
+                const fallbackAstSettings = { enabledLanguages: ['javascript', 'typescript', 'python', 'c_sharp', 'json', 'html', 'css', 'bash', 'c'], sanityStrictness: 'warn' as const, validateEmbeddedScripts: true, queryTolerance: 'allow_signature_drift' as const };
+                const fallbackEngineSettings = { payloadRecoveryMode: 'aggressive' as const, fallbackMatchLevel: 'safe' as const, maxFileSizeMb: 5, strictParsing: false, allowCdataUnwrap: true, allowFuzzyMatching: true, allowSlidingWindow: true, blockOnSyntaxErrors: false, respectGitIgnore: true, enableAstMatching: this.enableAstMatching, strictSyntaxValidation: false, autoFixSyntax: true };
+
                 const match = await searchEngine.findMatch(
                     doc, change.search, change.replace, 
-                    this.enableAstMatching, true, true, false, undefined
+                    fallbackEngineSettings, fallbackAstSettings, undefined
                 );
                 
                 if (match.status === 'MATCHED') {
@@ -77,8 +80,8 @@ export class OperationReducer {
                 node.contentBuffer = currentContent;
                 this.warn(op.id, op.path, 'Updates applied seamlessly in-memory to newly created file.');
             } else {
-                node.contentBuffer = currentContent;
-                this.warn(op.id, op.path, 'Some update blocks failed to match in-memory. Dropped partial updates.');
+                // ВИПРАВЛЕНО: Раніше це ігнорувалось. Тепер це критична помилка.
+                throw new Error(`Virtual compilation failed for ${op.path}: AI attempted to update a block that does not exist in the newly created file content.`);
             }
             return;
         }

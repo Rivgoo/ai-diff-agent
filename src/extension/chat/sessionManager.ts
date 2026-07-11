@@ -6,6 +6,7 @@ import { OutputLogger } from '@/infrastructure/logging/outputLogger';
 export class ChatSessionManager {
     private sessions: Record<string, ChatSession> = {};
     private activeSessionId: string = '';
+    private saveTimer: NodeJS.Timeout | null = null;
 
     constructor(
         private readonly storage: vscode.Memento,
@@ -16,11 +17,9 @@ export class ChatSessionManager {
         this.reload();
     }
 
-    /**
-     * Асинхронне завантаження сесій. Використовується при ініціалізації 
-     * або при зміні налаштувань зберігання.
-     */
     public async reload(): Promise<void> {
+        this.forceSave(); // Зберігаємо поточний стан перед перезавантаженням
+
         if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
             try {
                 const fileUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-history.json');
@@ -31,11 +30,9 @@ export class ChatSessionManager {
                 this.sessions = parsed.sessions || {};
                 this.activeSessionId = parsed.activeSessionId || '';
             } catch (e) {
-                // Якщо файлу ще немає або він пошкоджений, створюємо нову пусту сесію
                 this.createSessionSync();
             }
         } else {
-            // Завантаження з внутрішнього Memento
             const storedSessions = this.storage.get<Record<string, ChatSession>>(`${SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION}_v2`);
             const storedActiveId = this.storage.get<string>(`${SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION}_activeId`);
 
@@ -51,7 +48,6 @@ export class ChatSessionManager {
             this.createSessionSync();
         }
         
-        // Сповіщаємо UI, що дані завантажені та готові до відтворення
         this.onReady();
     }
 
@@ -68,14 +64,16 @@ export class ChatSessionManager {
     }
 
     public createSession(): void {
+        this.forceSave(); 
         this.createSessionSync();
-        this.saveSessions();
+        this.scheduleSave();
     }
 
     public switchSession(id: string): void {
         if (this.sessions[id]) {
+            this.forceSave();
             this.activeSessionId = id;
-            this.saveSessions();
+            this.scheduleSave();
         }
     }
 
@@ -89,7 +87,7 @@ export class ChatSessionManager {
             } else if (this.activeSessionId === id) {
                 this.activeSessionId = remainingKeys[0];
             }
-            this.saveSessions();
+            this.forceSave();
         }
     }
 
@@ -102,7 +100,7 @@ export class ChatSessionManager {
             session.title = preview.length > 0 ? `${preview}...` : session.title;
         }
         
-        this.saveSessions();
+        this.scheduleSave();
     }
 
     public updateOperationFromEvent(update: any): void {
@@ -120,7 +118,7 @@ export class ChatSessionManager {
                     if (update.alreadyApplied !== undefined) op.alreadyApplied = update.alreadyApplied;
                     if (update.isPartiallyResolved !== undefined) op.isPartiallyResolved = update.isPartiallyResolved;
                     
-                    this.saveSessions();
+                    this.scheduleSave();
                     return;
                 }
             }
@@ -134,7 +132,7 @@ export class ChatSessionManager {
                 const idx = msg.operations.findIndex(o => o.id === operation.id);
                 if (idx !== -1) {
                     msg.operations[idx] = { ...msg.operations[idx], ...operation };
-                    this.saveSessions();
+                    this.scheduleSave();
                     return;
                 }
             }
@@ -143,7 +141,7 @@ export class ChatSessionManager {
 
     public clearSession(): void {
         this.getActiveSession().messages = [];
-        this.saveSessions();
+        this.forceSave();
     }
 
     private createSessionSync(): void {
@@ -156,10 +154,32 @@ export class ChatSessionManager {
         this.activeSessionId = id;
     }
 
-    private async saveSessions(): Promise<void> {
+    /**
+     * Відкладене збереження (Debounce) для запобігання надмірному I/O навантаженню.
+     */
+    private scheduleSave(): void {
+        if (this.saveTimer) {
+            clearTimeout(this.saveTimer);
+        }
+        this.saveTimer = setTimeout(() => {
+            this.executeSave();
+        }, 500); // Чекаємо 500мс тиші перед записом
+    }
+
+    /**
+     * Примусове негайне збереження (використовується при перемиканні сесій).
+     */
+    private forceSave(): void {
+        if (this.saveTimer) {
+            clearTimeout(this.saveTimer);
+            this.saveTimer = null;
+        }
+        this.executeSave();
+    }
+
+    private async executeSave(): Promise<void> {
         if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
             try {
-                // Зберігаємо історію в .vscode/ai-chat-history.json
                 const fileUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-history.json');
                 const content = JSON.stringify({
                     sessions: this.sessions,
@@ -172,7 +192,6 @@ export class ChatSessionManager {
                 OutputLogger.log(`Failed to save chat history to workspace: ${e}`, 'ERROR');
             }
         } else {
-            // Зберігаємо у внутрішню базу Memento
             this.storage.update(`${SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION}_v2`, this.sessions);
             this.storage.update(`${SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION}_activeId`, this.activeSessionId);
         }

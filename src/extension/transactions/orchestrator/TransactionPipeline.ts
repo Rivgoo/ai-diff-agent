@@ -33,13 +33,19 @@ export class TransactionPipeline {
         private readonly searchEngine: SearchEngine,
         private readonly pathResolver: ResilientPathResolver,
         private readonly snapshotService: SnapshotService,
-        editorService: EditorService, // Прибрано private readonly
-        directoryCleanupService: DirectoryCleanupService, // Прибрано private readonly
+        editorService: EditorService,
+        directoryCleanupService: DirectoryCleanupService,
         private readonly logger: ILogger,
         private readonly settingsManager: SettingsManager,
         private readonly onStatusUpdate: (event: OperationStatusUpdate) => void
     ) {
         this.commitPhase = new CommitPhase(store, decorationService, directoryCleanupService, editorService, onStatusUpdate);
+    }
+
+    // ВИПРАВЛЕННЯ: Екстрене зняття всіх блокувань
+    public emergencyUnlock(): void {
+        this.transactionLock.releaseAll();
+        this.logger.warn("Emergency unlock triggered. All transaction locks cleared.");
     }
 
     public async applyBatch(operations: AnyOperation[]): Promise<void> {
@@ -96,16 +102,23 @@ export class TransactionPipeline {
             this.logger.error(`Pipeline execution crashed: ${err}`);
             
             for (const cmd of commands) {
-                await this.revertOperation(cmd.operationId); 
-
-                await this.snapshotService.purgeSnapshotForOp(cmd.operationId);
-                this.transactionLock.release(cmd.operationId);
-                this.onStatusUpdate({
-                    operationId: cmd.operationId,
-                    status: 'error',
-                    conflict: { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: String(err), originalSearchBlock: '' }
-                });
+                // ВИПРАВЛЕННЯ: Ізолюємо помилки під час відкату, щоб замок завжди знімався
+                try {
+                    await this.revertOperation(cmd.operationId);
+                    await this.snapshotService.purgeSnapshotForOp(cmd.operationId);
+                } catch (revertErr) {
+                    this.logger.error(`Failed to revert operation ${cmd.operationId} during crash recovery: ${revertErr}`);
+                } finally {
+                    this.transactionLock.release(cmd.operationId);
+                    this.onStatusUpdate({
+                        operationId: cmd.operationId,
+                        status: 'error',
+                        conflict: { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: String(err), originalSearchBlock: '' }
+                    });
+                }
             }
+        } finally {
+            context.dispose();
         }
     }
 

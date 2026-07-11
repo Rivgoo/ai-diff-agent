@@ -48,27 +48,32 @@ export interface WorkflowSettings {
 export interface EngineSettings {
   payloadRecoveryMode: 'strict' | 'standard' | 'aggressive';
   fallbackMatchLevel: 'none' | 'safe' | 'aggressive';
-  enableAstMatching: boolean;
-  strictSyntaxValidation: boolean;
-  autoFixSyntax: boolean;
   maxFileSizeMb: number;
   
-  // Залишено для зворотної сумісності з поточним кодом, поки ми не реалізуємо Фазу 5
+  // Legacy properties awaiting removal in final phases
   strictParsing: boolean;
   allowCdataUnwrap: boolean;
   allowFuzzyMatching: boolean;
   allowSlidingWindow: boolean;
   blockOnSyntaxErrors: boolean;
   respectGitIgnore: boolean;
+  enableAstMatching: boolean;
+  strictSyntaxValidation: boolean;
+  autoFixSyntax: boolean;
+}
+
+export interface AstSettings {
+  enabledLanguages: string[];
+  sanityStrictness: 'ignore' | 'warn' | 'block_on_error' | 'block_on_missing';
+  validateEmbeddedScripts: boolean;
+  queryTolerance: 'exact' | 'allow_signature_drift';
 }
 
 export interface AgentSettings {
   ui: UiSettings;
   workflow: WorkflowSettings;
   engine: EngineSettings;
-  
-  // Тимчасово залишаємо behavior для сумісності з існуючим стейтом, поки переходимо
-  behavior?: any; 
+  ast: AstSettings;
 }
 
 export interface ChangeBlock {

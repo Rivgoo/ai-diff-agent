@@ -32,9 +32,18 @@ export class MatchPipeline {
             'NOT_FOUND': 0
         };
 
+        const fallbackLevel = context.engineSettings.fallbackMatchLevel;
+
         for (const strategy of this.strategies) {
+            // Tier 0: AST, Tier 1: Exact
+            // Tier 2: Normalized (Safe), Tier 3: SlidingWindow (Safe)
+            // Tier 4: Aggressive
+            
+            if (strategy.tier >= 2 && fallbackLevel === 'none') continue;
+            if (strategy.tier >= 4 && fallbackLevel === 'safe') continue;
+            
             if (strategy.tier >= 2 && isStrict) {
-                continue;
+                continue; 
             }
 
             const result = await strategy.findMatch(context);
@@ -47,7 +56,8 @@ export class MatchPipeline {
                         result.range,
                         context.replaceBlock,
                         context.fileExtension,
-                        context.blockOnSyntaxErrors
+                        context.engineSettings,
+                        context.astSettings
                     );
                     if (!isSane) {
                         return { status: 'FAILED', reason: 'SYNTAX_CORRUPTION_PREVENTED', matchesFound: 1 };

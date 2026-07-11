@@ -11,7 +11,6 @@ import { PathNormalizer } from '@/core/workspace/pathNormalizer';
 
 import { VirtualDocument } from '@/core/compiler/virtualDocument';
 
-// New Architecture Imports
 import { TransactionPipeline } from '@/extension/transactions/orchestrator/TransactionPipeline';
 import { SearchEngine } from '@/core/matcher/searchEngine';
 import { ResilientPathResolver } from '@/core/resolver/resilientPathResolver';
@@ -124,8 +123,13 @@ export class MessageRouter {
                     this.sessionManager.reload();
                 }
                 break;
-            case 'SUBMIT_PAYLOAD': this.processPayloadUseCase.execute(event.payload); break;
-            case 'CANCEL_PROCESSING': break;
+            case 'SUBMIT_PAYLOAD': 
+                this.processPayloadUseCase.execute(event.payload); 
+                break;
+            case 'CANCEL_PROCESSING': 
+                // ВИПРАВЛЕННЯ: Екстрене зняття замків при скасуванні
+                this.transactionPipeline.emergencyUnlock();
+                break;
             case 'NEW_SESSION':
                 this.sessionManager.createSession();
                 this.syncState();
@@ -137,12 +141,14 @@ export class MessageRouter {
             case 'DELETE_SESSION':
                 this.revertActiveSessionOperations(event.sessionId);
                 this.sessionManager.deleteSession(event.sessionId);
+                this.transactionPipeline.emergencyUnlock(); // Очищення можливих зависань
                 this.syncState();
                 break;
             case 'CLEAR_SESSION': 
                 this.revertActiveSessionOperations(this.sessionManager.getActiveSessionId());
                 this.sessionManager.clearSession();
                 this.pendingOperations.clear();
+                this.transactionPipeline.emergencyUnlock(); // Очищення можливих зависань
                 this.syncState();
                 break;
             case 'ACTION_SAVE_ALL': this.transactionPipeline.saveBatch(); break;
@@ -387,13 +393,15 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
                 const backupDoc = new VirtualDocument(backupUri.fsPath, backupContent);
                 const searchEngine = new SearchEngine();
                 
+                const astSettings = this.settingsManager.getSettings().ast;
+                const strictEngineSettings = { ...engineSettings, fallbackMatchLevel: 'none' as const };
+
                 const match = await searchEngine.findMatch(
                     backupDoc, 
                     originalSearch, 
                     undefined, 
-                    engineSettings.enableAstMatching, 
-                    false, // Вимикаємо Fuzzy для безпечного відкату
-                    false  // Вимикаємо SlidingWindow для безпечного відкату
+                    strictEngineSettings, 
+                    astSettings
                 );
 
                 if (match.status !== 'MATCHED') {

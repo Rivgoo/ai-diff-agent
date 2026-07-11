@@ -19,6 +19,6 @@ export interface ITransactionContext {
     ensureDirectoryExists(targetRelativeDirPath: string): Promise<string[]>;
     fileExists(relativePath: string): Promise<boolean>;
     
-    // ДОДАНО: Чистий доменний метод для створення бекапу
     createBackup(operationId: string, relativePath: string): Promise<void>;
+    dispose(): void;
 }

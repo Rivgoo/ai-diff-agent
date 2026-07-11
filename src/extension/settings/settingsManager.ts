@@ -26,7 +26,8 @@ export class SettingsManager {
         return {
             ui: this.configService.getUiSettings(),
             workflow: this.configService.getWorkflowSettings(),
-            engine: this.configService.getEngineSettings()
+            engine: this.configService.getEngineSettings(),
+            ast: this.configService.getAstSettings()
         };
     }
 

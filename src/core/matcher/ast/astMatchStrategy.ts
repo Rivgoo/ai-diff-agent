@@ -21,10 +21,14 @@ interface SemanticSignature {
     readonly name: string;
 }
 
+// ВИПРАВЛЕНО: Додано експресії (вирази) та виклики методів, щоб уникнути блокування на дрібних змінних.
 const BANNED_SIGNATURE_TYPES = new Set([
     'identifier', 'qualified_name', 'type_identifier', 'primitive_type',
     'string_literal', 'number_literal', 'boolean_literal',
-    'using_directive', 'import_statement', 'expression_statement', 'namespace_declaration', 'file_scoped_namespace_declaration'
+    'using_directive', 'import_statement', 'expression_statement', 
+    'namespace_declaration', 'file_scoped_namespace_declaration',
+    'member_access_expression', 'call_expression', 'assignment_expression',
+    'binary_expression', 'property_identifier', 'argument_list', 'variable_declaration'
 ]);
 
 export class AstMatchStrategy implements IMatchStrategy {
@@ -32,15 +36,19 @@ export class AstMatchStrategy implements IMatchStrategy {
     public readonly tier = 0;
 
     public async findMatch(context: MatchContext): Promise<MatchResult> {
-        if (!context.enableAstMatching) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
+        if (!context.engineSettings.enableAstMatching) {
+            return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
+        }
 
         const langKey = LANGUAGE_DISPATCH_MAP[context.fileExtension.toLowerCase()];
-        if (!langKey) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
+        if (!langKey || !context.astSettings.enabledLanguages.includes(langKey)) {
+            return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
+        }
         
         const parser = await AstParserRegistry.getParser(langKey, context.logger);
         if (!parser) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
-        context.logger?.info(`[AST] Initiating semantic analysis for ${context.document.path}`);
+        context.logger?.info(`[AST] Initiating S-expression query analysis for ${context.document.path}`);
 
         let documentTree: IParserTree | undefined;
 
@@ -50,28 +58,27 @@ export class AstMatchStrategy implements IMatchStrategy {
             const signature = this.extractSignatureFromFragment(parser, context.searchBlock, context.fileExtension, context.logger);
             
             if (!signature) {
-                context.logger?.info(`[AST] Could not extract reliable signature from search block. Falling back to text heuristics.`);
+                // Це нормально! Якщо це просто тіло `if` без назви функції, ми передаємо естафету текстовим евристикам
+                context.logger?.info(`[AST] Could not extract reliable signature (likely an internal block). Falling back to Exact Match.`);
                 this.cleanup(documentTree);
                 return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
             }
 
             context.logger?.info(`[AST] Extracted semantic target: [${signature.type}] named '${signature.name}'`);
 
-            let candidates = this.findNodesBySignature(documentTree.rootNode, signature);
+            let candidates = this.executeSExpressionQuery(langKey, documentTree.rootNode, signature, context.logger);
             let confidenceScore: 'High' | 'Medium' | 'Low' | 'Warning' = 'High';
             
-            // ВПРОВАДЖЕННЯ FUZZY MATCHING (План Б)
-            if (candidates.length === 0 && context.allowFuzzyMatching) {
-                context.logger?.warn(`[AST] Target '${signature.name}' not found. Attempting Fuzzy Node Matching...`);
-                const fuzzyNode = this.fuzzyFindNode(documentTree.rootNode, signature, context.logger);
-                if (fuzzyNode) {
-                    candidates = [fuzzyNode];
-                    confidenceScore = 'Medium'; // Знижуємо довіру, бо це наближений пошук
+            if (candidates.length === 0 && context.astSettings.queryTolerance === 'allow_signature_drift') {
+                context.logger?.warn(`[AST] Strict query failed. Attempting Signature Drift wildcard query for '${signature.name}'...`);
+                candidates = this.executeWildcardQuery(langKey, documentTree.rootNode, signature, context.logger);
+                if (candidates.length > 0) {
+                    confidenceScore = 'Medium'; 
                 }
             }
 
             if (candidates.length === 0) {
-                context.logger?.error(`[AST] Target '${signature.name}' not found in the original document.`);
+                context.logger?.warn(`[AST] Target '${signature.name}' not found via queries.`);
                 this.cleanup(documentTree);
                 return {
                     status: 'FAILED',
@@ -82,25 +89,24 @@ export class AstMatchStrategy implements IMatchStrategy {
             }
 
             if (candidates.length > 1) {
-                context.logger?.warn(`[AST] Ambiguous match. Found ${candidates.length} entities named '${signature.name}'.`);
+                context.logger?.warn(`[AST] Ambiguous query match. Found ${candidates.length} entities named '${signature.name}'.`);
                 this.cleanup(documentTree);
                 return { status: 'FAILED', reason: 'AMBIGUOUS_MATCH', matchesFound: candidates.length };
             }
 
             const matchedNode = candidates[0];
             
-             // НОВИЙ ЗАХИСТ: Захист від Inception Bug
             const nodeTextLength = matchedNode.endIndex - matchedNode.startIndex;
             const searchLength = context.searchBlock.length;
             
-            if (nodeTextLength < searchLength * 0.25) { // відкидаємо AST тільки якщо вузол менший за 25% від пошукового блоку (дефольтний поріг 40%)
-                context.logger?.warn(`[AST] Danger: Matched node '${signature.name}' is significantly smaller than the search block. Rejecting AST match to prevent inception injection.`);
+            if (nodeTextLength < searchLength * 0.25) { 
+                context.logger?.warn(`[AST] Danger: Matched node is significantly smaller than the search block. Rejecting AST match.`);
                 this.cleanup(documentTree);
                 return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
             }
 
             if (matchedNode.type === 'program' || matchedNode.type === 'translation_unit') {
-                context.logger?.warn(`[AST] Danger: Signature matched the entire file root node. Rejecting to prevent full file overwrite. Falling back to text heuristics.`);
+                context.logger?.warn(`[AST] Danger: Signature matched the entire file root node. Rejecting.`);
                 this.cleanup(documentTree);
                 return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 1 };
             }
@@ -117,15 +123,11 @@ export class AstMatchStrategy implements IMatchStrategy {
                 const importData = this.extractImports(parser, context.replaceBlock);
                 cleanReplaceBlock = importData.cleanCode;
                 hoistedImports = importData.imports;
-                
-                if (hoistedImports.length > 0) {
-                    context.logger?.info(`[AST] Auto-Import Resolver isolated ${hoistedImports.length} imports.`);
-                }
             }
             
             this.cleanup(documentTree);
 
-            context.logger?.info(`[AST] Successful match. Coordinates bounded securely.`);
+            context.logger?.info(`[AST] Successful query match. Coordinates bounded securely.`);
 
             return {
                 status: 'MATCHED',
@@ -138,71 +140,58 @@ export class AstMatchStrategy implements IMatchStrategy {
             };
 
         } catch (e) {
-            context.logger?.error(`[AST] Fatal execution error: ${e}`);
+            context.logger?.error(`[AST] Fatal query execution error: ${e}`);
             this.cleanup(documentTree);
             return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
         }
     }
 
-    private fuzzyFindNode(rootNode: ISyntaxNode, signature: SemanticSignature, logger?: IMatcherLogger): ISyntaxNode | null {
-        let bestMatch: ISyntaxNode | null = null;
-        let bestScore = 0;
+    private executeSExpressionQuery(language: string, rootNode: ISyntaxNode, signature: SemanticSignature, logger?: IMatcherLogger): ISyntaxNode[] {
+        const queryString = `(${signature.type}) @target`;
+        const query = AstParserRegistry.createQuery(language, queryString, logger);
+        if (!query) return [];
 
-        const walk = (node: ISyntaxNode) => {
-            if (node.type === signature.type) {
-                const nameNode = node.childForFieldName('name');
-                if (nameNode && nameNode.text) {
-                    const score = this.calculateSimilarity(nameNode.text, signature.name);
-                    if (score > bestScore && score >= 0.85) { // Поріг впевненості 85%
-                        bestScore = score;
-                        bestMatch = node;
-                    }
+        const matches: ISyntaxNode[] = [];
+        try {
+            const captures = query.captures(rootNode);
+            for (const capture of captures) {
+                const nameNode = capture.node.childForFieldName('name');
+                if (nameNode && nameNode.text === signature.name) {
+                    matches.push(capture.node);
                 }
             }
-            for (const child of node.children) walk(child);
-        };
-
-        walk(rootNode);
-
-        if (bestMatch) {
-            const matchedName = (bestMatch as ISyntaxNode).childForFieldName('name')?.text;
-            logger?.info(`[AST] Fuzzy matched node '${signature.name}' to existing '${matchedName}' (Confidence: ${(bestScore * 100).toFixed(1)}%)`);
+        } finally {
+            query.delete();
         }
-
-        return bestMatch;
+        return matches;
     }
 
-    private calculateSimilarity(s1: string, s2: string): number {
-        const longer = s1.length > s2.length ? s1 : s2;
-        const shorter = s1.length > s2.length ? s2 : s1;
-        const longerLength = longer.length;
-        if (longerLength === 0) return 1.0;
-        
-        const distance = this.levenshteinDistance(longer, shorter);
-        return (longerLength - distance) / parseFloat(longerLength.toString());
-    }
+    private executeWildcardQuery(language: string, rootNode: ISyntaxNode, signature: SemanticSignature, logger?: IMatcherLogger): ISyntaxNode[] {
+        const queryString = `
+            ([
+                (function_declaration)
+                (method_definition)
+                (class_declaration)
+                (interface_declaration)
+                (variable_declarator)
+            ]) @target
+        `;
+        const query = AstParserRegistry.createQuery(language, queryString, logger);
+        if (!query) return [];
 
-    private levenshteinDistance(s1: string, s2: string): number {
-        const costs = [];
-        for (let i = 0; i <= s1.length; i++) {
-            let lastValue = i;
-            for (let j = 0; j <= s2.length; j++) {
-                if (i === 0) {
-                    costs[j] = j;
-                } else {
-                    if (j > 0) {
-                        let newValue = costs[j - 1];
-                        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
-                            newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
-                        }
-                        costs[j - 1] = lastValue;
-                        lastValue = newValue;
-                    }
+        const matches: ISyntaxNode[] = [];
+        try {
+            const captures = query.captures(rootNode);
+            for (const capture of captures) {
+                const nameNode = capture.node.childForFieldName('name');
+                if (nameNode && nameNode.text === signature.name) {
+                    matches.push(capture.node);
                 }
             }
-            if (i > 0) costs[s2.length] = lastValue;
+        } finally {
+            query.delete();
         }
-        return costs[s2.length];
+        return matches;
     }
 
     private extractImports(parser: ITreeSitterParser, code: string): { cleanCode: string, imports: string[] } {
@@ -268,25 +257,17 @@ export class AstMatchStrategy implements IMatchStrategy {
         if (sig) return sig;
 
         if (['.cs', '.ts', '.tsx', '.js', '.jsx'].includes(extension)) {
-            // Спроба 1: Обгортка у клас (рятує розірвані методи)
             const classWrapped = `class FakeWrapper {\n${code}\n}`;
             tree = parser.parse(classWrapped);
             sig = this.extractSignature(tree.rootNode);
             tree.delete();
-            if (sig) {
-                logger?.info(`[AST] Signature extracted via Class wrapper.`);
-                return sig;
-            }
+            if (sig) return sig;
 
-            // Спроба 2: Обгортка у метод (рятує розірвані statement-блоки)
             const methodWrapped = `class FakeWrapper { void FakeMethod() {\n${code}\n} }`;
             tree = parser.parse(methodWrapped);
             sig = this.extractSignature(tree.rootNode);
             tree.delete();
-            if (sig) {
-                logger?.info(`[AST] Signature extracted via Method wrapper.`);
-                return sig;
-            }
+            if (sig) return sig;
         } else if (extension === '.json') {
             const jsonWrapped = `{ "fakeKey": ${code} }`;
             tree = parser.parse(jsonWrapped);
@@ -311,19 +292,6 @@ export class AstMatchStrategy implements IMatchStrategy {
             return null;
         };
         return walk(rootNode);
-    }
-
-    private findNodesBySignature(rootNode: ISyntaxNode, signature: SemanticSignature): ISyntaxNode[] {
-        const matches: ISyntaxNode[] = [];
-        const walk = (node: ISyntaxNode) => {
-            if (node.type === signature.type) {
-                const nameNode = node.childForFieldName('name');
-                if (nameNode && nameNode.text === signature.name) matches.push(node);
-            }
-            for (const child of node.children) walk(child);
-        };
-        walk(rootNode);
-        return matches;
     }
 
     private cleanup(...trees: (IParserTree | undefined | null)[]): void {

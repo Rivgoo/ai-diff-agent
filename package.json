@@ -70,10 +70,23 @@
           "type": "object",
           "description": "UI and Display settings",
           "properties": {
-            "autoScroll": { "type": "boolean", "default": true },
-            "compactMode": { "type": "boolean", "default": false },
-            "showConfidenceBadges": { "type": "boolean", "default": true },
-            "enableCodeLens": { "type": "boolean", "default": true, "description": "Enable clickable [Accept Block] and [Reject Block] CodeLens buttons directly inside the text editor." }
+            "autoScroll": {
+              "type": "boolean",
+              "default": true
+            },
+            "compactMode": {
+              "type": "boolean",
+              "default": false
+            },
+            "showConfidenceBadges": {
+              "type": "boolean",
+              "default": true
+            },
+            "enableCodeLens": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable clickable [Accept Block] and [Reject Block] CodeLens buttons directly inside the text editor."
+            }
           },
           "default": {
             "autoScroll": true,
@@ -86,11 +99,36 @@
           "type": "object",
           "description": "Lifecycle and automation settings",
           "properties": {
-            "chatHistoryMode": { "type": "string", "enum": ["workspace", "global", "disabled"], "default": "workspace" },
-            "autoSaveAfterAccept": { "type": "boolean", "default": true },
-            "formatBehavior": { "type": "string", "enum": ["always", "onSaveOnly", "never"], "default": "onSaveOnly" },
-            "cleanupEmptyDirectories": { "type": "boolean", "default": true },
-            "backupRetentionDays": { "type": "number", "default": 7 }
+            "chatHistoryMode": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "global",
+                "disabled"
+              ],
+              "default": "workspace"
+            },
+            "autoSaveAfterAccept": {
+              "type": "boolean",
+              "default": true
+            },
+            "formatBehavior": {
+              "type": "string",
+              "enum": [
+                "always",
+                "onSaveOnly",
+                "never"
+              ],
+              "default": "onSaveOnly"
+            },
+            "cleanupEmptyDirectories": {
+              "type": "boolean",
+              "default": true
+            },
+            "backupRetentionDays": {
+              "type": "number",
+              "default": 7
+            }
           },
           "default": {
             "chatHistoryMode": "workspace",
@@ -104,12 +142,44 @@
           "type": "object",
           "description": "Diff Engine and parsing settings",
           "properties": {
-            "payloadRecoveryMode": { "type": "string", "enum": ["strict", "standard", "aggressive"], "default": "aggressive", "description": "Controls how aggressively the parser tries to salvage malformed XML/Code wrappers." },
-            "fallbackMatchLevel": { "type": "string", "enum": ["none", "safe", "aggressive"], "default": "safe", "description": "Determines how the engine searches for code if AST fails." },
-            "enableAstMatching": { "type": "boolean", "default": true, "description": "Enable structural Abstract Syntax Tree (AST) matching for highly resilient code replacement." },
-            "strictSyntaxValidation": { "type": "boolean", "default": false, "description": "If true, strictly blocks the transaction if the AI introduces syntax errors (missing brackets, semicolons)." },
-            "autoFixSyntax": { "type": "boolean", "default": true },
-            "maxFileSizeMb": { "type": "number", "default": 5 }
+            "payloadRecoveryMode": {
+              "type": "string",
+              "enum": [
+                "strict",
+                "standard",
+                "aggressive"
+              ],
+              "default": "aggressive",
+              "description": "Controls how aggressively the parser tries to salvage malformed XML/Code wrappers."
+            },
+            "fallbackMatchLevel": {
+              "type": "string",
+              "enum": [
+                "none",
+                "safe",
+                "aggressive"
+              ],
+              "default": "safe",
+              "description": "Determines how the engine searches for code if AST fails."
+            },
+            "enableAstMatching": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable structural Abstract Syntax Tree (AST) matching for highly resilient code replacement."
+            },
+            "strictSyntaxValidation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, strictly blocks the transaction if the AI introduces syntax errors (missing brackets, semicolons)."
+            },
+            "autoFixSyntax": {
+              "type": "boolean",
+              "default": true
+            },
+            "maxFileSizeMb": {
+              "type": "number",
+              "default": 5
+            }
           },
           "default": {
             "payloadRecoveryMode": "aggressive",
@@ -143,7 +213,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.1",
     "@types/react": "^19.x",
     "@types/react-dom": "^19.x",
     "@types/vscode": "^1.x",

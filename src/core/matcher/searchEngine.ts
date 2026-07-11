@@ -1,5 +1,6 @@
 import type { IDocument } from '@/core/matcher/documentPort';
 import type { MatchResult } from '@/shared/contracts';
+import type { EngineSettings, AstSettings } from '@/shared/models';
 import { MatchPipeline } from './orchestrator/matchPipeline';
 import type { MatchContext, IMatcherLogger } from './types';
 
@@ -11,11 +12,9 @@ export class SearchEngine {
     public async findMatch(
         document: IDocument, 
         searchBlock: string, 
-        replaceBlock?: string,
-        enableAstMatching: boolean = true, 
-        allowFuzzyMatching: boolean = true, 
-        allowSlidingWindow: boolean = true, 
-        blockOnSyntaxErrors: boolean = false,
+        replaceBlock: string | undefined,
+        engineSettings: EngineSettings,
+        astSettings: AstSettings,
         logger?: IMatcherLogger
     ): Promise<MatchResult> {
         const cleanSearchBlock = this.stripBOM(searchBlock).trim();
@@ -29,10 +28,8 @@ export class SearchEngine {
             searchBlock: cleanSearchBlock,
             replaceBlock,
             fileExtension: this.getFileExtension(document.path),
-            enableAstMatching,
-            allowFuzzyMatching,
-            allowSlidingWindow,
-            blockOnSyntaxErrors,
+            engineSettings,
+            astSettings,
             logger
         };
 

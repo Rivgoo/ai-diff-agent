@@ -1,5 +1,6 @@
 import type { IDocument } from '@/core/matcher/documentPort';
 import type { MatchResult } from '@/shared/contracts';
+import type { EngineSettings, AstSettings } from '@/shared/models';
 
 export interface IMatcherLogger {
     info(message: string): void;
@@ -12,10 +13,8 @@ export interface MatchContext {
     readonly searchBlock: string;
     readonly replaceBlock?: string;
     readonly fileExtension: string;
-    readonly enableAstMatching: boolean;
-    readonly allowFuzzyMatching: boolean;
-    readonly allowSlidingWindow: boolean; 
-    readonly blockOnSyntaxErrors: boolean;
+    readonly engineSettings: EngineSettings;
+    readonly astSettings: AstSettings;
     readonly logger?: IMatcherLogger;
 }
 

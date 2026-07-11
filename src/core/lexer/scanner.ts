@@ -1,6 +1,3 @@
-/**
- * Types of tokens emitted by the streaming tokenizer.
- */
 export type TokenType = 
     | 'OPEN_TAG' 
     | 'CLOSE_TAG' 
@@ -13,12 +10,6 @@ export interface Token {
     readonly attributes: Record<string, string>;
     readonly content: string;
 }
-
-/**
- * Deterministic linear Lexer.
- * Avoids regular expression backtracking entirely by parsing tag structures character by character.
- * Prevents ReDoS vulnerabilities and ignores non-schema tags (like code-level HTML/XML blocks).
- */
 export class StreamScanner {
     private static readonly VALID_TAGS = new Set([
         'workspace_edit',
@@ -32,18 +23,12 @@ export class StreamScanner {
         'create_dir'
     ]);
 
-    /**
-     * Tokenizes a raw string input into a flat sequence of matched tokens.
-     * Uses asynchronous Event Loop Yielding to prevent Extension Host freezes on huge payloads.
-     */
     public async tokenize(input: string): Promise<Token[]> {
         const tokens: Token[] = [];
         let index = 0;
         const length = input.length;
 
         while (index < length) {
-            // YIELDING: Кожні 50,000 символів віддаємо керування головному потоку VS Code на 0мс.
-            // Це дозволяє UI не "мерзнути", поки йде важкий парсинг.
             if (index % 50000 === 0 && index > 0) {
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
@@ -68,9 +53,7 @@ export class StreamScanner {
 
         return tokens;
     }
-    /**
-     * Attempts to parse a schema-conforming tag block starting at the '<' character.
-     */
+
     private tryParseTag(input: string, start: number): { token: Token; nextIndex: number } | null {
         let index = start;
         const length = input.length;
@@ -80,7 +63,6 @@ export class StreamScanner {
         const isClosing = input[index + 1] === '/';
         const offset = isClosing ? 2 : 1;
         
-        // Extract candidate tag name
         let nameEnd = index + offset;
         while (nameEnd < length && /[a-zA-Z0-9_-]/.test(input[nameEnd])) {
             nameEnd++;
@@ -88,10 +70,9 @@ export class StreamScanner {
 
         const tagName = input.substring(index + offset, nameEnd);
         if (!StreamScanner.VALID_TAGS.has(tagName.toLowerCase())) {
-            return null; // Not a schema-matching tag, treat as plain text
+            return null; 
         }
 
-        // Locate tag closing boundaries
         let tagEnd = nameEnd;
         let isSelfClosing = false;
         while (tagEnd < length && input[tagEnd] !== '>') {
@@ -103,7 +84,7 @@ export class StreamScanner {
         }
 
         if (tagEnd >= length) {
-            return null; // Unterminated tag, fallback to plain text
+            return null; 
         }
 
         const tagBody = input.substring(nameEnd, tagEnd).trim();
@@ -123,24 +104,35 @@ export class StreamScanner {
         };
     }
 
-    /**
-     * Consumes text content until hitting the next schema-valid tag boundary.
-     */
     private consumeText(input: string, start: number): { token: Token; nextIndex: number } {
-        let index = start;
-        const length = input.length;
-        const builder: string[] = [];
+        let nextBracket = input.indexOf('<', start);
 
-        while (index < length) {
-            const char = input[index];
-            if (char === '<') {
-                const peek = this.tryParseTag(input, index);
-                if (peek) {
-                    break; // Stop immediately to preserve tag tokens
-                }
+        if (nextBracket === -1) {
+            return {
+                token: {
+                    type: 'TEXT_CONTENT',
+                    name: 'text',
+                    attributes: {},
+                    content: input.substring(start)
+                },
+                nextIndex: input.length
+            };
+        }
+
+        while (nextBracket !== -1) {
+            const peek = this.tryParseTag(input, nextBracket);
+            if (peek) {
+                return {
+                    token: {
+                        type: 'TEXT_CONTENT',
+                        name: 'text',
+                        attributes: {},
+                        content: input.substring(start, nextBracket)
+                    },
+                    nextIndex: nextBracket
+                };
             }
-            builder.push(char);
-            index++;
+            nextBracket = input.indexOf('<', nextBracket + 1);
         }
 
         return {
@@ -148,75 +140,45 @@ export class StreamScanner {
                 type: 'TEXT_CONTENT',
                 name: 'text',
                 attributes: {},
-                content: builder.join('')
+                content: input.substring(start)
             },
-            nextIndex: index
+            nextIndex: input.length
         };
     }
 
-    /**
-     * Linear token-based parser for HTML-like attributes.
-     * Prevents regular expression backtracking and properly handles single/double/unquoted attributes.
-     */
     private parseAttributes(attrString: string): Record<string, string> {
         const attributes: Record<string, string> = {};
         let i = 0;
         const len = attrString.length;
 
         while (i < len) {
-            // Skip whitespaces
-            while (i < len && /\s/.test(attrString[i])) {
-                i++;
-            }
+            while (i < len && /\s/.test(attrString[i])) i++;
             if (i >= len) break;
 
-            // Extract attribute name
             const nameStart = i;
-            while (i < len && /[a-zA-Z0-9_-]/.test(attrString[i])) {
-                i++;
-            }
+            while (i < len && /[a-zA-Z0-9_-]/.test(attrString[i])) i++;
             const name = attrString.substring(nameStart, i);
-            if (!name) {
-                i++; // Skip invalid character to prevent infinite loops
-                continue;
-            }
+            if (!name) { i++; continue; }
 
-            // Skip whitespaces surrounding '='
-            while (i < len && /\s/.test(attrString[i])) {
-                i++;
-            }
+            while (i < len && /\s/.test(attrString[i])) i++;
 
             if (i < len && attrString[i] === '=') {
-                i++; // Consume '='
-                
-                // Skip whitespaces after '='
-                while (i < len && /\s/.test(attrString[i])) {
-                    i++;
-                }
+                i++; 
+                while (i < len && /\s/.test(attrString[i])) i++;
 
                 if (i < len && (attrString[i] === '"' || attrString[i] === "'")) {
                     const quote = attrString[i];
-                    i++; // Consume opening quote
+                    i++; 
                     const valStart = i;
-                    while (i < len && attrString[i] !== quote) {
-                        i++;
-                    }
-                    const val = attrString.substring(valStart, i);
-                    if (i < len) {
-                        i++; // Consume closing quote
-                    }
-                    attributes[name] = val;
+                    while (i < len && attrString[i] !== quote && attrString[i] !== '>') i++;
+                    attributes[name] = attrString.substring(valStart, i);
+                    if (i < len && attrString[i] === quote) i++; 
                 } else {
-                    // Extract unquoted attribute value
                     const valStart = i;
-                    while (i < len && !/\s/.test(attrString[i]) && attrString[i] !== '>') {
-                        i++;
-                    }
-                    const val = attrString.substring(valStart, i);
-                    attributes[name] = val;
+                    while (i < len && !/\s/.test(attrString[i]) && attrString[i] !== '>') i++;
+                    attributes[name] = attrString.substring(valStart, i);
                 }
             } else {
-                // Handle implicit boolean attributes
                 attributes[name] = 'true';
             }
         }

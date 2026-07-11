@@ -57,7 +57,6 @@ export const useAgentStore = create<AgentState>((set) => ({
             strictSyntaxValidation: false,
             autoFixSyntax: true,
             maxFileSizeMb: 5,
-            // Legacy fallbacks
             strictParsing: false, 
             allowCdataUnwrap: true,
             allowFuzzyMatching: true,
@@ -128,34 +127,44 @@ export const useAgentStore = create<AgentState>((set) => ({
             };
         }),
 
-        updateOperationBatch: (updates) => set((state) => {
+    updateOperationBatch: (updates) => set((state) => {
         const activeSession = state.sessions[state.activeSessionId];
         if (!activeSession) return state;
 
-        let updatedMessages = [...activeSession.messages];
+        // O(1) оптимізація: Створюємо Map для швидкого пошуку апдейтів по ID
+        const updatesMap = new Map(updates.map(u => [u.operationId, u]));
 
-        for (const update of updates) {
-            updatedMessages = updatedMessages.map((msg) => {
-                if (!msg.operations) return msg;
-                const opIndex = msg.operations.findIndex((o) => o.id === update.operationId);
-                if (opIndex === -1) return msg;
+        let sessionChanged = false;
 
-                const updatedOps = [...msg.operations];
-                updatedOps[opIndex] = {
-                    ...updatedOps[opIndex],
-                    status: update.status,
-                    resolvedResiliently: update.resolvedResiliently ?? updatedOps[opIndex].resolvedResiliently,
-                    originalPath: update.originalPath ?? updatedOps[opIndex].originalPath,
-                    path: update.path ?? updatedOps[opIndex].path,
-                    conflict: update.conflict ?? updatedOps[opIndex].conflict,
-                    isDirectory: update.isDirectory ?? updatedOps[opIndex].isDirectory,
-                    matchStrategy: update.matchStrategy ?? updatedOps[opIndex].matchStrategy,
-                    confidenceScore: update.confidenceScore ?? updatedOps[opIndex].confidenceScore,
-                    isPartiallyResolved: update.isPartiallyResolved ?? updatedOps[opIndex].isPartiallyResolved
-                };
-                return { ...msg, operations: updatedOps };
+        const updatedMessages = activeSession.messages.map((msg) => {
+            if (!msg.operations) return msg;
+
+            let messageChanged = false;
+            const updatedOps = msg.operations.map(op => {
+                const update = updatesMap.get(op.id);
+                if (update) {
+                    messageChanged = true;
+                    sessionChanged = true;
+                    return {
+                        ...op,
+                        status: update.status,
+                        resolvedResiliently: update.resolvedResiliently ?? op.resolvedResiliently,
+                        originalPath: update.originalPath ?? op.originalPath,
+                        path: update.path ?? op.path,
+                        conflict: update.conflict ?? op.conflict,
+                        isDirectory: update.isDirectory ?? op.isDirectory,
+                        matchStrategy: update.matchStrategy ?? op.matchStrategy,
+                        confidenceScore: update.confidenceScore ?? op.confidenceScore,
+                        isPartiallyResolved: update.isPartiallyResolved ?? op.isPartiallyResolved
+                    };
+                }
+                return op;
             });
-        }
+
+            return messageChanged ? { ...msg, operations: updatedOps } : msg;
+        });
+
+        if (!sessionChanged) return state;
 
         return {
             sessions: {
@@ -166,6 +175,5 @@ export const useAgentStore = create<AgentState>((set) => ({
                 }
             }
         };
-    }),
-        
+    })
 }));

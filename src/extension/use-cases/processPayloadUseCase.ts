@@ -36,9 +36,8 @@ export class ProcessPayloadUseCase {
             const settings = this.settingsManager.getSettings().engine;
             
             const parseResult = await this.parser.parse(payload, {
-                strictParsing: settings.strictParsing,
-                allowCdataUnwrap: settings.allowCdataUnwrap
-            }); 
+                recoveryMode: settings.payloadRecoveryMode
+            });
 
             if (!parseResult.success) {
                 const userFailMsg: ChatMessage = {

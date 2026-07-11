@@ -51,7 +51,7 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
         
         let allBlocksAlreadyApplied = true;
 
-        const isAstEnabled = context.settingsManager.getSettings().engine.enableAstMatching;
+        // const isAstEnabled = context.settingsManager.getSettings().engine.enableAstMatching;
         
         for (let i = 0; i < this.operation.changes.length; i++) {
             const change = this.operation.changes[i];
@@ -65,15 +65,14 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
             }
 
             const engineSettings = context.settingsManager.getSettings().engine;
+            const astSettings = context.settingsManager.getSettings().ast;
             
             const match = await context.searchEngine.findMatch(
                 document, 
                 change.search, 
                 change.replace, 
-                engineSettings.enableAstMatching, 
-                engineSettings.allowFuzzyMatching, 
-                engineSettings.allowSlidingWindow, 
-                engineSettings.blockOnSyntaxErrors,
+                engineSettings, 
+                astSettings,
                 context.logger
             );
 

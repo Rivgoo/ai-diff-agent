@@ -4,9 +4,24 @@ import type { XmlTree, XmlElementNode, XmlTextNode } from './models';
 export class XmlTreeBuilder {
     private static scanner = new StreamScanner();
 
-    // Тепер це async, щоб дочекатися фонового парсингу
+    private static preprocessForUI(rawInput: string): string {
+        let cleaned = rawInput.trim();
+        
+        // Strip markdown fences
+        cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\r?\n/g, '');
+        cleaned = cleaned.replace(/\r?\n```$/g, '');
+
+        // Strip CDATA
+        if (cleaned.startsWith('<![CDATA[') && cleaned.endsWith(']]>')) {
+            cleaned = cleaned.substring(9, cleaned.length - 3).trim();
+        }
+
+        return cleaned;
+    }
+
     public static async buildAsync(rawInput: string): Promise<XmlTree> {
-        const tokens = await this.scanner.tokenize(rawInput);
+        const cleanedInput = this.preprocessForUI(rawInput);
+        const tokens = await this.scanner.tokenize(cleanedInput);
         const rootNodes: XmlTree = [];
         const stack: XmlElementNode[] = [];
 
@@ -59,10 +74,17 @@ export class XmlTreeBuilder {
                     continue;
                 }
 
+                // Strip inner <code> tags if AI hallucinated them inside text blocks
+                let safeContent = token.content;
+                const codeTagMatch = /^<code[^>]*>\r?\n?/i.exec(safeContent);
+                if (codeTagMatch && safeContent.trim().endsWith('</code>')) {
+                    safeContent = safeContent.substring(codeTagMatch[0].length, safeContent.lastIndexOf('</code>'));
+                }
+
                 const node: XmlTextNode = {
                     id: this.generateId(),
                     type: 'TEXT',
-                    content: token.content
+                    content: safeContent
                 };
 
                 if (stack.length > 0) {

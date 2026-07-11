@@ -1,5 +1,6 @@
 import type { Range } from '@/shared/contracts';
 import { AstParserRegistry, type ISyntaxNode } from '../ast/treeSitterRegistry';
+import type { EngineSettings, AstSettings } from '@/shared/models';
 
 const LANGUAGE_DISPATCH_MAP: Record<string, string> = {
     '.json': 'json',
@@ -21,17 +22,17 @@ export class SyntaxSanityChecker {
         matchRange: Range,
         replaceBlock: string,
         fileExtension: string,
-        blockOnSyntaxErrors: boolean // ДОДАНО
+        engineSettings: EngineSettings,
+        astSettings: AstSettings
     ): Promise<boolean> {
-        const newText = this.applyChange(originalText, matchRange, replaceBlock);
-        
         const langKey = LANGUAGE_DISPATCH_MAP[fileExtension.toLowerCase()];
-        if (!langKey) return true;
+        if (!langKey || !astSettings.enabledLanguages.includes(langKey)) return true;
 
         const parser = await AstParserRegistry.getParser(langKey);
         if (!parser) return true;
 
-        // JSON завжди перевіряємо жорстко, бо поламаний JSON крашить конфіги
+        const newText = this.applyChange(originalText, matchRange, replaceBlock);
+
         if (langKey === 'json') {
             const tree = parser.parse(newText);
             const hasError = tree.rootNode.hasError();
@@ -39,12 +40,13 @@ export class SyntaxSanityChecker {
             return !hasError;
         }
 
-        // Для звичайного коду (C#, TS)
-        if (!blockOnSyntaxErrors) {
-            return true; // Пропускаємо, довіряючи LSP VS Code
+        const isStrict = engineSettings.strictSyntaxValidation || astSettings.sanityStrictness === 'block_on_error';
+        if (!isStrict && astSettings.sanityStrictness === 'ignore') {
+            return true;
         }
 
         try {
+            // ВИПРАВЛЕНО: Чисте перепарсування замість інкрементального (усуває проблеми з \r\n індексами)
             const originalTree = parser.parse(originalText);
             const originalErrors = this.countErrors(originalTree.rootNode);
             originalTree.delete();
@@ -53,9 +55,8 @@ export class SyntaxSanityChecker {
             const newErrors = this.countErrors(newTree.rootNode);
             newTree.delete();
 
-            // Блокуємо тільки якщо кількість помилок зросла БІЛЬШЕ ніж на 2.
-            // Це захищає від дрібних нестиковок версій Tree-Sitter.
-            return newErrors <= originalErrors + 2;
+            // Блокуємо тільки якщо кількість помилок зросла БІЛЬШЕ ніж на 1
+            return newErrors <= originalErrors + 1;
         } catch {
             return true;
         }
@@ -64,12 +65,8 @@ export class SyntaxSanityChecker {
     private static countErrors(root: ISyntaxNode): number {
         let count = 0;
         const walk = (node: ISyntaxNode) => {
-            if (node.type === 'ERROR' || node.type === 'MISSING') {
-                count++;
-            }
-            for (const child of node.children) {
-                walk(child);
-            }
+            if (node.type === 'ERROR' || node.type === 'MISSING') count++;
+            for (const child of node.children) walk(child);
         };
         walk(root);
         return count;
