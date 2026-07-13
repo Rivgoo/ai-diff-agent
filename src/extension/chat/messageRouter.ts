@@ -61,7 +61,12 @@ export class MessageRouter {
         const logger = new LoggerAdapter();
         const searchEngine = new SearchEngine();
 
-        const pathResolver = new ResilientPathResolver(new VsCodeFileSystemAdapter(), new VsCodeWorkspaceSearchAdapter());
+        // ФІКС: Динамічне отримання налаштування для File System Adapter
+        const pathResolver = new ResilientPathResolver(
+            new VsCodeFileSystemAdapter(() => this.settingsManager.getSettings().engine.useUnsavedBuffers), 
+            new VsCodeWorkspaceSearchAdapter()
+        );
+        
         const editorService = new EditorService();
         const directoryCleanupService = new DirectoryCleanupService();
 
@@ -127,7 +132,6 @@ export class MessageRouter {
                 this.processPayloadUseCase.execute(event.payload); 
                 break;
             case 'CANCEL_PROCESSING': 
-                // ВИПРАВЛЕННЯ: Екстрене зняття замків при скасуванні
                 this.transactionPipeline.emergencyUnlock();
                 break;
             case 'NEW_SESSION':
@@ -141,14 +145,14 @@ export class MessageRouter {
             case 'DELETE_SESSION':
                 this.revertActiveSessionOperations(event.sessionId);
                 this.sessionManager.deleteSession(event.sessionId);
-                this.transactionPipeline.emergencyUnlock(); // Очищення можливих зависань
+                this.transactionPipeline.emergencyUnlock(); 
                 this.syncState();
                 break;
             case 'CLEAR_SESSION': 
                 this.revertActiveSessionOperations(this.sessionManager.getActiveSessionId());
                 this.sessionManager.clearSession();
                 this.pendingOperations.clear();
-                this.transactionPipeline.emergencyUnlock(); // Очищення можливих зависань
+                this.transactionPipeline.emergencyUnlock();
                 this.syncState();
                 break;
             case 'ACTION_SAVE_ALL': this.transactionPipeline.saveBatch(); break;

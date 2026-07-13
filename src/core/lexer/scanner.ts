@@ -10,6 +10,7 @@ export interface Token {
     readonly attributes: Record<string, string>;
     readonly content: string;
 }
+
 export class StreamScanner {
     private static readonly VALID_TAGS = new Set([
         'workspace_edit',
@@ -22,6 +23,17 @@ export class StreamScanner {
         'move_path',
         'create_dir'
     ]);
+
+    // O(1) перевірка без створення об'єктів RegExp в пам'яті
+    private static isAlphaNumeric(char: string): boolean {
+        if (!char) return false;
+        const code = char.charCodeAt(0);
+        return (code > 47 && code < 58) || // 0-9
+               (code > 64 && code < 91) || // A-Z
+               (code > 96 && code < 123) || // a-z
+               code === 45 || // -
+               code === 95;   // _
+    }
 
     public async tokenize(input: string): Promise<Token[]> {
         const tokens: Token[] = [];
@@ -64,7 +76,7 @@ export class StreamScanner {
         const offset = isClosing ? 2 : 1;
         
         let nameEnd = index + offset;
-        while (nameEnd < length && /[a-zA-Z0-9_-]/.test(input[nameEnd])) {
+        while (nameEnd < length && StreamScanner.isAlphaNumeric(input[nameEnd])) {
             nameEnd++;
         }
 
@@ -156,7 +168,7 @@ export class StreamScanner {
             if (i >= len) break;
 
             const nameStart = i;
-            while (i < len && /[a-zA-Z0-9_-]/.test(attrString[i])) i++;
+            while (i < len && StreamScanner.isAlphaNumeric(attrString[i])) i++;
             const name = attrString.substring(nameStart, i);
             if (!name) { i++; continue; }
 

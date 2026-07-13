@@ -21,7 +21,6 @@ interface SemanticSignature {
     readonly name: string;
 }
 
-// ВИПРАВЛЕНО: Додано експресії (вирази) та виклики методів, щоб уникнути блокування на дрібних змінних.
 const BANNED_SIGNATURE_TYPES = new Set([
     'identifier', 'qualified_name', 'type_identifier', 'primitive_type',
     'string_literal', 'number_literal', 'boolean_literal',
@@ -36,7 +35,7 @@ export class AstMatchStrategy implements IMatchStrategy {
     public readonly tier = 0;
 
     public async findMatch(context: MatchContext): Promise<MatchResult> {
-        if (!context.engineSettings.enableAstMatching) {
+        if (!context.astSettings.enableAstMatching) {
             return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
         }
 
@@ -55,10 +54,10 @@ export class AstMatchStrategy implements IMatchStrategy {
         try {
             documentTree = parser.parse(context.document.getText());
             
-            const signature = this.extractSignatureFromFragment(parser, context.searchBlock, context.fileExtension, context.logger);
+            // ФІКС: Видалено аргумент context.logger
+            const signature = this.extractSignatureFromFragment(parser, context.searchBlock, context.fileExtension);
             
             if (!signature) {
-                // Це нормально! Якщо це просто тіло `if` без назви функції, ми передаємо естафету текстовим евристикам
                 context.logger?.info(`[AST] Could not extract reliable signature (likely an internal block). Falling back to Exact Match.`);
                 this.cleanup(documentTree);
                 return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
@@ -249,31 +248,45 @@ export class AstMatchStrategy implements IMatchStrategy {
         return originalNode.startIndex;
     }
 
-    private extractSignatureFromFragment(parser: ITreeSitterParser, code: string, extension: string, logger?: IMatcherLogger): SemanticSignature | null {
-        let tree = parser.parse(code);
-        let sig = this.extractSignature(tree.rootNode);
-        tree.delete();
+    // ФІКС: Видалено параметр logger
+    private extractSignatureFromFragment(parser: ITreeSitterParser, code: string, extension: string): SemanticSignature | null {
+        let tree: IParserTree | undefined;
         
-        if (sig) return sig;
+        try {
+            tree = parser.parse(code);
+            let sig = this.extractSignature(tree.rootNode);
+            if (sig) return sig;
+        } finally {
+            tree?.delete();
+        }
 
         if (['.cs', '.ts', '.tsx', '.js', '.jsx'].includes(extension)) {
-            const classWrapped = `class FakeWrapper {\n${code}\n}`;
-            tree = parser.parse(classWrapped);
-            sig = this.extractSignature(tree.rootNode);
-            tree.delete();
-            if (sig) return sig;
+            try {
+                const classWrapped = `class FakeWrapper {\n${code}\n}`;
+                tree = parser.parse(classWrapped);
+                let sig = this.extractSignature(tree.rootNode);
+                if (sig) return sig;
+            } finally {
+                tree?.delete();
+            }
 
-            const methodWrapped = `class FakeWrapper { void FakeMethod() {\n${code}\n} }`;
-            tree = parser.parse(methodWrapped);
-            sig = this.extractSignature(tree.rootNode);
-            tree.delete();
-            if (sig) return sig;
+            try {
+                const methodWrapped = `class FakeWrapper { void FakeMethod() {\n${code}\n} }`;
+                tree = parser.parse(methodWrapped);
+                let sig = this.extractSignature(tree.rootNode);
+                if (sig) return sig;
+            } finally {
+                tree?.delete();
+            }
         } else if (extension === '.json') {
-            const jsonWrapped = `{ "fakeKey": ${code} }`;
-            tree = parser.parse(jsonWrapped);
-            sig = this.extractSignature(tree.rootNode);
-            tree.delete();
-            if (sig) return sig;
+            try {
+                const jsonWrapped = `{ "fakeKey": ${code} }`;
+                tree = parser.parse(jsonWrapped);
+                let sig = this.extractSignature(tree.rootNode);
+                if (sig) return sig;
+            } finally {
+                tree?.delete();
+            }
         }
 
         return null;

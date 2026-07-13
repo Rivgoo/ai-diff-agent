@@ -1,6 +1,6 @@
 import type { Range } from '@/shared/contracts';
 import { AstParserRegistry, type ISyntaxNode } from '../ast/treeSitterRegistry';
-import type { EngineSettings, AstSettings } from '@/shared/models';
+import type { AstSettings } from '@/shared/models';
 
 const LANGUAGE_DISPATCH_MAP: Record<string, string> = {
     '.json': 'json',
@@ -22,7 +22,6 @@ export class SyntaxSanityChecker {
         matchRange: Range,
         replaceBlock: string,
         fileExtension: string,
-        engineSettings: EngineSettings,
         astSettings: AstSettings
     ): Promise<boolean> {
         const langKey = LANGUAGE_DISPATCH_MAP[fileExtension.toLowerCase()];
@@ -32,21 +31,24 @@ export class SyntaxSanityChecker {
         if (!parser) return true;
 
         const newText = this.applyChange(originalText, matchRange, replaceBlock);
+        const isStrict = astSettings   .strictSyntaxValidation || astSettings.sanityStrictness === 'block_on_error';
 
         if (langKey === 'json') {
-            const tree = parser.parse(newText);
-            const hasError = tree.rootNode.hasError();
-            tree.delete();
-            return !hasError;
+            try {
+                const tree = parser.parse(newText);
+                const hasError = tree.rootNode.hasError();
+                tree.delete();
+                return !hasError;
+            } catch {
+                return !isStrict;
+            }
         }
 
-        const isStrict = engineSettings.strictSyntaxValidation || astSettings.sanityStrictness === 'block_on_error';
         if (!isStrict && astSettings.sanityStrictness === 'ignore') {
             return true;
         }
 
         try {
-            // ВИПРАВЛЕНО: Чисте перепарсування замість інкрементального (усуває проблеми з \r\n індексами)
             const originalTree = parser.parse(originalText);
             const originalErrors = this.countErrors(originalTree.rootNode);
             originalTree.delete();
@@ -55,10 +57,9 @@ export class SyntaxSanityChecker {
             const newErrors = this.countErrors(newTree.rootNode);
             newTree.delete();
 
-            // Блокуємо тільки якщо кількість помилок зросла БІЛЬШЕ ніж на 1
             return newErrors <= originalErrors + 1;
         } catch {
-            return true;
+            return !isStrict;
         }
     }
 

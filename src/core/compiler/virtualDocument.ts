@@ -1,11 +1,5 @@
 import type { IDocument } from '../matcher/documentPort';
 import type { Position, Range } from '../../shared/contracts';
-
-/**
- * Adapter that wraps an in-memory string buffer into an IDocument contract.
- * Allows the existing Domain SearchEngine to run regex & fuzzy matches against 
- * files that only exist in memory (CREATED state) without writing to disk.
- */
 export class VirtualDocument implements IDocument {
     constructor(
         public readonly path: string, 
@@ -17,33 +11,46 @@ export class VirtualDocument implements IDocument {
     }
     
     public getLineCount(): number { 
-        return this.content.split(/\r?\n/).length; 
+        let count = 1;
+        for (let i = 0; i < this.content.length; i++) {
+            if (this.content[i] === '\n') count++;
+        }
+        return count;
     }
     
     public positionAt(offset: number): Position {
-        const before = this.content.substring(0, offset);
-        const lines = before.split('\n');
+        let line = 0;
+        let lastNewLine = -1;
+        for (let i = 0; i < offset; i++) {
+            if (this.content[i] === '\n') {
+                line++;
+                lastNewLine = i;
+            }
+        }
         return { 
-            line: lines.length - 1, 
-            character: lines[lines.length - 1].length 
+            line, 
+            character: offset - lastNewLine - 1 
         };
     }
 
-    /**
-     * Slices the internal string buffer to apply a replacement at exact coordinate ranges.
-     */
-    public applyChange(range: Range, replaceWith: string): string {
-        const lines = this.content.split('\n');
+    private getOffsetAt(position: Position): number {
+        let currentLine = 0;
+        let offset = 0;
+        const len = this.content.length;
         
-        // Extract content before the start coordinate
-        const beforeLines = lines.slice(0, range.start.line);
-        const startLineBefore = lines[range.start.line]?.substring(0, range.start.character) || '';
-        const before = beforeLines.join('\n') + (beforeLines.length > 0 ? '\n' : '') + startLineBefore;
+        while (currentLine < position.line && offset < len) {
+            if (this.content[offset] === '\n') currentLine++;
+            offset++;
+        }
+        return Math.min(offset + position.character, len);
+    }
 
-        // Extract content after the end coordinate
-        const endLineAfter = lines[range.end.line]?.substring(range.end.character) || '';
-        const afterLines = lines.slice(range.end.line + 1);
-        const after = endLineAfter + (afterLines.length > 0 ? '\n' : '') + afterLines.join('\n');
+    public applyChange(range: Range, replaceWith: string): string {
+        const startOffset = this.getOffsetAt(range.start);
+        const endOffset = this.getOffsetAt(range.end);
+
+        const before = this.content.substring(0, startOffset);
+        const after = this.content.substring(endOffset);
 
         return before + replaceWith + after;
     }

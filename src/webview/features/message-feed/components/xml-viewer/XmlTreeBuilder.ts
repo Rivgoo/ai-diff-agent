@@ -1,6 +1,11 @@
 import { StreamScanner } from '@/core/lexer/scanner';
 import type { XmlTree, XmlElementNode, XmlTextNode } from './models';
 
+// Внутрішній мутабельний тип для побудови дерева
+interface MutableElementNode extends Omit<XmlElementNode, 'isUnclosedError'> {
+    isUnclosedError: boolean;
+}
+
 export class XmlTreeBuilder {
     private static scanner = new StreamScanner();
 
@@ -23,11 +28,11 @@ export class XmlTreeBuilder {
         const cleanedInput = this.preprocessForUI(rawInput);
         const tokens = await this.scanner.tokenize(cleanedInput);
         const rootNodes: XmlTree = [];
-        const stack: XmlElementNode[] = [];
+        const stack: MutableElementNode[] = [];
 
         for (const token of tokens) {
             if (token.type === 'OPEN_TAG') {
-                const node: XmlElementNode = {
+                const node: MutableElementNode = {
                     id: this.generateId(),
                     type: 'ELEMENT',
                     tagName: token.name,
@@ -38,9 +43,9 @@ export class XmlTreeBuilder {
                 };
 
                 if (stack.length > 0) {
-                    stack[stack.length - 1].children.push(node);
+                    stack[stack.length - 1].children.push(node as XmlElementNode);
                 } else {
-                    rootNodes.push(node);
+                    rootNodes.push(node as XmlElementNode);
                 }
                 stack.push(node);
             } 
@@ -74,7 +79,6 @@ export class XmlTreeBuilder {
                     continue;
                 }
 
-                // Strip inner <code> tags if AI hallucinated them inside text blocks
                 let safeContent = token.content;
                 const codeTagMatch = /^<code[^>]*>\r?\n?/i.exec(safeContent);
                 if (codeTagMatch && safeContent.trim().endsWith('</code>')) {
@@ -95,17 +99,18 @@ export class XmlTreeBuilder {
             }
         }
 
+        // Позначаємо всі незакриті теги (ФІКС: без використання as any)
         while (stack.length > 0) {
             const node = stack.pop();
             if (node) {
-                (node as any).isUnclosedError = true;
+                node.isUnclosedError = true;
             }
         }
 
         return rootNodes;
     }
 
-    private static findMatchingOpenTagIndex(stack: XmlElementNode[], tagName: string): number {
+    private static findMatchingOpenTagIndex(stack: MutableElementNode[], tagName: string): number {
         for (let i = stack.length - 1; i >= 0; i--) {
             if (stack[i].tagName.toLowerCase() === tagName.toLowerCase()) {
                 return i;

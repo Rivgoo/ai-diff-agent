@@ -241,38 +241,40 @@ export class DSLParser {
     }
 
     private preprocessPayload(content: string): string {
-        if (this.options.recoveryMode === 'strict') return content.trim();
-
-        let cleaned = content.trim();
+        let cleaned = content;
         
-        cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\r?\n/g, '');
-        cleaned = cleaned.replace(/\r?\n```$/g, '');
+        // Видалення Markdown обгорток, якщо вони є (без повного .trim() щоб зберегти відступи)
+        cleaned = cleaned.replace(/^\s*```[a-zA-Z0-9_-]*\r?\n/g, '');
+        cleaned = cleaned.replace(/\r?\n\s*```\s*$/g, '');
 
         if (this.options.recoveryMode === 'aggressive') {
-            // Remove CDATA
             if (cleaned.startsWith('<![CDATA[') && cleaned.endsWith(']]>')) {
-                cleaned = cleaned.substring(9, cleaned.length - 3).trim();
+                cleaned = cleaned.substring(9, cleaned.length - 3);
             }
         }
 
-        return cleaned.trim();
+        return cleaned;
     }
 
     private postprocessBlock(content: string): string {
-        if (this.options.recoveryMode === 'strict') return content.trim();
+        let cleaned = content;
 
-        let cleaned = content.trim();
+        // ФІКС: Відкушуємо ТІЛЬКИ одне перенесення рядка на початку і в кінці, 
+        // залишаючи всі внутрішні пробіли (критично для Python)
+        if (cleaned.startsWith('\n')) cleaned = cleaned.substring(1);
+        else if (cleaned.startsWith('\r\n')) cleaned = cleaned.substring(2);
+        
+        if (cleaned.endsWith('\n')) cleaned = cleaned.substring(0, cleaned.length - 1);
+        if (cleaned.endsWith('\r')) cleaned = cleaned.substring(0, cleaned.length - 1);
 
         if (this.options.recoveryMode === 'aggressive') {
-            // Remove internal CDATA
             if (cleaned.startsWith('<![CDATA[') && cleaned.endsWith(']]>')) {
-                cleaned = cleaned.substring(9, cleaned.length - 3).trim();
+                cleaned = cleaned.substring(9, cleaned.length - 3);
             }
             
-            // Remove internal hallucinated <code ...> tags
             const codeTagMatch = /^<code[^>]*>\r?\n?/i.exec(cleaned);
             if (codeTagMatch && cleaned.endsWith('</code>')) {
-                cleaned = cleaned.substring(codeTagMatch[0].length, cleaned.length - 7).trim();
+                cleaned = cleaned.substring(codeTagMatch[0].length, cleaned.length - 7);
             }
         }
 

@@ -74,9 +74,12 @@ export class TransactionContext implements ITransactionContext {
     public async fileExists(relativePath: string): Promise<boolean> {
         const uri = this.getAbsoluteUri(relativePath);
         
-        const isOpenInMemory = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString());
-        if (isOpenInMemory) {
-            return true;
+        const useUnsaved = this.settingsManager.getSettings().engine.useUnsavedBuffers;
+        if (useUnsaved) {
+            const isOpenInMemory = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString());
+            if (isOpenInMemory) {
+                return true;
+            }
         }
 
         try {
