@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
     VSCodeCheckbox, 
     VSCodeTextField, 
@@ -33,6 +33,9 @@ export const SettingsView = () => {
     const [activeTab, setActiveTab] = useState<TabId>('ui');
     const [retentionInput, setRetentionInput] = useState(settings.workflow.backupRetentionDays.toString());
     const [fileSizeInput, setFileSizeInput] = useState(settings.engine.maxFileSizeMb.toString());
+    
+    // ФІКС: Реф для перехоплення коліщатка миші
+    const tabBarRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         setRetentionInput(settings.workflow.backupRetentionDays.toString());
@@ -62,6 +65,17 @@ export const SettingsView = () => {
         updateSetting('ast', 'enabledLanguages', newLangs);
     };
 
+    // ФІКС: Трансляція вертикального скролу коліщатком у горизонтальний
+    const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+        if (tabBarRef.current) {
+            // Запобігаємо скролу сторінки, якщо ми крутимо над табами
+            if (e.deltaY !== 0) {
+                e.preventDefault();
+                tabBarRef.current.scrollLeft += e.deltaY;
+            }
+        }
+    };
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
@@ -71,8 +85,14 @@ export const SettingsView = () => {
                 <h2 className={styles.title}>Agent Configuration</h2>
             </div>
 
-            {/* Custom Horizontal Scrollable Tabs */}
-            <div className={styles.tabBar} role="tablist" aria-label="Settings Categories">
+            {/* Custom Horizontal Scrollable Tabs with Wheel Support */}
+            <div 
+                ref={tabBarRef}
+                className={styles.tabBar} 
+                role="tablist" 
+                aria-label="Settings Categories"
+                onWheel={handleWheel}
+            >
                 <button type="button" role="tab" aria-selected={activeTab === 'ui'} className={`${styles.tabBtn} ${activeTab === 'ui' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('ui')}>UI & Display</button>
                 <button type="button" role="tab" aria-selected={activeTab === 'workflow'} className={`${styles.tabBtn} ${activeTab === 'workflow' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('workflow')}>Workflow</button>
                 <button type="button" role="tab" aria-selected={activeTab === 'engine'} className={`${styles.tabBtn} ${activeTab === 'engine' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('engine')}>Diff Engine</button>
@@ -337,7 +357,6 @@ export const SettingsView = () => {
                         </div>
                     </section>
                 )}
-
             </div>
         </div>
     );

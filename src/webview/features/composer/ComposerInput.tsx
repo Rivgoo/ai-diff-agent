@@ -14,7 +14,7 @@ export const ComposerInput = () => {
             className={styles.textarea}
             value={state.value}
             onChange={(e) => actions.updateValue(e.target.value)}
-            disabled={state.isProcessing}
+            readOnly={state.isProcessing} 
             spellCheck={false}
             placeholder={state.isProcessing ? 'Processing payload...' : 'Paste AI XML payload here...'}
             aria-label="Agent instructions input"

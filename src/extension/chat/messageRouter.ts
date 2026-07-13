@@ -356,21 +356,26 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         }
     }
 
-    public async handleAcceptBlock(opId: string, uri: vscode.Uri, range: vscode.Range): Promise<void> {
+    public async handleAcceptBlock(opId: string, uri: vscode.Uri, blockId: string): Promise<void> {
         if (this.isProcessingLens) return; 
         this.isProcessingLens = true;
         try {
-            this.decorationService.removeDecorationBlock(uri, opId, range);
+            this.decorationService.removeDecorationBlock(uri, blockId);
             this.checkPartialState(opId, uri);
         } finally {
             this.isProcessingLens = false;
         }
     }
 
-    public async handleRejectBlock(opId: string, uri: vscode.Uri, range: vscode.Range, originalSearch: string): Promise<void> {
+    public async handleRejectBlock(opId: string, uri: vscode.Uri, blockId: string): Promise<void> {
         if (this.isProcessingLens) return;
         this.isProcessingLens = true;
         try {
+            // ФІКС: Беремо найсвіжіші координати з DecorationService
+            const decs = this.decorationService.getDecorationsForDocument(uri);
+            const freshDec = decs.find(d => d.id === blockId);
+            if (!freshDec) return; // Блок вже опрацьований
+
             const sessionOp = this.sessionManager.getActiveSession().messages
                 .flatMap(m => m.operations || [])
                 .find(o => o.id === opId);
@@ -380,7 +385,7 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
             const edit = new vscode.WorkspaceEdit();
 
             if (sessionOp.type === 'create_file') {
-                edit.replace(uri, range, ''); 
+                edit.replace(uri, freshDec.range, ''); 
             } 
             else if (sessionOp.type === 'update_file') {
                 const backupUri = this.snapshotService.getBackupUri(opId, PathNormalizer.normalize(uri.fsPath));
@@ -402,7 +407,7 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
 
                 const match = await searchEngine.findMatch(
                     backupDoc, 
-                    originalSearch, 
+                    freshDec.originalSearch, 
                     undefined, 
                     strictEngineSettings, 
                     astSettings
@@ -414,12 +419,12 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
                 }
                 
                 const originalText = this.extractFullLines(backupContent, match.range.start.line, match.range.end.line);
-                edit.replace(uri, range, originalText);
+                edit.replace(uri, freshDec.range, originalText); 
             }
 
             await vscode.workspace.applyEdit(edit);
             
-            this.decorationService.removeDecorationBlock(uri, opId, range);
+            this.decorationService.removeDecorationBlock(uri, blockId);
             this.checkPartialState(opId, uri);
 
         } catch (e) {

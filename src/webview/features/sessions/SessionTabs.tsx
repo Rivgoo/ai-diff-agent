@@ -1,4 +1,4 @@
-import { use } from 'react';
+import { use, useEffect, useRef } from 'react';
 import { useIPC } from '@/webview/hooks/useIPC';
 import { AgentContext } from '@/webview/store/AgentProvider';
 import { IconPlus, IconX, IconBrandGithub, IconFolder } from '@tabler/icons-react';
@@ -8,14 +8,30 @@ export const SessionTabs = () => {
     const { sendEvent } = useIPC();
     const context = use(AgentContext);
     
+    const containerRef = useRef<HTMLDivElement>(null);
+    
     if (!context) throw new Error('SessionTabs must be inside AgentProvider');
     const { sessions, activeSessionId } = context.state;
 
     const sessionList = Object.values(sessions).sort((a, b) => Number(a.id) - Number(b.id));
+
+    useEffect(() => {
+        if (!containerRef.current || !activeSessionId) return;
+        
+        // Використовуємо setTimeout, щоб дати React час відрендерити нову вкладку
+        setTimeout(() => {
+            if (!containerRef.current) return;
+            const activeTabElement = containerRef.current.querySelector(`.${styles.tabActive}`);
+            if (activeTabElement) {
+                activeTabElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+        }, 50);
+    }, [activeSessionId, sessionList.length]);
+
     if (sessionList.length === 0) return null;
 
     return (
-        <div className={styles.container}>
+        <div className={styles.container} ref={containerRef}>
             <div className={styles.topActions} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0 8px' }}>
                 <button 
                     className={styles.iconBtn} style={{ background: 'none', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer' }}

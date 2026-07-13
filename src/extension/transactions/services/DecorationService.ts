@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 export interface OpDecoration {
+    id: string; // ФІКС: Унікальний ID блоку
     opId: string;
     range: vscode.Range;
     originalSearch: string; 
@@ -26,21 +27,23 @@ export class DecorationService {
         const key = uri.toString();
         const existing = this.activeDecorations.get(key) || [];
         for (const b of blocks) {
-            existing.push({ opId, range: b.range, originalSearch: b.originalSearch });
+            existing.push({ 
+                id: Math.random().toString(36).substring(2, 9),
+                opId, 
+                range: b.range, 
+                originalSearch: b.originalSearch 
+            });
         }
         this.activeDecorations.set(key, existing);
         this.triggerUpdateDecorations();
     }
 
-    // НОВИЙ МЕТОД: Для видалення ОДНОГО конкретного блоку (знадобиться в Частині 2)
-    public removeDecorationBlock(uri: vscode.Uri, opId: string, exactRange: vscode.Range): void {
+    public removeDecorationBlock(uri: vscode.Uri, blockId: string): void {
         const key = uri.toString();
         const decs = this.activeDecorations.get(key);
         if (!decs) return;
 
-        const filtered = decs.filter(d => 
-            !(d.opId === opId && d.range.isEqual(exactRange))
-        );
+        const filtered = decs.filter(d => d.id !== blockId);
 
         if (filtered.length === 0) {
             this.activeDecorations.delete(key);
@@ -87,7 +90,6 @@ export class DecorationService {
         return result;
     }
 
-    // НОВИЙ МЕТОД: Отримання ВСІХ декорацій для конкретного документа (для CodeLens)
     public getDecorationsForDocument(uri: vscode.Uri): OpDecoration[] {
         return this.activeDecorations.get(uri.toString()) || [];
     }
@@ -108,7 +110,6 @@ export class DecorationService {
         for (const editor of vscode.window.visibleTextEditors) {
             this.updateDecorationsForEditor(editor);
         }
-        // Сповіщаємо CodeLensProvider, що потрібно перемалювати кнопки
         this._onDidChangeDecorations.fire();
     }
 

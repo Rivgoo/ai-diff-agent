@@ -50,7 +50,7 @@ export class SnapshotService {
         } catch { /* Safe ignore */ }
     }
 
-    public async cleanStaleBackups(retentionDays: number): Promise<void> {
+    public async cleanStaleBackups(retentionDays: number, activeOpIds: Set<string>): Promise<void> {
         const backupsDir = vscode.Uri.joinPath(this.globalStorageUri, 'backups');
         try {
             const entries = await vscode.workspace.fs.readDirectory(backupsDir);
@@ -59,9 +59,14 @@ export class SnapshotService {
 
             for (const [folderName, type] of entries) {
                 if (type === vscode.FileType.Directory) {
+                    if (activeOpIds.has(folderName)) {
+                        continue;
+                    }
+
                     const folderUri = vscode.Uri.joinPath(backupsDir, folderName);
                     const stat = await vscode.workspace.fs.stat(folderUri);
                     const ageDays = (now - stat.mtime) / msInDay;
+                    
                     if (ageDays > retentionDays) {
                         await vscode.workspace.fs.delete(folderUri, { recursive: true, useTrash: false });
                     }

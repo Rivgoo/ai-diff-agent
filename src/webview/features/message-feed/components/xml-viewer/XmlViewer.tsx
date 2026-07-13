@@ -101,11 +101,15 @@ export const XmlViewer = ({ rawInput }: XmlViewerProps) => {
     }, [tree, collapsedNodeIds]);
 
     const toggleCollapse = (nodeId: string) => {
-        setCollapsedNodeIds(prev => {
-            const next = new Set(prev);
-            if (next.has(nodeId)) next.delete(nodeId);
-            else next.add(nodeId);
-            return next;
+        import('react').then(({ startTransition }) => {
+            startTransition(() => {
+                setCollapsedNodeIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(nodeId)) next.delete(nodeId);
+                    else next.add(nodeId);
+                    return next;
+                });
+            });
         });
     };
 

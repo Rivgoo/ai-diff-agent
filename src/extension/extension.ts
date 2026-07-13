@@ -11,7 +11,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     OutputLogger.initialize();
     OutputLogger.log('AI Diff Agent activating...', 'INFO');
 
-    // Ініціалізація Tree-Sitter WASM Engine
     try {
         const wasmGrammarsPath = vscode.Uri.joinPath(context.extensionUri, 'out', 'extension', 'grammars').fsPath;
         await AstParserRegistry.initialize(wasmGrammarsPath);
@@ -25,7 +24,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const config = vscode.workspace.getConfiguration('aiDiffAgent');
     const retentionDays = config.get<number>('workflow.backupRetentionDays') || 7;
     const snapshotService = new SnapshotService(context.globalStorageUri);
-    snapshotService.cleanStaleBackups(retentionDays);
+    
+    const rawData = context.workspaceState.get<any[]>('ai-diff-agent.transactions', []);
+    const activeTxIds = new Set<string>(rawData.map(r => r.transactionId).filter(Boolean));
+    
+    snapshotService.cleanStaleBackups(retentionDays, activeTxIds);
 
     const decorationService = new DecorationService();
 
@@ -70,12 +73,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             OutputLogger.show();
         }),
         
-        vscode.commands.registerCommand('ai-diff-agent.action.acceptBlock', async (opId: string, uri: vscode.Uri, range: vscode.Range) => {
-            await sidebarProvider.router.handleAcceptBlock(opId, uri, range);
+        vscode.commands.registerCommand('ai-diff-agent.action.acceptBlock', async (opId: string, uri: vscode.Uri, blockId: string) => {
+            await sidebarProvider.router.handleAcceptBlock(opId, uri, blockId);
         }),
         
-        vscode.commands.registerCommand('ai-diff-agent.action.rejectBlock', async (opId: string, uri: vscode.Uri, range: vscode.Range, searchBlock: string) => {
-            await sidebarProvider.router.handleRejectBlock(opId, uri, range, searchBlock);
+        vscode.commands.registerCommand('ai-diff-agent.action.rejectBlock', async (opId: string, uri: vscode.Uri, blockId: string) => {
+            await sidebarProvider.router.handleRejectBlock(opId, uri, blockId);
         })
     );
 

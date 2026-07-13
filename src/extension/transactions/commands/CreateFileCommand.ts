@@ -53,10 +53,12 @@ export class CreateFileCommand extends BaseCommand<CreateFileOperation> {
         }
 
         const lineCount = this.operation.content.split(/\r?\n/).length;
+        const lastLine = Math.max(0, lineCount - 1);
+        
         context.uow.addAppliedBlock(this.operationId, this.targetPath, {
             range: {
                 start: { line: 0, character: 0 },
-                end: { line: lineCount, character: 999 }
+                end: { line: lastLine, character: 999 }
             },
             originalSearch: ''
         });

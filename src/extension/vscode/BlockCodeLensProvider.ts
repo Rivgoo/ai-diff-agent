@@ -10,12 +10,10 @@ export class BlockCodeLensProvider implements vscode.CodeLensProvider {
         private readonly decorationService: DecorationService,
         private readonly settingsManager: SettingsManager
     ) {
-        // Коли змінюються підсвітки, ми кажемо VS Code оновити лінзи
         this.decorationService.onDidChangeDecorations(() => {
             this._onDidChangeCodeLenses.fire();
         });
         
-        // Коли змінюються налаштування (користувач увімкнув/вимкнув фічу)
         vscode.workspace.onDidChangeConfiguration((e) => {
             if (e.affectsConfiguration('aiDiffAgent.ui.enableCodeLens')) {
                 this._onDidChangeCodeLenses.fire();
@@ -26,7 +24,7 @@ export class BlockCodeLensProvider implements vscode.CodeLensProvider {
     public provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] | null {
         const isEnabled = this.settingsManager.getSettings().ui.enableCodeLens;
         if (!isEnabled) {
-            return null; // Якщо вимкнено в налаштуваннях - нічого не малюємо
+            return null;
         }
 
         const decorations = this.decorationService.getDecorationsForDocument(document.uri);
@@ -42,14 +40,14 @@ export class BlockCodeLensProvider implements vscode.CodeLensProvider {
             const acceptLens = new vscode.CodeLens(targetRange, {
                 title: "$(check) Accept Block",
                 command: "ai-diff-agent.action.acceptBlock",
-                arguments: [dec.opId, document.uri, dec.range],
+                arguments: [dec.opId, document.uri, dec.id], 
                 tooltip: "Keep these changes and remove the highlight"
             });
 
             const rejectLens = new vscode.CodeLens(targetRange, {
                 title: "$(close) Reject Block",
                 command: "ai-diff-agent.action.rejectBlock",
-                arguments: [dec.opId, document.uri, dec.range, dec.originalSearch], 
+                arguments: [dec.opId, document.uri, dec.id], 
                 tooltip: "Revert this specific block to its original state"
             });
 

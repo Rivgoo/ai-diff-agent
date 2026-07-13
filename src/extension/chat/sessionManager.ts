@@ -8,6 +8,8 @@ export class ChatSessionManager {
     private activeSessionId: string = '';
     private saveTimer: NodeJS.Timeout | null = null;
 
+    private saveQueue: Promise<void> = Promise.resolve();
+
     constructor(
         private readonly storage: vscode.Memento,
         private readonly workspaceRoot: vscode.Uri | undefined,
@@ -154,9 +156,6 @@ export class ChatSessionManager {
         this.activeSessionId = id;
     }
 
-    /**
-     * Відкладене збереження (Debounce) для запобігання надмірному I/O навантаженню.
-     */
     private scheduleSave(): void {
         if (this.saveTimer) {
             clearTimeout(this.saveTimer);
@@ -166,9 +165,6 @@ export class ChatSessionManager {
         }, 500); // Чекаємо 500мс тиші перед записом
     }
 
-    /**
-     * Примусове негайне збереження (використовується при перемиканні сесій).
-     */
     private forceSave(): void {
         if (this.saveTimer) {
             clearTimeout(this.saveTimer);
@@ -177,23 +173,27 @@ export class ChatSessionManager {
         this.executeSave();
     }
 
-    private async executeSave(): Promise<void> {
-        if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
-            try {
-                const fileUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-history.json');
-                const content = JSON.stringify({
-                    sessions: this.sessions,
-                    activeSessionId: this.activeSessionId
-                }, null, 2);
-                
-                const data = new TextEncoder().encode(content);
-                await vscode.workspace.fs.writeFile(fileUri, data);
-            } catch (e) {
-                OutputLogger.log(`Failed to save chat history to workspace: ${e}`, 'ERROR');
+    private executeSave(): void {
+        this.saveQueue = this.saveQueue.then(async () => {
+            if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
+                try {
+                    const fileUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-history.json');
+                    const content = JSON.stringify({
+                        sessions: this.sessions,
+                        activeSessionId: this.activeSessionId
+                    }, null, 2);
+                    
+                    const data = new TextEncoder().encode(content);
+                    await vscode.workspace.fs.writeFile(fileUri, data);
+                } catch (e) {
+                    OutputLogger.log(`Failed to save chat history to workspace: ${e}`, 'ERROR');
+                }
+            } else {
+                this.storage.update(`${SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION}_v2`, this.sessions);
+                this.storage.update(`${SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION}_activeId`, this.activeSessionId);
             }
-        } else {
-            this.storage.update(`${SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION}_v2`, this.sessions);
-            this.storage.update(`${SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION}_activeId`, this.activeSessionId);
-        }
+        }).catch(e => {
+            OutputLogger.log(`Critical save queue error: ${e}`, 'ERROR');
+        });
     }
 }
