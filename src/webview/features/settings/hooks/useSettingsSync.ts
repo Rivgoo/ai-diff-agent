@@ -7,7 +7,7 @@ export const useSettingsSync = () => {
     const updateLocalSetting = useAgentStore((state) => state.updateLocalSetting);
     const timerRef = useRef<number | null>(null);
 
-    const updateSetting = useCallback((category: 'ui' | 'workflow' | 'engine', key: string, value: any) => {
+    const updateSetting = useCallback((category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai', key: string, value: any) => {
         updateLocalSetting(category, key, value);
 
         if (timerRef.current) {

@@ -40,7 +40,7 @@ interface AgentState {
         alreadyApplied?: boolean,
         isPartiallyResolved?: boolean,
     ) => void;
-    updateLocalSetting: (category: 'ui' | 'workflow' | 'engine', key: string, value: any) => void;
+    updateLocalSetting: (category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai', key: string, value: any) => void;
 }
 
 export const useAgentStore = create<AgentState>((set) => ({
@@ -48,21 +48,51 @@ export const useAgentStore = create<AgentState>((set) => ({
     activeSessionId: '',
     isAgentTyping: false,
     settings: { 
-        ui: { autoScroll: true, compactMode: false, showConfidenceBadges: true, enableCodeLens: true },
-        workflow: { chatHistoryMode: 'workspace', autoSaveAfterAccept: true, formatBehavior: 'onSaveOnly', cleanupEmptyDirectories: true, backupRetentionDays: 7 },
+        ui: { 
+            autoScroll: true, 
+            compactMode: false, 
+            showConfidenceBadges: true, 
+            enableCodeLens: true,
+            phantomInlineDiffs: true,
+            enableWalkthroughMode: false
+        },
+        workflow: { 
+            chatHistoryMode: 'workspace', 
+            autoSaveAfterAccept: true, 
+            formatBehavior: 'onSaveOnly', 
+            cleanupEmptyDirectories: true, 
+            backupRetentionDays: 7,
+            executionMode: 'tolerant',
+            clipboardWatcher: false,
+            historyBranchAwareness: true
+        },
         engine: { 
             payloadRecoveryMode: 'aggressive',
             fallbackMatchLevel: 'safe',
-            enableAstMatching: true,
-            strictSyntaxValidation: false,
-            autoFixSyntax: true,
             maxFileSizeMb: 5,
+            useUnsavedBuffers: true,
+            polyglotParsing: true,
             strictParsing: false, 
             allowCdataUnwrap: true,
             allowFuzzyMatching: true,
             allowSlidingWindow: true,
             blockOnSyntaxErrors: false,
             respectGitIgnore: true
+        },
+        ast: {
+            enableAstMatching: true,
+            enabledLanguages: ['javascript', 'typescript', 'python', 'c_sharp', 'json', 'html', 'css', 'bash', 'c'],
+            sanityStrictness: 'warn',
+            validateEmbeddedScripts: true,
+            queryTolerance: 'allow_signature_drift',
+            strictSyntaxValidation: false,
+            autoFixSyntax: true,
+            lspValidation: false,
+            autoStitchImports: false,
+            blastRadiusAnalysis: true
+        },
+        ai: {
+            feedbackLoopEnabled: false
         }
     },
     isSettingsOpen: false,
@@ -131,9 +161,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         const activeSession = state.sessions[state.activeSessionId];
         if (!activeSession) return state;
 
-        // O(1) оптимізація: Створюємо Map для швидкого пошуку апдейтів по ID
         const updatesMap = new Map(updates.map(u => [u.operationId, u]));
-
         let sessionChanged = false;
 
         const updatedMessages = activeSession.messages.map((msg) => {

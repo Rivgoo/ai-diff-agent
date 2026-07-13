@@ -70,124 +70,100 @@
           "type": "object",
           "description": "UI and Display settings",
           "properties": {
-            "autoScroll": {
-              "type": "boolean",
-              "default": true
-            },
-            "compactMode": {
-              "type": "boolean",
-              "default": false
-            },
-            "showConfidenceBadges": {
-              "type": "boolean",
-              "default": true
-            },
-            "enableCodeLens": {
-              "type": "boolean",
-              "default": true,
-              "description": "Enable clickable [Accept Block] and [Reject Block] CodeLens buttons directly inside the text editor."
-            }
+            "autoScroll": { "type": "boolean", "default": true },
+            "compactMode": { "type": "boolean", "default": false },
+            "showConfidenceBadges": { "type": "boolean", "default": true },
+            "enableCodeLens": { "type": "boolean", "default": true },
+            "phantomInlineDiffs": { "type": "boolean", "default": true },
+            "enableWalkthroughMode": { "type": "boolean", "default": false }
           },
           "default": {
             "autoScroll": true,
             "compactMode": false,
             "showConfidenceBadges": true,
-            "enableCodeLens": true
+            "enableCodeLens": true,
+            "phantomInlineDiffs": true,
+            "enableWalkthroughMode": false
           }
         },
         "aiDiffAgent.workflow": {
           "type": "object",
           "description": "Lifecycle and automation settings",
           "properties": {
-            "chatHistoryMode": {
-              "type": "string",
-              "enum": [
-                "workspace",
-                "global",
-                "disabled"
-              ],
-              "default": "workspace"
-            },
-            "autoSaveAfterAccept": {
-              "type": "boolean",
-              "default": true
-            },
-            "formatBehavior": {
-              "type": "string",
-              "enum": [
-                "always",
-                "onSaveOnly",
-                "never"
-              ],
-              "default": "onSaveOnly"
-            },
-            "cleanupEmptyDirectories": {
-              "type": "boolean",
-              "default": true
-            },
-            "backupRetentionDays": {
-              "type": "number",
-              "default": 7
-            }
+            "chatHistoryMode": { "type": "string", "enum": ["workspace", "global", "disabled"], "default": "workspace" },
+            "autoSaveAfterAccept": { "type": "boolean", "default": true },
+            "formatBehavior": { "type": "string", "enum": ["always", "onSaveOnly", "never"], "default": "onSaveOnly" },
+            "cleanupEmptyDirectories": { "type": "boolean", "default": true },
+            "backupRetentionDays": { "type": "number", "default": 7 },
+            "executionMode": { "type": "string", "enum": ["atomic", "tolerant"], "default": "tolerant" },
+            "clipboardWatcher": { "type": "boolean", "default": false },
+            "historyBranchAwareness": { "type": "boolean", "default": true }
           },
           "default": {
             "chatHistoryMode": "workspace",
             "autoSaveAfterAccept": true,
             "formatBehavior": "onSaveOnly",
             "cleanupEmptyDirectories": true,
-            "backupRetentionDays": 7
+            "backupRetentionDays": 7,
+            "executionMode": "tolerant",
+            "clipboardWatcher": false,
+            "historyBranchAwareness": true
           }
         },
         "aiDiffAgent.engine": {
           "type": "object",
-          "description": "Diff Engine and parsing settings",
+          "description": "Text Parsing & Limits",
           "properties": {
-            "payloadRecoveryMode": {
-              "type": "string",
-              "enum": [
-                "strict",
-                "standard",
-                "aggressive"
-              ],
-              "default": "aggressive",
-              "description": "Controls how aggressively the parser tries to salvage malformed XML/Code wrappers."
-            },
-            "fallbackMatchLevel": {
-              "type": "string",
-              "enum": [
-                "none",
-                "safe",
-                "aggressive"
-              ],
-              "default": "safe",
-              "description": "Determines how the engine searches for code if AST fails."
-            },
-            "enableAstMatching": {
-              "type": "boolean",
-              "default": true,
-              "description": "Enable structural Abstract Syntax Tree (AST) matching for highly resilient code replacement."
-            },
-            "strictSyntaxValidation": {
-              "type": "boolean",
-              "default": false,
-              "description": "If true, strictly blocks the transaction if the AI introduces syntax errors (missing brackets, semicolons)."
-            },
-            "autoFixSyntax": {
-              "type": "boolean",
-              "default": true
-            },
-            "maxFileSizeMb": {
-              "type": "number",
-              "default": 5
-            }
+            "payloadRecoveryMode": { "type": "string", "enum": ["strict", "standard", "aggressive"], "default": "aggressive" },
+            "fallbackMatchLevel": { "type": "string", "enum": ["none", "safe", "aggressive"], "default": "safe" },
+            "maxFileSizeMb": { "type": "number", "default": 5 },
+            "useUnsavedBuffers": { "type": "boolean", "default": true },
+            "polyglotParsing": { "type": "boolean", "default": true }
           },
           "default": {
             "payloadRecoveryMode": "aggressive",
             "fallbackMatchLevel": "safe",
+            "maxFileSizeMb": 5,
+            "useUnsavedBuffers": true,
+            "polyglotParsing": true
+          }
+        },
+        "aiDiffAgent.ast": {
+          "type": "object",
+          "description": "Tree-Sitter, Semantics and LSP",
+          "properties": {
+            "enableAstMatching": { "type": "boolean", "default": true },
+            "enabledLanguages": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": ["javascript", "typescript", "python", "c_sharp", "json", "html", "css", "bash", "c"]
+            },
+            "queryTolerance": { "type": "string", "enum": ["exact", "allow_signature_drift"], "default": "allow_signature_drift" },
+            "strictSyntaxValidation": { "type": "boolean", "default": false },
+            "autoFixSyntax": { "type": "boolean", "default": true },
+            "lspValidation": { "type": "boolean", "default": false },
+            "autoStitchImports": { "type": "boolean", "default": false },
+            "blastRadiusAnalysis": { "type": "boolean", "default": true }
+          },
+          "default": {
             "enableAstMatching": true,
+            "enabledLanguages": ["javascript", "typescript", "python", "c_sharp", "json", "html", "css", "bash", "c"],
+            "queryTolerance": "allow_signature_drift",
             "strictSyntaxValidation": false,
             "autoFixSyntax": true,
-            "maxFileSizeMb": 5
+            "lspValidation": false,
+            "autoStitchImports": false,
+            "blastRadiusAnalysis": true
+          }
+        },
+        "aiDiffAgent.ai": {
+          "type": "object",
+          "description": "AI Feedback Loop",
+          "properties": {
+            "feedbackLoopEnabled": { "type": "boolean", "default": false }
+          },
+          "default": {
+            "feedbackLoopEnabled": false
           }
         }
       }
