@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, startTransition } from 'react';
 import { IconChevronRight } from '@tabler/icons-react';
 import { XmlTreeBuilder } from './XmlTreeBuilder';
 import { XmlOpeningTag, XmlClosingTag, XmlText, XmlRowIndent } from './XmlElements';
@@ -79,11 +79,9 @@ function flattenTree(
 }
 
 export const XmlViewer = ({ rawInput }: XmlViewerProps) => {
-    // Стан для асинхронного завантаження AST дерева
     const [tree, setTree] = useState<XmlTree | null>(null);
     const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(new Set());
 
-    // Запускаємо побудову дерева у фоні при відкритті акордеону
     useEffect(() => {
         let isMounted = true;
         XmlTreeBuilder.buildAsync(rawInput).then(result => {
@@ -101,19 +99,17 @@ export const XmlViewer = ({ rawInput }: XmlViewerProps) => {
     }, [tree, collapsedNodeIds]);
 
     const toggleCollapse = (nodeId: string) => {
-        import('react').then(({ startTransition }) => {
-            startTransition(() => {
-                setCollapsedNodeIds(prev => {
-                    const next = new Set(prev);
-                    if (next.has(nodeId)) next.delete(nodeId);
-                    else next.add(nodeId);
-                    return next;
-                });
+        // ФІКС: Статичний виклик startTransition замість динамічного імпорту
+        startTransition(() => {
+            setCollapsedNodeIds(prev => {
+                const next = new Set(prev);
+                if (next.has(nodeId)) next.delete(nodeId);
+                else next.add(nodeId);
+                return next;
             });
         });
     };
 
-    // Показуємо прелоадер, доки лексер працює
     if (!tree) {
         return (
             <div className={styles.container} style={{ padding: '8px 12px', color: 'var(--vscode-descriptionForeground)' }}>

@@ -145,13 +145,27 @@ export class ProcessPayloadUseCase {
 
             const currentSession = this.sessionManager.getActiveSession();
             const lastMessage = currentSession.messages[currentSession.messages.length - 1];
-            const hasConflicts = lastMessage.operations?.some(op => op.status === 'conflict' || op.status === 'error');
             
-            if (hasConflicts) {
+            const totalOps = lastMessage.operations?.length || 0;
+            const conflictOps = lastMessage.operations?.filter(op => op.status === 'conflict' || op.status === 'error').length || 0;
+            const appliedOps = totalOps - conflictOps;
+            
+            if (conflictOps > 0) {
+                const isAtomic = this.settingsManager.getSettings().workflow.executionMode === 'atomic';
+                
+                let systemText = '';
+                if (isAtomic) {
+                    systemText = 'Could not apply changes. The entire transaction was rolled back (Atomic mode) to prevent incomplete modifications. Please resolve the search conflicts below.';
+                } else if (appliedOps === 0) {
+                    systemText = 'Could not apply any changes. All files encountered conflicts. Please review the errors below.';
+                } else {
+                    systemText = `Partial success (${appliedOps}/${totalOps} files staged). However, some files encountered matching conflicts and were isolated. Please resolve them below.`;
+                }
+
                 this.sessionManager.addMessage({
                     id: Date.now().toString(),
                     role: 'system',
-                    text: 'Could not apply changes. The transaction was automatically rolled back to prevent incomplete code modifications. Please resolve the search pattern conflicts listed below.',
+                    text: systemText,
                     timestamp: Date.now()
                 });
             }

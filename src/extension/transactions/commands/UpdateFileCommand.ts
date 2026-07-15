@@ -9,6 +9,7 @@ import { TextNormalizerV2 } from '@/core/matcher/heuristics/textNormalizerV2';
 interface MatchedBlock {
     range: Range;
     replace: string;
+    requiresMerge: boolean;
 }
 
 export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
@@ -50,8 +51,6 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
         const docText = document.getText();
         
         let allBlocksAlreadyApplied = true;
-
-        // const isAstEnabled = context.settingsManager.getSettings().engine.enableAstMatching;
         
         for (let i = 0; i < this.operation.changes.length; i++) {
             const change = this.operation.changes[i];
@@ -94,9 +93,22 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                  finalReplace = match.hoistedImports.join('\n') + '\n' + finalReplace;
             }
 
+            let requiresMerge = false;
+            if (match.strategy !== 'EXACT_MATCH') {
+                const currentFileText = this.extractFullLines(docText, match.range.start.line, match.range.end.line);
+                const normCurrent = TextNormalizerV2.aggressiveNormalizeSearchBlock(currentFileText);
+                const normAI = TextNormalizerV2.aggressiveNormalizeSearchBlock(change.search);
+                
+                if (normCurrent !== normAI) {
+                    requiresMerge = true;
+                    this.metadata.requiresAutoMerge = true;
+                }
+            }
+
             this.matchedBlocks.push({
                 range: match.range,
-                replace: finalReplace
+                replace: finalReplace,
+                requiresMerge
             });
         }
 
@@ -117,9 +129,22 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
 
         this.matchedBlocks.sort((a, b) => b.range.start.line - a.range.start.line);
 
+        const document = await context.getDocument(this.targetPath);
+        const docText = document.getText();
+
         for (const match of this.matchedBlocks) {
-            context.uow.replace(this.targetPath, match.range, match.replace);
-            const lineDelta = match.replace.split(/\r?\n/).length;
+            let contentToInsert = match.replace;
+            let lineDelta = match.replace.split(/\r?\n/).length;
+
+
+            if (match.requiresMerge) {
+                const currentText = this.extractFullLines(docText, match.range.start.line, match.range.end.line);
+                contentToInsert = `<<<<<<< CURRENT (Your Changes)\n${currentText}\n=======\n${match.replace}\n>>>>>>> INCOMING (AI Changes)`;
+                lineDelta = contentToInsert.split(/\r?\n/).length;
+                context.logger.warn(`[Semantic Merge] Inserted merge markers for block in ${this.targetPath}`);
+            }
+
+            context.uow.replace(this.targetPath, match.range, contentToInsert);
             
             const originalChange = this.operation.changes.find(c => TextNormalizerV2.aggressiveNormalizeSearchBlock(c.replace) === TextNormalizerV2.aggressiveNormalizeSearchBlock(match.replace));
 
@@ -133,5 +158,11 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
         }
 
         this.antiActions.push({ type: 'restore_file', path: this.targetPath, relativePath: this.normalizedPath });
+    }
+
+    private extractFullLines(text: string, startLine: number, endLine: number): string {
+        const lines = text.split(/\r?\n/); 
+        const targetLines = lines.slice(startLine, endLine + 1);
+        return targetLines.join('\n');
     }
 }

@@ -155,7 +155,20 @@ export class MessageRouter {
                 this.transactionPipeline.emergencyUnlock();
                 this.syncState();
                 break;
-            case 'ACTION_SAVE_ALL': this.transactionPipeline.saveBatch(); break;
+            case 'ACTION_SAVE_ALL': 
+                if (event.hasConflicts) {
+                    vscode.window.showWarningMessage(
+                        "You have unresolved conflicts in this batch. Do you want to save the successful files and ignore the conflicts?",
+                        "Save Successful", "Cancel"
+                    ).then(choice => {
+                        if (choice === "Save Successful") {
+                            this.transactionPipeline.saveBatch();
+                        }
+                    });
+                } else {
+                    this.transactionPipeline.saveBatch();
+                }
+                break;
             case 'ACTION_REVERT_ALL': this.transactionPipeline.revertBatch(); break;
             case 'ACTION_ACCEPT_OPERATION': this.transactionPipeline.saveOperation(event.operationId); break;
             case 'ACTION_REVERT_OPERATION': this.transactionPipeline.revertOperation(event.operationId); break;

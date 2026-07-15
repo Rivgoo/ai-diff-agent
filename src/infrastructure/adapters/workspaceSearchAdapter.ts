@@ -31,9 +31,10 @@ export class VsCodeWorkspaceSearchAdapter implements IWorkspaceSearchPort {
         
         let regexStr = globPattern.replace(/\./g, '\\.').replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*');
         if (!regexStr.startsWith('.*')) regexStr = '^' + regexStr;
+        
         regexStr = regexStr + '$';
+        
         const regex = new RegExp(regexStr, 'i');
-
         const visited = new Set<string>();
 
         const walk = async (currentUri: vscode.Uri) => {
@@ -58,6 +59,7 @@ export class VsCodeWorkspaceSearchAdapter implements IWorkspaceSearchPort {
                     }
                 }
             } catch {
+
             }
         };
 

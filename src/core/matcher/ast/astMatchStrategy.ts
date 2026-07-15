@@ -296,7 +296,9 @@ export class AstMatchStrategy implements IMatchStrategy {
         const walk = (node: ISyntaxNode): SemanticSignature | null => {
             if (node.isNamed && !BANNED_SIGNATURE_TYPES.has(node.type)) {
                 const nameNode = node.childForFieldName('name');
-                if (nameNode && nameNode.text) return { type: node.type, name: nameNode.text };
+                if (nameNode && nameNode.text && nameNode.text !== 'FakeWrapper' && nameNode.text !== 'FakeMethod') {
+                    return { type: node.type, name: nameNode.text };
+                }
             }
             for (const child of node.children) {
                 const res = walk(child);

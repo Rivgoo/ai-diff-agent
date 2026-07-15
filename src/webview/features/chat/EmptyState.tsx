@@ -1,4 +1,4 @@
-import { use, useState, useRef, useEffect } from 'react';
+import { useContext, useState, useRef, useEffect } from 'react';
 import { useIPC } from '@/webview/hooks/useIPC';
 import { AgentContext } from '@/webview/store/AgentProvider';
 import { Button } from '@/webview/shared/ui/Button/Button';
@@ -8,7 +8,7 @@ import styles from './EmptyState.module.css';
 
 export const EmptyState = () => {
     const { sendEvent } = useIPC();
-    const context = use(AgentContext);
+    const context = useContext(AgentContext); // ФІКС
     
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [promptMode, setPromptMode] = useState<'stable' | 'experimental'>('stable');

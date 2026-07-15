@@ -1,9 +1,9 @@
-import { use } from 'react';
+import { useContext } from 'react';
 import { ComposerContext } from './composerContext';
 import styles from './composer.module.css';
 
 export const ComposerInput = () => {
-    const context = use(ComposerContext);
+    const context = useContext(ComposerContext); // ФІКС
     if (!context) throw new Error('ComposerInput must be inside ComposerProvider');
 
     const { state, actions, meta } = context;

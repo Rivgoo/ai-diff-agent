@@ -1,10 +1,10 @@
-import { use } from 'react';
+import { useContext } from 'react';
 import { ComposerContext } from './composerContext';
 import { Button } from '@/webview/shared/ui/Button/Button';
 import { IconSend, IconX, IconAdjustmentsHorizontal, IconTrash } from '@tabler/icons-react';
 
 export const ComposerSubmit = () => {
-    const context = use(ComposerContext);
+    const context = useContext(ComposerContext);
     if (!context) return null;
     return (
         <Button variant="primary" onClick={context.actions.submit} disabled={!context.state.hasValue} aria-label="Apply AI Payload">
@@ -14,7 +14,7 @@ export const ComposerSubmit = () => {
 };
 
 export const ComposerCancel = () => {
-    const context = use(ComposerContext);
+    const context = useContext(ComposerContext);
     if (!context) return null;
     return (
         <Button variant="danger" onClick={context.actions.cancel} aria-label="Cancel Processing">
@@ -24,7 +24,7 @@ export const ComposerCancel = () => {
 };
 
 export const ComposerSettings = () => {
-    const context = use(ComposerContext);
+    const context = useContext(ComposerContext);
     if (!context) return null;
     return (
         <Button variant="icon" onClick={context.actions.toggleSettings} aria-label="Composer Settings">
@@ -34,7 +34,7 @@ export const ComposerSettings = () => {
 };
 
 export const ComposerClear = () => {
-    const context = use(ComposerContext);
+    const context = useContext(ComposerContext);
     if (!context) return null;
     return (
         <Button variant="icon" onClick={context.actions.clearSession} disabled={context.state.isClearDisabled} aria-label="Clear Chat History">

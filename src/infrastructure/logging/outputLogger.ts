@@ -1,48 +1,40 @@
 import * as vscode from 'vscode';
 
-/**
- * Global observability utility providing unified diagnostic logging.
- * Decouples engine logs and redirects them to a dedicated VS Code Output Channel.
- * Automatically self-initializes if invoked prior to de-serialisation.
- */
 export class OutputLogger {
-    private static channel: vscode.OutputChannel | undefined;
+    private static _channel: vscode.OutputChannel | undefined;
 
-    /**
-     * Allocates the VS Code Output Channel if it does not already exist.
-     */
+    private static get channel(): vscode.OutputChannel {
+        if (!this._channel) {
+            this._channel = vscode.window.createOutputChannel('AI Diff Agent');
+        }
+        return this._channel;
+    }
+
     public static initialize(): void {
-        if (!this.channel) {
-            this.channel = vscode.window.createOutputChannel('AI Diff Agent');
-        }
+        const _ = this.channel; // Форсуємо створення
     }
 
-    /**
-     * Emits a formatted timestamped trace to the output console.
-     */
     public static log(message: string, level: 'INFO' | 'WARN' | 'ERROR' = 'INFO'): void {
-        if (!this.channel) {
-            this.initialize();
-        }
         const timestamp = new Date().toISOString();
-        this.channel!.appendLine(`[${timestamp}] [${level}] ${message}`);
-    }
+        const formattedMessage = `[${timestamp}] [${level}] ${message}`;
+        
+        this.channel.appendLine(formattedMessage);
 
-    /**
-     * Focuses the dedicated output panel to provide user visibility.
-     */
-    public static show(): void {
-        if (!this.channel) {
-            this.initialize();
+        if (level === 'ERROR') {
+            console.error(formattedMessage);
+        } else if (level === 'WARN') {
+            console.warn(formattedMessage);
+        } else {
+            console.log(formattedMessage);
         }
-        this.channel!.show(true);
     }
 
-    /**
-     * Disposes of the active channel reference to avoid host leaks on deactivation.
-     */
+    public static show(): void {
+        this.channel.show(true);
+    }
+
     public static dispose(): void {
-        this.channel?.dispose();
-        this.channel = undefined;
+        this._channel?.dispose();
+        this._channel = undefined;
     }
 }

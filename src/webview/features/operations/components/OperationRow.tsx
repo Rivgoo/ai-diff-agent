@@ -14,7 +14,8 @@ interface OperationRowProps {
 
 export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps) => {
     const { sendEvent } = useIPC();
-    const showConfidenceBadges = useAgentStore(s => s.settings.behavior?.showConfidenceBadges ?? true); 
+    // ФІКС: Звертаємось до нової категорії ui замість застарілої behavior
+    const showConfidenceBadges = useAgentStore(s => s.settings.ui?.showConfidenceBadges ?? true); 
     
     const classNames = [styles.row];
     if (isActive) classNames.push(styles.rowActive);
@@ -43,6 +44,7 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
         switch (vm.statusIcon) {
             case 'loading': return <IconLoader2 size={size} className={styles.iconSpin} />;
             case 'edit': return <IconEdit size={size} color="var(--vscode-editorWarning-foreground)" />;
+            case 'merge': return <IconGitCompare size={size} color="#b180d7" />;
             case 'check': return <IconCheck size={size} color="var(--vscode-testing-iconPassed)" />;
             case 'revert': return <IconArrowBackUp size={size} />;
             case 'error': return <IconX size={size} color="var(--vscode-editorError-foreground)" />;
@@ -51,7 +53,7 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
         }
     };
 
-    const isDirty = vm.statusIcon === 'edit';
+    const isDirty = vm.statusIcon === 'edit' || vm.statusIcon === 'merge';
     const isSaved = vm.statusIcon === 'check';
     const canDiff = isDirty || isSaved; 
 
@@ -66,11 +68,13 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
                 
                 {confBadge}
 
+                {vm.statusIcon === 'merge' && (
+                    <Badge backgroundColor="#b180d7" color="#fff">AUTO-MERGE</Badge>
+                )}
+
                 {vm.isPartiallyResolved && (
                     <Badge backgroundColor="var(--vscode-editorInfo-background)" color="#fff">PARTIAL</Badge>
                 )}
-
-                {vm.dirPath && <span className={styles.dirPath} title={vm.dirPath}>&lrm;{vm.dirPath}</span>}
 
                 {vm.dirPath && <span className={styles.dirPath} title={vm.dirPath}>&lrm;{vm.dirPath}</span>}
                 {vm.isResilient && <span className={styles.resilientFlag} title={`Resolved: ${vm.originalPath}`}>HEURISTIC</span>}

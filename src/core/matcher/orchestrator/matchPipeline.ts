@@ -51,12 +51,12 @@ export class MatchPipeline {
             
             if (result.status === 'MATCHED') {
                 if (context.replaceBlock !== undefined) {
+                    // ФІКС: Передаємо ТІЛЬКИ astSettings (engineSettings було видалено з сигнатури)
                     const isSane = await SyntaxSanityChecker.verify(
                         context.document.getText(),
                         result.range,
                         context.replaceBlock,
                         context.fileExtension,
-                        context.engineSettings,
                         context.astSettings
                     );
                     if (!isSane) {
@@ -67,7 +67,6 @@ export class MatchPipeline {
             }
             
             if (result.status === 'FAILED') {
-                // Записуємо помилку тільки якщо вона важливіша за попередню
                 const currentPriority = errorPriority[result.reason] ?? 0;
                 const bestPriority = bestFailure ? (errorPriority[bestFailure.reason] ?? 0) : -1;
                 

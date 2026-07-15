@@ -16,6 +16,7 @@ export interface ChangeStats {
 export type OperationStatus =
   | "pending"
   | "applied_dirty"
+  | "merged_dirty"
   | "saved"
   | "reverted"
   | "conflict"
@@ -54,7 +55,7 @@ export interface EngineSettings {
   payloadRecoveryMode: 'strict' | 'standard' | 'aggressive';
   fallbackMatchLevel: 'none' | 'safe' | 'aggressive';
   maxFileSizeMb: number;
-  useUnsavedBuffers: boolean; // Заділ для Фази 1
+  useUnsavedBuffers: boolean; 
   polyglotParsing: boolean; // Заділ для Фази 5
   
   // Legacy properties awaiting removal in final phases

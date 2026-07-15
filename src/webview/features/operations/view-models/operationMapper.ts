@@ -18,7 +18,7 @@ export interface OperationRowViewModel {
     readonly conflictDetails?: ConflictDetails;
     readonly isResilient: boolean;
     readonly originalPath?: string;
-    readonly statusIcon: 'edit' | 'check' | 'revert' | 'error' | 'loading' | 'warning' | null;
+    readonly statusIcon: 'edit' | 'check' | 'revert' | 'error' | 'loading' | 'warning' | 'merge' | null;
     readonly isDirectory: boolean;
     readonly matchStrategy?: string;
     readonly confidenceScore?: string;
@@ -40,7 +40,6 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
     const descriptor = OPERATION_DESCRIPTORS[op.type];
     const statusMarker = descriptor ? descriptor.prefix : '[ ]';
     
-    // Якщо файл вже містить ці зміни, фарбуємо маркер у жовтий
     let markerColor = descriptor ? descriptor.themeColorVar : 'var(--vscode-descriptionForeground)';
     if (alreadyApplied) markerColor = 'var(--vscode-editorWarning-foreground)';
 
@@ -48,8 +47,9 @@ export function mapToOperationRowViewModel(op: DiffOperation): OperationRowViewM
     
     if (isProcessing) statusIcon = 'loading';
     else if (isRealConflict) statusIcon = 'error';
-    else if (alreadyApplied) statusIcon = 'warning'; // Жовтий значок
+    else if (alreadyApplied) statusIcon = 'warning';
     else if (isAborted) statusIcon = null;
+    else if (op.status === 'merged_dirty') statusIcon = 'merge';
     else if (op.status === 'applied_dirty') statusIcon = 'edit';
     else if (op.status === 'saved') statusIcon = 'check';
     else if (op.status === 'reverted') statusIcon = 'revert';

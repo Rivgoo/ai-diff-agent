@@ -42,7 +42,6 @@ export class TransactionPipeline {
         this.commitPhase = new CommitPhase(store, decorationService, directoryCleanupService, editorService, onStatusUpdate);
     }
 
-    // ВИПРАВЛЕННЯ: Екстрене зняття всіх блокувань
     public emergencyUnlock(): void {
         this.transactionLock.releaseAll();
         this.logger.warn("Emergency unlock triggered. All transaction locks cleared.");
@@ -85,24 +84,38 @@ export class TransactionPipeline {
             this.logger.info(`Starting transaction pipeline for ${commands.length} commands.`);
             
             const validationResult = await this.validationPhase.execute(commands, context);
-            if (!validationResult.success) {
-                this.logger.warn(`Validation failed for ${validationResult.error.failedId}. Aborting batch.`);
-                const conflictMap = new Map<string, ConflictDetails>();
-                conflictMap.set(validationResult.error.failedId, validationResult.error.conflict);
-                this.abortBatch(pendingOps, "Validation failed", conflictMap, validationResult.error.failedId);
+            const executionMode = this.settingsManager.getSettings().workflow.executionMode;
+            
+            if (validationResult.conflicts.size > 0 && executionMode === 'atomic') {
+                const firstConflictId = Array.from(validationResult.conflicts.keys())[0];
+                this.logger.warn(`Atomic Mode: Validation failed for ${firstConflictId}. Aborting entire batch.`);
+                this.abortBatch(pendingOps, "Validation failed (Atomic Mode)", validationResult.conflicts, firstConflictId);
                 return;
             }
 
-            await this.executionPhase.execute(commands, context);
-            await this.commitPhase.execute(commands, pendingOps, context, rootName, rootUri);
+            if (validationResult.conflicts.size > 0) {
+                this.logger.warn(`Tolerant Mode: Isolated ${validationResult.conflicts.size} conflicts.`);
+                const conflictOps = pendingOps.filter(op => validationResult.conflicts.has(op.id));
+                this.abortBatch(conflictOps, "Isolated conflict", validationResult.conflicts);
+            }
 
-            this.logger.info("Transaction pipeline executed successfully.");
+            const validCommands = validationResult.validCommands;
+            
+            if (validCommands.length === 0) {
+                this.logger.warn(`No valid operations left to execute. Stopping pipeline.`);
+                return;
+            }
+            await this.executionPhase.execute(validCommands, context);
+            
+            const validPendingOps = pendingOps.filter(op => validCommands.some(cmd => cmd.operationId === op.id));
+            await this.commitPhase.execute(validCommands, validPendingOps, context, rootName, rootUri);
+
+            this.logger.info(`Transaction pipeline executed successfully for ${validCommands.length} commands.`);
 
         } catch (err) {
             this.logger.error(`Pipeline execution crashed: ${err}`);
             
             for (const cmd of commands) {
-                // ВИПРАВЛЕННЯ: Ізолюємо помилки під час відкату, щоб замок завжди знімався
                 try {
                     await this.revertOperation(cmd.operationId);
                     await this.snapshotService.purgeSnapshotForOp(cmd.operationId);

@@ -164,8 +164,7 @@ export class AstParserRegistry {
 
         try {
             const langObj = this.languages.get(language);
-            // ВИПРАВЛЕНО: Правильна ініціалізація запиту для web-tree-sitter
-            return new ParserClass.Query(langObj, queryString);
+            return langObj.query(queryString);
         } catch (error) {
             logger?.error(`[AST] Query compilation failed for pattern:\n${queryString}\nError: ${error}`);
             return null;

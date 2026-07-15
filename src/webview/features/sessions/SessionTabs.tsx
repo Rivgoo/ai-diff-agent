@@ -1,4 +1,4 @@
-import { use, useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import { useIPC } from '@/webview/hooks/useIPC';
 import { AgentContext } from '@/webview/store/AgentProvider';
 import { IconPlus, IconX, IconBrandGithub, IconFolder } from '@tabler/icons-react';
@@ -6,7 +6,7 @@ import styles from './SessionTabs.module.css';
 
 export const SessionTabs = () => {
     const { sendEvent } = useIPC();
-    const context = use(AgentContext);
+    const context = useContext(AgentContext); // ФІКС
     
     const containerRef = useRef<HTMLDivElement>(null);
     

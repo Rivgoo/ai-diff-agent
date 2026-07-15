@@ -1,10 +1,6 @@
+/// <reference types="node" />
+
 import * as path from 'path';
-
-/**
- * Stateful Centralized VS Code API Mock Engine.
- * Upgraded in Phase 4 to subclass Map and parse advanced case-insensitive bracket glob queries.
- */
-
 class MockFilesystemMap extends Map<string, string> {
     public override set(key: string, value: string): this {
         super.set(key, value);
@@ -215,7 +211,6 @@ export const workspace = {
         const results: Uri[] = [];
         const globPattern = typeof include === 'string' ? include : (include && typeof include.pattern === 'string' ? include.pattern : String(include));
         
-        // Safely translate Glob Pattern to RegExp
         let regexStr = globPattern
             .replace(/\./g, '\\.')
             .replace(/\*\*/g, '.*')
@@ -223,6 +218,7 @@ export const workspace = {
         if (!regexStr.startsWith('.*')) {
             regexStr = '^' + regexStr;
         }
+        
         regexStr = regexStr + '$';
         
         const regex = new RegExp(regexStr, 'i'); // Case-insensitive matching
