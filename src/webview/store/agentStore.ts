@@ -37,9 +37,10 @@ interface AgentState {
         conflict?: ConflictDetails,
         isDirectory?: boolean,
         matchStrategy?: string,
-        alreadyApplied?: boolean
+        alreadyApplied?: boolean,
+        isPartiallyResolved?: boolean,
     ) => void;
-    updateLocalSetting: (category: 'behavior' | 'engine', key: string, value: any) => void;
+    updateLocalSetting: (category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai', key: string, value: any) => void;
 }
 
 export const useAgentStore = create<AgentState>((set) => ({
@@ -47,18 +48,51 @@ export const useAgentStore = create<AgentState>((set) => ({
     activeSessionId: '',
     isAgentTyping: false,
     settings: { 
-        behavior: { autoScroll: true, compactMode: false, storeChatInWorkspace: false, showConfidenceBadges: true }, 
+        ui: { 
+            autoScroll: true, 
+            compactMode: false, 
+            showConfidenceBadges: true, 
+            enableCodeLens: true,
+            phantomInlineDiffs: true,
+            enableWalkthroughMode: false
+        },
+        workflow: { 
+            chatHistoryMode: 'workspace', 
+            autoSaveAfterAccept: true, 
+            formatBehavior: 'onSaveOnly', 
+            cleanupEmptyDirectories: true, 
+            backupRetentionDays: 7,
+            executionMode: 'tolerant',
+            clipboardWatcher: false,
+            historyBranchAwareness: true
+        },
         engine: { 
+            payloadRecoveryMode: 'aggressive',
+            fallbackMatchLevel: 'safe',
+            maxFileSizeMb: 5,
+            useUnsavedBuffers: true,
+            polyglotParsing: true,
             strictParsing: false, 
-            maxBackupRetentionDays: 7, 
-            autoFixSyntax: true, 
-            autoFormatOnApply: true, 
-            enableAstMatching: true,
-            respectGitIgnore: true,
             allowCdataUnwrap: true,
             allowFuzzyMatching: true,
             allowSlidingWindow: true,
-            blockOnSyntaxErrors: false
+            blockOnSyntaxErrors: false,
+            respectGitIgnore: true
+        },
+        ast: {
+            enableAstMatching: true,
+            enabledLanguages: ['javascript', 'typescript', 'python', 'c_sharp', 'json', 'html', 'css', 'bash', 'c'],
+            sanityStrictness: 'warn',
+            validateEmbeddedScripts: true,
+            queryTolerance: 'allow_signature_drift',
+            strictSyntaxValidation: false,
+            autoFixSyntax: true,
+            lspValidation: false,
+            autoStitchImports: false,
+            blastRadiusAnalysis: true
+        },
+        ai: {
+            feedbackLoopEnabled: false
         }
     },
     isSettingsOpen: false,
@@ -85,7 +119,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         }
     })),
 
-    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied) =>
+    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied, isPartiallyResolved) =>
         set((state) => {
             const activeSession = state.sessions[state.activeSessionId];
             if (!activeSession) return state;
@@ -106,8 +140,8 @@ export const useAgentStore = create<AgentState>((set) => ({
                     isDirectory: isDirectory ?? updatedOps[opIndex].isDirectory,
                     matchStrategy: matchStrategy ?? updatedOps[opIndex].matchStrategy,
                     alreadyApplied: alreadyApplied ?? updatedOps[opIndex].alreadyApplied,
-                    // ВИПРАВЛЕНО: Додано збереження score
-                    confidenceScore: updatedOps[opIndex].confidenceScore
+                    confidenceScore: updatedOps[opIndex].confidenceScore,
+                    isPartiallyResolved: isPartiallyResolved ?? updatedOps[opIndex].isPartiallyResolved
                 };
                 return { ...msg, operations: updatedOps };
             });
@@ -123,33 +157,42 @@ export const useAgentStore = create<AgentState>((set) => ({
             };
         }),
 
-        updateOperationBatch: (updates) => set((state) => {
+    updateOperationBatch: (updates) => set((state) => {
         const activeSession = state.sessions[state.activeSessionId];
         if (!activeSession) return state;
 
-        let updatedMessages = [...activeSession.messages];
+        const updatesMap = new Map(updates.map(u => [u.operationId, u]));
+        let sessionChanged = false;
 
-        for (const update of updates) {
-            updatedMessages = updatedMessages.map((msg) => {
-                if (!msg.operations) return msg;
-                const opIndex = msg.operations.findIndex((o) => o.id === update.operationId);
-                if (opIndex === -1) return msg;
+        const updatedMessages = activeSession.messages.map((msg) => {
+            if (!msg.operations) return msg;
 
-                const updatedOps = [...msg.operations];
-                updatedOps[opIndex] = {
-                    ...updatedOps[opIndex],
-                    status: update.status,
-                    resolvedResiliently: update.resolvedResiliently ?? updatedOps[opIndex].resolvedResiliently,
-                    originalPath: update.originalPath ?? updatedOps[opIndex].originalPath,
-                    path: update.path ?? updatedOps[opIndex].path,
-                    conflict: update.conflict ?? updatedOps[opIndex].conflict,
-                    isDirectory: update.isDirectory ?? updatedOps[opIndex].isDirectory,
-                    matchStrategy: update.matchStrategy ?? updatedOps[opIndex].matchStrategy,
-                    confidenceScore: update.confidenceScore ?? updatedOps[opIndex].confidenceScore
-                };
-                return { ...msg, operations: updatedOps };
+            let messageChanged = false;
+            const updatedOps = msg.operations.map(op => {
+                const update = updatesMap.get(op.id);
+                if (update) {
+                    messageChanged = true;
+                    sessionChanged = true;
+                    return {
+                        ...op,
+                        status: update.status,
+                        resolvedResiliently: update.resolvedResiliently ?? op.resolvedResiliently,
+                        originalPath: update.originalPath ?? op.originalPath,
+                        path: update.path ?? op.path,
+                        conflict: update.conflict ?? op.conflict,
+                        isDirectory: update.isDirectory ?? op.isDirectory,
+                        matchStrategy: update.matchStrategy ?? op.matchStrategy,
+                        confidenceScore: update.confidenceScore ?? op.confidenceScore,
+                        isPartiallyResolved: update.isPartiallyResolved ?? op.isPartiallyResolved
+                    };
+                }
+                return op;
             });
-        }
+
+            return messageChanged ? { ...msg, operations: updatedOps } : msg;
+        });
+
+        if (!sessionChanged) return state;
 
         return {
             sessions: {
@@ -160,7 +203,5 @@ export const useAgentStore = create<AgentState>((set) => ({
                 }
             }
         };
-    }),
-        
+    })
 }));
-

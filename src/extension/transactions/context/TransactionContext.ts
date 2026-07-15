@@ -14,7 +14,7 @@ export class TransactionContext implements ITransactionContext {
     private readonly documentCache = new Map<string, IDocument>();
 
     constructor(
-        private readonly workspaceRootUri: vscode.Uri, // Використовуємо Uri для безпеки
+        private readonly workspaceRootUri: vscode.Uri, 
         public readonly rootName: string,
         public readonly uow: IUnitOfWork,
         public readonly searchEngine: SearchEngine,
@@ -24,7 +24,6 @@ export class TransactionContext implements ITransactionContext {
         public readonly settingsManager: SettingsManager
     ) {}
 
-    // ГАРАНТОВАНО БЕЗПЕЧНИЙ МЕТОД ДЛЯ WINDOWS ТА UNIX
     public getAbsoluteUri(relativePath: string): vscode.Uri {
         const cleanPath = relativePath.replace(/^[\/\\]+/, '');
         return vscode.Uri.joinPath(this.workspaceRootUri, cleanPath);
@@ -75,9 +74,12 @@ export class TransactionContext implements ITransactionContext {
     public async fileExists(relativePath: string): Promise<boolean> {
         const uri = this.getAbsoluteUri(relativePath);
         
-        const isOpenInMemory = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString());
-        if (isOpenInMemory) {
-            return true;
+        const useUnsaved = this.settingsManager.getSettings().engine.useUnsavedBuffers;
+        if (useUnsaved) {
+            const isOpenInMemory = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString());
+            if (isOpenInMemory) {
+                return true;
+            }
         }
 
         try {
@@ -91,5 +93,13 @@ export class TransactionContext implements ITransactionContext {
     public async createBackup(operationId: string, relativePath: string): Promise<void> {
         const absoluteUri = this.getAbsoluteUri(relativePath);
         await this.snapshotService.createSnapshot(operationId, relativePath, absoluteUri);
+    }
+
+    /**
+     * Prevents memory leaks by aggressively clearing the cached document references.
+     */
+    public dispose(): void {
+        this.documentCache.clear();
+        this.resolvedPaths.clear();
     }
 }

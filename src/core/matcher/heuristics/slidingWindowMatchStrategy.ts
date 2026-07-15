@@ -12,7 +12,7 @@ export class SlidingWindowMatchStrategy implements IMatchStrategy {
     public readonly tier = 3;
 
     public async findMatch(context: MatchContext): Promise<MatchResult> {
-        if (!context.allowSlidingWindow) {
+        if (context.engineSettings.fallbackMatchLevel === 'none') {
             return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
         }
 

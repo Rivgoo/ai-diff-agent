@@ -46,17 +46,23 @@ export class CommitPhase {
 
             if (antiActions.length > 0) {
                 this.store.addTransaction({ operationId: cmd.operationId, antiActions });
+                
+                const finalStatus = cmd.metadata.requiresAutoMerge ? 'merged_dirty' : 'applied_dirty';
+
                 this.onStatusUpdate({
                     operationId: cmd.operationId,
-                    status: 'applied_dirty',
+                    status: finalStatus,
                     ...cmd.metadata
                 });
 
-                const appliedData = context.uow.getAppliedRanges(cmd.operationId);
+                const appliedData = context.uow.getAppliedBlocks(cmd.operationId);
                 if (appliedData) {
                     const vsUri = (context.uow as any).getAbsoluteUri(appliedData.path);
-                    const vsRanges = appliedData.ranges.map(r => new vscode.Range(r.start.line, r.start.character, r.end.line, r.end.character));
-                    this.decorationService.addDecorations(vsUri, cmd.operationId, vsRanges);
+                    const vsBlocks = appliedData.blocks.map(b => ({
+                        range: new vscode.Range(b.range.start.line, b.range.start.character, b.range.end.line, b.range.end.character),
+                        originalSearch: b.originalSearch
+                    }));
+                    this.decorationService.addDecorations(vsUri, cmd.operationId, vsBlocks);
                 }
             } else {
                 this.onStatusUpdate({
@@ -67,7 +73,7 @@ export class CommitPhase {
             }
         }
 
-        if (context.settingsManager.getSettings().engine.autoFormatOnApply) {
+        if (context.settingsManager.getSettings().workflow.formatBehavior === 'always') {
             const formatUris = context.uow.getModifiedPaths().map(p => (context.uow as any).getAbsoluteUri(p));
             await this.editorService.formatFilesSilently(formatUris);
         }

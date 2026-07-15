@@ -1,5 +1,10 @@
 import type { Range } from '@/shared/contracts';
 
+export interface AppliedBlock {
+    range: Range;
+    originalSearch: string;
+}
+
 export interface IUnitOfWork {
     createFile(path: string, content: string, options?: { ignoreIfExists: boolean }): void;
     replace(path: string, range: Range, content: string): void;
@@ -8,7 +13,7 @@ export interface IUnitOfWork {
     
     commit(): Promise<boolean>;
     
-    addAppliedRange(operationId: string, path: string, range: Range): void;
-    getAppliedRanges(operationId: string): { path: string; ranges: Range[] } | undefined;
+    addAppliedBlock(operationId: string, path: string, block: AppliedBlock): void; 
+    getAppliedBlocks(operationId: string): { path: string; blocks: AppliedBlock[] } | undefined; 
     getModifiedPaths(): string[];
 }

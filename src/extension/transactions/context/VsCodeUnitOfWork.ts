@@ -46,14 +46,16 @@ export class VsCodeUnitOfWork implements IUnitOfWork {
         return vscode.workspace.applyEdit(this.edit);
     }
 
-    public addAppliedRange(operationId: string, path: string, range: Range): void {
-        const existing = this.appliedRanges.get(operationId) || { path, ranges: [] };
-        existing.ranges.push(range);
-        this.appliedRanges.set(operationId, existing);
+    private readonly appliedBlocks = new Map<string, { path: string; blocks: { range: Range; originalSearch: string }[] }>();
+
+    public addAppliedBlock(operationId: string, path: string, block: { range: Range; originalSearch: string }): void {
+        const existing = this.appliedBlocks.get(operationId) || { path, blocks: [] };
+        existing.blocks.push(block);
+        this.appliedBlocks.set(operationId, existing);
     }
 
-    public getAppliedRanges(operationId: string): { path: string; ranges: Range[] } | undefined {
-        return this.appliedRanges.get(operationId);
+    public getAppliedBlocks(operationId: string): { path: string; blocks: { range: Range; originalSearch: string }[] } | undefined {
+        return this.appliedBlocks.get(operationId);
     }
 
     public getModifiedPaths(): string[] {

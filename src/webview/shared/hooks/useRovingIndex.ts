@@ -1,9 +1,6 @@
-import { useState, useCallback, KeyboardEvent } from 'react';
+import { useState, useCallback, type KeyboardEvent } from 'react';
 
-/**
- * Handles keyboard a11y navigation (ArrowUp/ArrowDown) for list items.
- */
-export function useRovingIndex(itemCount: number, initialIndex = -1) {
+export function useRovingIndex(itemCount: number, onSelect?: (index: number) => void, initialIndex = -1) {
     const [activeIndex, setActiveIndex] = useState(initialIndex);
 
     const onKeyDown = useCallback((e: KeyboardEvent) => {
@@ -15,8 +12,11 @@ export function useRovingIndex(itemCount: number, initialIndex = -1) {
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             setActiveIndex((prev) => (prev - 1 + itemCount) % itemCount);
+        } else if (e.key === 'Enter' && activeIndex !== -1) {
+            e.preventDefault();
+            if (onSelect) onSelect(activeIndex);
         }
-    }, [itemCount]);
+    }, [itemCount, activeIndex, onSelect]);
 
     return { activeIndex, setActiveIndex, onKeyDown };
 }

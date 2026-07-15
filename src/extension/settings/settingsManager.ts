@@ -24,12 +24,15 @@ export class SettingsManager {
 
     public getSettings(): AgentSettings {
         return {
-            behavior: this.configService.getBehaviorSettings(),
-            engine: this.configService.getEngineSettings()
+            ui: this.configService.getUiSettings(),
+            workflow: this.configService.getWorkflowSettings(),
+            engine: this.configService.getEngineSettings(),
+            ast: this.configService.getAstSettings(),
+            ai: this.configService.getAiSettings()
         };
     }
 
-    public async updateSetting(category: 'behavior' | 'engine', key: string, value: any): Promise<void> {
+    public async updateSetting(category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai', key: string, value: any): Promise<void> {
         try {
             await this.configService.updateSetting(category, key, value);
         } catch (error) {

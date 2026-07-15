@@ -24,17 +24,21 @@ export const StatusBarMinimal = () => {
     const latestMsgWithOps = [...messages].reverse().find(msg => msg.operations && msg.operations.length > 0);
     const activeOps = latestMsgWithOps ? (latestMsgWithOps.operations || []) : [];
 
-    const dirtyOps = activeOps.filter(op => op.status === 'applied_dirty');
+    const dirtyOps = activeOps.filter(op => op.status === 'applied_dirty' || op.status === 'merged_dirty');
     const hasConflicts = activeOps.some(op => op.status === 'conflict' || op.status === 'error');
 
     const isProcessing = stage !== 'idle' && stage !== 'error';
-    const hasActiveContent = isProcessing || (dirtyOps.length > 0 && !hasConflicts);
+    
+    const hasActiveContent = isProcessing || dirtyOps.length > 0;
 
     if (!hasActiveContent) {
         return null; 
     }
 
-    const handleSaveAll = () => sendEvent({ type: 'ACTION_SAVE_ALL' });
+    const handleSaveAll = () => {
+        sendEvent({ type: 'ACTION_SAVE_ALL', hasConflicts });
+    };
+    
     const handleRevertAll = () => sendEvent({ type: 'ACTION_REVERT_ALL' });
 
     return (

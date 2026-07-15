@@ -4,29 +4,20 @@ import { StreamScanner, type Token } from '../lexer/scanner';
 import { PathSanitizer } from '../workspace/pathSanitizer';
 
 export interface ParserOptions {
-    strictParsing: boolean;
-    allowCdataUnwrap: boolean;
+    recoveryMode: 'strict' | 'standard' | 'aggressive';
 }
 
-/**
- * Main AST DSL Parser.
- * Orchestrates the flat token stream into structured executable Domain operations.
- * Implements loose-recovery mechanics to strip redundant markdown and CDATA wraps.
- */
 export class DSLParser {
     private readonly scanner = new StreamScanner();
-    private options: ParserOptions = { strictParsing: false, allowCdataUnwrap: true };
+    private options: ParserOptions = { recoveryMode: 'aggressive' };
 
-    /**
-     * Parses raw input instructions and generates executable file operations.
-     */
     public async parse(rawInput: string, options?: Partial<ParserOptions>): Promise<Result<AnyOperation[]>> {
         if (options) {
             this.options = { ...this.options, ...options };
         }
         
         try {
-            const cleanedInput = this.stripMarkdownFences(rawInput);
+            const cleanedInput = this.preprocessPayload(rawInput);
             const tokens = await this.scanner.tokenize(cleanedInput);
 
             let index = 0;
@@ -44,7 +35,6 @@ export class DSLParser {
                 index++;
             }
 
-            // Fallback: Parse operation blocks loosely if workspace_edit root is missing
             const looseResult = this.parseOperationsList(tokens, 0, tokens.length);
             return Result.ok(looseResult.operations);
 
@@ -53,9 +43,6 @@ export class DSLParser {
         }
     }
 
-    /**
-     * Processes a bounded workspace edit block.
-     */
     private parseWorkspaceEdit(tokens: Token[], startIdx: number): Result<{ operations: AnyOperation[]; nextIndex: number }> {
         let index = startIdx + 1;
         const operations: AnyOperation[] = [];
@@ -79,9 +66,6 @@ export class DSLParser {
         return Result.ok({ operations, nextIndex: index }); 
     }
 
-    /**
-     * Extracts a continuous flat list of operations loosely.
-     */
     private parseOperationsList(tokens: Token[], start: number, end: number): { operations: AnyOperation[] } {
         const operations: AnyOperation[] = [];
         let index = start;
@@ -99,9 +83,6 @@ export class DSLParser {
         return { operations };
     }
 
-    /**
-     * Evaluates a single operation block (create, update, delete, move, create_dir).
-     */
     private tryParseOperation(tokens: Token[], startIdx: number): { operation: AnyOperation; nextIndex: number } | null {
         const token = tokens[startIdx];
 
@@ -120,7 +101,7 @@ export class DSLParser {
                     id,
                     type: 'create_file',
                     path,
-                    content: this.stripMarkdownFences(this.stripCdata(contentResult.content)),
+                    content: this.postprocessBlock(contentResult.content),
                     status: 'pending'
                 },
                 nextIndex: contentResult.nextIndex
@@ -155,13 +136,7 @@ export class DSLParser {
             const dest = rawDest ? PathSanitizer.sanitize(rawDest) : undefined;
             if (src && dest) {
                 return {
-                    operation: {
-                        id,
-                        type: 'move_path',
-                        path: src,
-                        destinationPath: dest,
-                        status: 'pending'
-                    },
+                    operation: { id, type: 'move_path', path: src, destinationPath: dest, status: 'pending' },
                     nextIndex: startIdx + 1
                 };
             }
@@ -177,9 +152,6 @@ export class DSLParser {
         return null;
     }
 
-    /**
-     * Parses nested change blocks inside an update_file operation.
-     */
     private parseChangeBlocks(tokens: Token[], startIdx: number): { changes: ChangeBlock[]; nextIndex: number } {
         let index = startIdx + 1;
         const changes: ChangeBlock[] = [];
@@ -205,9 +177,6 @@ export class DSLParser {
         return { changes, nextIndex: index };
     }
 
-    /**
-     * Parses search/replace tag sequences inside an active change block.
-     */
     private parseSingleChange(tokens: Token[], startIdx: number): { change: ChangeBlock | null; nextIndex: number } {
         let index = startIdx + 1;
         let search: string | null = null;
@@ -218,21 +187,18 @@ export class DSLParser {
 
             if (token.type === 'CLOSE_TAG' && token.name === 'change') {
                 if (search !== null && replace !== null) {
-                    return {
-                        change: { search, replace },
-                        nextIndex: index + 1
-                    };
+                    return { change: { search, replace }, nextIndex: index + 1 };
                 }
                 return { change: null, nextIndex: index + 1 };
             }
 
             if (token.type === 'OPEN_TAG' && token.name === 'search') {
                 const res = this.consumeContentUntilClose(tokens, index, 'search');
-                search = this.stripCdata(res.content);
+                search = this.postprocessBlock(res.content);
                 index = res.nextIndex;
             } else if (token.type === 'OPEN_TAG' && token.name === 'replace') {
                 const res = this.consumeContentUntilClose(tokens, index, 'replace');
-                replace = this.stripCdata(res.content);
+                replace = this.postprocessBlock(res.content);
                 index = res.nextIndex;
             } else {
                 index++;
@@ -250,7 +216,7 @@ export class DSLParser {
             const token = tokens[index];
 
             if (token.type === 'CLOSE_TAG' && token.name === tagName) {
-                return { content: this.stripMarkdownFences(builder.join('')), nextIndex: index + 1 };
+                return { content: builder.join(''), nextIndex: index + 1 };
             }
 
             if (token.type === 'TEXT_CONTENT') {
@@ -261,7 +227,7 @@ export class DSLParser {
             index++;
         }
 
-        return { content: this.stripMarkdownFences(builder.join('')), nextIndex: index };
+        return { content: builder.join(''), nextIndex: index };
     }
 
     private reconstructTagLiteral(token: Token): string {
@@ -269,44 +235,47 @@ export class DSLParser {
             .map(([k, v]) => ` ${k}="${v}"`)
             .join('');
 
-        if (token.type === 'OPEN_TAG') {
-            return `<${token.name}${attributes}>`;
-        }
-        if (token.type === 'CLOSE_TAG') {
-            return `</${token.name}>`;
-        }
+        if (token.type === 'OPEN_TAG') return `<${token.name}${attributes}>`;
+        if (token.type === 'CLOSE_TAG') return `</${token.name}>`;
         return `<${token.name}${attributes} />`;
     }
 
-    private stripMarkdownFences(content: string): string {
-        let cleaned = content.trim();
+    private preprocessPayload(content: string): string {
+        let cleaned = content;
         
-        if (this.options.strictParsing) {
-            return cleaned;
-        }
-        
-        cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\r?\n/g, '');
-        cleaned = cleaned.replace(/\r?\n```$/g, '');
-        
-        // ВИПРАВЛЕНО: Видалено жорсткий /^[ \t]*(code|Code)\r?\n/gm, який міг знищити реальний код!
+        // Видалення Markdown обгорток, якщо вони є (без повного .trim() щоб зберегти відступи)
+        cleaned = cleaned.replace(/^\s*```[a-zA-Z0-9_-]*\r?\n/g, '');
+        cleaned = cleaned.replace(/\r?\n\s*```\s*$/g, '');
 
-        return cleaned.trim();
+        if (this.options.recoveryMode === 'aggressive') {
+            if (cleaned.startsWith('<![CDATA[') && cleaned.endsWith(']]>')) {
+                cleaned = cleaned.substring(9, cleaned.length - 3);
+            }
+        }
+
+        return cleaned;
     }
 
-    /**
-     * Safely extracts code from CDATA if the LLM hallucinated it.
-     */
-    private stripCdata(content: string): string {
-        if (!this.options.allowCdataUnwrap) {
-            return content;
-        }
+    private postprocessBlock(content: string): string {
+        let cleaned = content;
 
-        let cleaned = content.trim();
-        const cdataStart = '<![CDATA[';
-        const cdataEnd = ']]>';
+        // ФІКС: Відкушуємо ТІЛЬКИ одне перенесення рядка на початку і в кінці, 
+        // залишаючи всі внутрішні пробіли (критично для Python)
+        if (cleaned.startsWith('\n')) cleaned = cleaned.substring(1);
+        else if (cleaned.startsWith('\r\n')) cleaned = cleaned.substring(2);
+        
+        if (cleaned.endsWith('\n')) cleaned = cleaned.substring(0, cleaned.length - 1);
+        if (cleaned.endsWith('\r')) cleaned = cleaned.substring(0, cleaned.length - 1);
 
-        if (cleaned.startsWith(cdataStart) && cleaned.endsWith(cdataEnd)) {
-            cleaned = cleaned.substring(cdataStart.length, cleaned.length - cdataEnd.length).trim();
+        if (this.options.recoveryMode === 'aggressive') {
+            if (cleaned.startsWith('<![CDATA[') && cleaned.endsWith(']]>')) {
+                cleaned = cleaned.substring(9, cleaned.length - 3);
+            }
+            
+            const codeTagMatch = /^<code[^>]*>\r?\n?/i.exec(cleaned);
+            if (codeTagMatch && cleaned.endsWith('</code>')) {
+                cleaned = cleaned.substring(codeTagMatch[0].length, cleaned.length - 7);
+            }
         }
 
         return cleaned;
@@ -316,7 +285,6 @@ export class DSLParser {
         if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.randomUUID) {
             return globalThis.crypto.randomUUID();
         }
-        // Polyfill fallback for environments without crypto.randomUUID
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
             const r = Math.random() * 16 | 0;
             const v = c === 'x' ? r : (r & 0x3 | 0x8);

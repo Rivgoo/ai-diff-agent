@@ -1,4 +1,4 @@
-import { use } from 'react';
+import { useContext } from 'react';
 import { ComposerProvider } from './ComposerProvider';
 import { ComposerFrame } from './ComposerFrame';
 import { ComposerInput } from './ComposerInput';
@@ -8,7 +8,7 @@ import { ComposerActionHints } from './ComposerActionHints';
 import { ComposerContext } from './composerContext';
 
 const ComposerDecisionRoot = () => {
-    const context = use(ComposerContext);
+    const context = useContext(ComposerContext); // ФІКС
     if (!context) return null;
 
     return (

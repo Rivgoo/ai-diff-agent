@@ -9,7 +9,8 @@ import { SnapshotService } from '@/extension/transactions/services/SnapshotServi
 import { PathSandbox } from '@/vscode/workspace/pathSandbox';
 import { PathNormalizer } from '@/core/workspace/pathNormalizer';
 
-// New Architecture Imports
+import { VirtualDocument } from '@/core/compiler/virtualDocument';
+
 import { TransactionPipeline } from '@/extension/transactions/orchestrator/TransactionPipeline';
 import { SearchEngine } from '@/core/matcher/searchEngine';
 import { ResilientPathResolver } from '@/core/resolver/resilientPathResolver';
@@ -29,6 +30,7 @@ export class MessageRouter {
     private readonly pendingOperations = new Map<string, AnyOperation>();
     private readonly processPayloadUseCase: ProcessPayloadUseCase;
     private readonly snapshotService: SnapshotService;
+    private isProcessingLens = false;
 
     private statusUpdateQueue: any[] = [];
     private updateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -48,7 +50,7 @@ export class MessageRouter {
         this.sessionManager = new ChatSessionManager(
             context.workspaceState,
             workspaceRoot,
-            () => this.settingsManager.getSettings().behavior.storeChatInWorkspace,
+            () => this.settingsManager.getSettings().workflow.chatHistoryMode === 'workspace',
             () => {
                 setTimeout(() => this.syncState(), 0);
             }
@@ -57,10 +59,14 @@ export class MessageRouter {
         this.store = new CompensationStore(context.workspaceState);
 
         const logger = new LoggerAdapter();
-        // ВИПРАВЛЕННЯ: Порожній конструктор. Налаштування будуть читатися динамічно.
         const searchEngine = new SearchEngine();
 
-        const pathResolver = new ResilientPathResolver(new VsCodeFileSystemAdapter(), new VsCodeWorkspaceSearchAdapter());
+        // ФІКС: Динамічне отримання налаштування для File System Adapter
+        const pathResolver = new ResilientPathResolver(
+            new VsCodeFileSystemAdapter(() => this.settingsManager.getSettings().engine.useUnsavedBuffers), 
+            new VsCodeWorkspaceSearchAdapter()
+        );
+        
         const editorService = new EditorService();
         const directoryCleanupService = new DirectoryCleanupService();
 
@@ -118,12 +124,16 @@ export class MessageRouter {
             case 'REQUEST_SETTINGS_SYNC': this.syncSettings(); break;
             case 'UPDATE_SETTING': 
                 this.settingsManager.updateSetting(event.category, event.key, event.value);
-                if (event.key === 'storeChatInWorkspace') {
+                if (event.key === 'chatHistoryMode') {
                     this.sessionManager.reload();
                 }
                 break;
-            case 'SUBMIT_PAYLOAD': this.processPayloadUseCase.execute(event.payload); break;
-            case 'CANCEL_PROCESSING': break;
+            case 'SUBMIT_PAYLOAD': 
+                this.processPayloadUseCase.execute(event.payload); 
+                break;
+            case 'CANCEL_PROCESSING': 
+                this.transactionPipeline.emergencyUnlock();
+                break;
             case 'NEW_SESSION':
                 this.sessionManager.createSession();
                 this.syncState();
@@ -135,15 +145,30 @@ export class MessageRouter {
             case 'DELETE_SESSION':
                 this.revertActiveSessionOperations(event.sessionId);
                 this.sessionManager.deleteSession(event.sessionId);
+                this.transactionPipeline.emergencyUnlock(); 
                 this.syncState();
                 break;
             case 'CLEAR_SESSION': 
                 this.revertActiveSessionOperations(this.sessionManager.getActiveSessionId());
                 this.sessionManager.clearSession();
                 this.pendingOperations.clear();
+                this.transactionPipeline.emergencyUnlock();
                 this.syncState();
                 break;
-            case 'ACTION_SAVE_ALL': this.transactionPipeline.saveBatch(); break;
+            case 'ACTION_SAVE_ALL': 
+                if (event.hasConflicts) {
+                    vscode.window.showWarningMessage(
+                        "You have unresolved conflicts in this batch. Do you want to save the successful files and ignore the conflicts?",
+                        "Save Successful", "Cancel"
+                    ).then(choice => {
+                        if (choice === "Save Successful") {
+                            this.transactionPipeline.saveBatch();
+                        }
+                    });
+                } else {
+                    this.transactionPipeline.saveBatch();
+                }
+                break;
             case 'ACTION_REVERT_ALL': this.transactionPipeline.revertBatch(); break;
             case 'ACTION_ACCEPT_OPERATION': this.transactionPipeline.saveOperation(event.operationId); break;
             case 'ACTION_REVERT_OPERATION': this.transactionPipeline.revertOperation(event.operationId); break;
@@ -156,11 +181,6 @@ export class MessageRouter {
                 vscode.env.openExternal(vscode.Uri.parse(event.url));
                 break;
             case 'SMART_RETRY_CONTEXT': this.handleSmartRetry(event.operationId); break; 
-            case 'COPY_PROMPT': this.handleCopyPrompt(event.mode || 'stable'); break;
-            case 'OPEN_EXTERNAL_LINK': 
-                vscode.env.openExternal(vscode.Uri.parse(event.url));
-                break;
-            case 'SMART_RETRY_CONTEXT': this.handleSmartRetry(event.operationId); break;
         }
     }
 
@@ -347,5 +367,105 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         } catch (e) {
             // Ignore cancel
         }
+    }
+
+    public async handleAcceptBlock(opId: string, uri: vscode.Uri, blockId: string): Promise<void> {
+        if (this.isProcessingLens) return; 
+        this.isProcessingLens = true;
+        try {
+            this.decorationService.removeDecorationBlock(uri, blockId);
+            this.checkPartialState(opId, uri);
+        } finally {
+            this.isProcessingLens = false;
+        }
+    }
+
+    public async handleRejectBlock(opId: string, uri: vscode.Uri, blockId: string): Promise<void> {
+        if (this.isProcessingLens) return;
+        this.isProcessingLens = true;
+        try {
+            // ФІКС: Беремо найсвіжіші координати з DecorationService
+            const decs = this.decorationService.getDecorationsForDocument(uri);
+            const freshDec = decs.find(d => d.id === blockId);
+            if (!freshDec) return; // Блок вже опрацьований
+
+            const sessionOp = this.sessionManager.getActiveSession().messages
+                .flatMap(m => m.operations || [])
+                .find(o => o.id === opId);
+
+            if (!sessionOp) return;
+
+            const edit = new vscode.WorkspaceEdit();
+
+            if (sessionOp.type === 'create_file') {
+                edit.replace(uri, freshDec.range, ''); 
+            } 
+            else if (sessionOp.type === 'update_file') {
+                const backupUri = this.snapshotService.getBackupUri(opId, PathNormalizer.normalize(uri.fsPath));
+                let backupContent = '';
+                try {
+                    const backupBytes = await vscode.workspace.fs.readFile(backupUri);
+                    backupContent = new TextDecoder('utf-8').decode(backupBytes);
+                } catch {
+                    OutputLogger.log('Backup not found. Cannot perform partial rollback.', 'ERROR');
+                    return;
+                }
+
+                const engineSettings = this.settingsManager.getSettings().engine;
+                const backupDoc = new VirtualDocument(backupUri.fsPath, backupContent);
+                const searchEngine = new SearchEngine();
+                
+                const astSettings = this.settingsManager.getSettings().ast;
+                const strictEngineSettings = { ...engineSettings, fallbackMatchLevel: 'none' as const };
+
+                const match = await searchEngine.findMatch(
+                    backupDoc, 
+                    freshDec.originalSearch, 
+                    undefined, 
+                    strictEngineSettings, 
+                    astSettings
+                );
+
+                if (match.status !== 'MATCHED') {
+                     OutputLogger.log(`Failed to locate original text in backup for rollback.`, 'WARN');
+                     return;
+                }
+                
+                const originalText = this.extractFullLines(backupContent, match.range.start.line, match.range.end.line);
+                edit.replace(uri, freshDec.range, originalText); 
+            }
+
+            await vscode.workspace.applyEdit(edit);
+            
+            this.decorationService.removeDecorationBlock(uri, blockId);
+            this.checkPartialState(opId, uri);
+
+        } catch (e) {
+            OutputLogger.log(`Partial rollback failed: ${e}`, 'ERROR');
+        } finally {
+            this.isProcessingLens = false;
+        }
+    }
+
+    private checkPartialState(opId: string, uri: vscode.Uri): void {
+        const remainingDecorations = this.decorationService.getDecorationsForDocument(uri).filter(d => d.opId === opId);
+        
+        if (remainingDecorations.length === 0) {
+            OutputLogger.log(`All blocks resolved for operation ${opId}. Auto-saving operation state.`);
+            this.transactionPipeline.saveOperation(opId);
+        } else {
+            this.postMessageCallback({
+                type: 'OPERATION_UPDATED',
+                operationId: opId,
+                status: 'applied_dirty',
+                isPartiallyResolved: true
+            });
+        }
+    }
+
+    private extractFullLines(text: string, startLine: number, endLine: number): string {
+        const lines = text.split(/\r?\n/); 
+        const targetLines = lines.slice(startLine, endLine + 1);
+        return targetLines.join('\n');
     }
 }

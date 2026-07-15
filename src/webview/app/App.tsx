@@ -1,4 +1,4 @@
-import { useEffect, useRef, use } from 'react';
+import { useEffect, useRef, useContext } from 'react';
 import { useIPC } from '@/webview/hooks/useIPC';
 import { AgentContext } from '@/webview/store/AgentProvider';
 
@@ -13,7 +13,7 @@ import styles from './App.module.css';
 
 export const App = () => {
     const { sendEvent } = useIPC();
-    const context = use(AgentContext);
+    const context = useContext(AgentContext); // ФІКС
     
     if (!context) throw new Error('App must be wrapped in AgentProvider');
     const { state } = context;
@@ -22,10 +22,10 @@ export const App = () => {
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (state.settings.behavior.autoScroll && scrollRef.current) {
+        if (state.settings.ui?.autoScroll && scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [messages, state.isAgentTyping, state.settings.behavior.autoScroll]);
+    }, [messages, state.isAgentTyping, state.settings.ui?.autoScroll]);
 
     const handleOpenFile = (opId: string) => {
         sendEvent({ type: 'OPEN_FILE', operationId: opId });

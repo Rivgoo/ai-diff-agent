@@ -3,6 +3,7 @@ import type { CreateFileOperation, DeletePathOperation, UpdateFileOperation, Mov
 import type { CompilerWarning } from './models';
 import { SearchEngine } from '../matcher/searchEngine';
 import { VirtualDocument } from './virtualDocument';
+import type { EngineSettings, AstSettings } from '../../shared/models';
 
 export class OperationReducer {
     constructor(
@@ -55,9 +56,36 @@ export class OperationReducer {
             for (const change of op.changes) {
                 const doc = new VirtualDocument(node.currentPath, currentContent);
                 
+                const fallbackAstSettings: AstSettings = { 
+                    enableAstMatching: this.enableAstMatching,
+                    enabledLanguages: ['javascript', 'typescript', 'python', 'c_sharp', 'json', 'html', 'css', 'bash', 'c'], 
+                    sanityStrictness: 'warn', 
+                    validateEmbeddedScripts: true, 
+                    queryTolerance: 'allow_signature_drift',
+                    strictSyntaxValidation: false,
+                    autoFixSyntax: true,
+                    lspValidation: false,
+                    autoStitchImports: false,
+                    blastRadiusAnalysis: false
+                };
+                
+                const fallbackEngineSettings: EngineSettings = { 
+                    payloadRecoveryMode: 'aggressive', 
+                    fallbackMatchLevel: 'safe', 
+                    maxFileSizeMb: 5, 
+                    useUnsavedBuffers: true, 
+                    polyglotParsing: true, 
+                    strictParsing: false, 
+                    allowCdataUnwrap: true, 
+                    allowFuzzyMatching: true, 
+                    allowSlidingWindow: true, 
+                    blockOnSyntaxErrors: false, 
+                    respectGitIgnore: true 
+                };
+
                 const match = await searchEngine.findMatch(
                     doc, change.search, change.replace, 
-                    this.enableAstMatching, true, true, false, undefined
+                    fallbackEngineSettings, fallbackAstSettings, undefined
                 );
                 
                 if (match.status === 'MATCHED') {
@@ -77,8 +105,7 @@ export class OperationReducer {
                 node.contentBuffer = currentContent;
                 this.warn(op.id, op.path, 'Updates applied seamlessly in-memory to newly created file.');
             } else {
-                node.contentBuffer = currentContent;
-                this.warn(op.id, op.path, 'Some update blocks failed to match in-memory. Dropped partial updates.');
+                this.warn(op.id, op.path, 'Virtual compilation failed: AI attempted to update a block that does not exist in the newly created file content.');
             }
             return;
         }

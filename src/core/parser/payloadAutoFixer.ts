@@ -20,33 +20,6 @@ export class PayloadAutoFixer {
         // which break standard TS/JS compilers silently.
         fixed = fixed.replace(/[\u200B-\u200D\uFEFF]/g, '');
 
-
-        // --- WEB FRAMEWORK FIXES (React, Vue, Svelte, HTML) ---
-        
-        const isWebFile = /\.(tsx|jsx|html|vue|svelte)$/i.test(filePath);
-        if (isWebFile) {
-            // Fix 1: Missing backticks in template literals.
-            // Matches: class={flex-1 ${isDatabase ? 'a' : 'b'}} or className=...
-            // Replaces: class={`flex-1 ${isDatabase ? 'a' : 'b'}`}
-            fixed = fixed.replace(/(class|className)=\{([^`"'{}]*?\$\{.+?\}[^`"'{}]*?)\}/g, '$1={`$2`}');
-
-            // Fix 2: Missing standard quotes for plain string classes.
-            // Matches: className={flex items-center gap-3}
-            // Replaces: className="flex items-center gap-3"
-            fixed = fixed.replace(/(class|className)=\{([a-zA-Z0-9\s\-_/]+)\}/g, '$1="$2"');
-        }
-
-
-        // --- DATA FORMAT FIXES (JSON) ---
-
-        const isJson = /\.json$/i.test(filePath);
-        if (isJson) {
-            // Fix 3: Trailing commas in JSON.
-            // LLMs frequently leave trailing commas when deleting the last item in a JSON object/array.
-            // Matches a comma followed only by whitespace and a closing bracket/brace.
-            fixed = fixed.replace(/,(?=\s*[}\]])/g, '');
-        }
-
         return fixed;
     }
 }

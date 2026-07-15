@@ -1,39 +1,86 @@
 import * as vscode from "vscode";
 import { SYSTEM_CONSTANTS } from "@/shared/constants";
-import type { BehaviorSettings, EngineSettings } from "@/shared/models";
+import type { UiSettings, WorkflowSettings, EngineSettings, AstSettings, AiSettings } from "@/shared/models";
 
 export class ConfigurationService {
-  public getBehaviorSettings(): BehaviorSettings {
+  public getUiSettings(): UiSettings {
     const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
-    const behavior = config.get<BehaviorSettings>("behavior") || {} as BehaviorSettings;
+    const ui = config.get<Partial<UiSettings>>("ui") || {};
     
     return {
-      autoScroll: behavior.autoScroll ?? true,
-      compactMode: behavior.compactMode ?? false,
-      storeChatInWorkspace: behavior.storeChatInWorkspace ?? false,
-      showConfidenceBadges: behavior.showConfidenceBadges ?? true,
+      autoScroll: ui.autoScroll ?? true,
+      compactMode: ui.compactMode ?? false,
+      showConfidenceBadges: ui.showConfidenceBadges ?? true,
+      enableCodeLens: ui.enableCodeLens ?? true,
+      phantomInlineDiffs: ui.phantomInlineDiffs ?? true,
+      enableWalkthroughMode: ui.enableWalkthroughMode ?? false,
+    };
+  }
+
+  public getWorkflowSettings(): WorkflowSettings {
+    const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
+    const workflow = config.get<Partial<WorkflowSettings>>("workflow") || {};
+
+    return {
+      chatHistoryMode: workflow.chatHistoryMode ?? 'workspace',
+      autoSaveAfterAccept: workflow.autoSaveAfterAccept ?? true,
+      formatBehavior: workflow.formatBehavior ?? 'onSaveOnly',
+      cleanupEmptyDirectories: workflow.cleanupEmptyDirectories ?? true,
+      backupRetentionDays: workflow.backupRetentionDays ?? 7,
+      executionMode: workflow.executionMode ?? 'tolerant',
+      clipboardWatcher: workflow.clipboardWatcher ?? false,
+      historyBranchAwareness: workflow.historyBranchAwareness ?? true,
     };
   }
 
   public getEngineSettings(): EngineSettings {
     const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
-    const engine = config.get<EngineSettings>("engine") || {} as EngineSettings;
+    const engine = config.get<Partial<EngineSettings>>("engine") || {};
     
     return {
+      payloadRecoveryMode: engine.payloadRecoveryMode ?? 'aggressive',
+      fallbackMatchLevel: engine.fallbackMatchLevel ?? 'safe',
+      maxFileSizeMb: engine.maxFileSizeMb ?? 5,
+      useUnsavedBuffers: engine.useUnsavedBuffers ?? true,
+      polyglotParsing: engine.polyglotParsing ?? true,
+      
       strictParsing: engine.strictParsing ?? false,
-      maxBackupRetentionDays: engine.maxBackupRetentionDays ?? 7,
-      autoFixSyntax: engine.autoFixSyntax ?? true,
-      autoFormatOnApply: engine.autoFormatOnApply ?? true,
-      enableAstMatching: engine.enableAstMatching ?? true,
-      respectGitIgnore: engine.respectGitIgnore ?? true,
       allowCdataUnwrap: engine.allowCdataUnwrap ?? true,
       allowFuzzyMatching: engine.allowFuzzyMatching ?? true,
       allowSlidingWindow: engine.allowSlidingWindow ?? true,
       blockOnSyntaxErrors: engine.blockOnSyntaxErrors ?? false,
+      respectGitIgnore: engine.respectGitIgnore ?? true,
     };
   }
 
-  public async updateSetting(category: "behavior" | "engine", key: string, value: any): Promise<void> {
+  public getAstSettings(): AstSettings {
+    const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
+    const ast = config.get<Partial<AstSettings>>("ast") || {};
+
+    return {
+      enableAstMatching: ast.enableAstMatching ?? true,
+      enabledLanguages: ast.enabledLanguages ?? ['javascript', 'typescript', 'python', 'c_sharp', 'json', 'html', 'css', 'bash', 'c'],
+      sanityStrictness: ast.sanityStrictness ?? 'warn',
+      validateEmbeddedScripts: ast.validateEmbeddedScripts ?? true,
+      queryTolerance: ast.queryTolerance ?? 'allow_signature_drift',
+      strictSyntaxValidation: ast.strictSyntaxValidation ?? false,
+      autoFixSyntax: ast.autoFixSyntax ?? true,
+      lspValidation: ast.lspValidation ?? false,
+      autoStitchImports: ast.autoStitchImports ?? false,
+      blastRadiusAnalysis: ast.blastRadiusAnalysis ?? true,
+    };
+  }
+
+  public getAiSettings(): AiSettings {
+    const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
+    const ai = config.get<Partial<AiSettings>>("ai") || {};
+
+    return {
+      feedbackLoopEnabled: ai.feedbackLoopEnabled ?? false,
+    };
+  }
+
+  public async updateSetting(category: "ui" | "workflow" | "engine" | "ast" | "ai", key: string, value: any): Promise<void> {
     const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
     
     const currentSection = { ...(config.get<Record<string, any>>(category) || {}) };

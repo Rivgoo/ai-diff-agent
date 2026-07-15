@@ -1,9 +1,9 @@
-import { use } from 'react';
+import { useContext } from 'react';
 import { ComposerContext } from './composerContext';
 import styles from './composer.module.css';
 
 export const ComposerInput = () => {
-    const context = use(ComposerContext);
+    const context = useContext(ComposerContext); // ФІКС
     if (!context) throw new Error('ComposerInput must be inside ComposerProvider');
 
     const { state, actions, meta } = context;
@@ -14,7 +14,7 @@ export const ComposerInput = () => {
             className={styles.textarea}
             value={state.value}
             onChange={(e) => actions.updateValue(e.target.value)}
-            disabled={state.isProcessing}
+            readOnly={state.isProcessing} 
             spellCheck={false}
             placeholder={state.isProcessing ? 'Processing payload...' : 'Paste AI XML payload here...'}
             aria-label="Agent instructions input"

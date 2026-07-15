@@ -14,7 +14,12 @@ interface OperationListProps {
 export const OperationList = ({ operations, onOpenFile }: OperationListProps) => {
     const listRef = useRef<HTMLDivElement>(null);
     const viewModels = operations.map(mapToOperationRowViewModel);
-    const { activeIndex, setActiveIndex, onKeyDown } = useRovingIndex(viewModels.length);
+    
+    const handleSelect = (index: number) => {
+        onOpenFile(viewModels[index].id);
+    };
+    
+    const { activeIndex, setActiveIndex, onKeyDown } = useRovingIndex(viewModels.length, handleSelect);
 
     if (viewModels.length === 0) return null;
 
@@ -44,7 +49,6 @@ export const OperationList = ({ operations, onOpenFile }: OperationListProps) =>
                                 onMouseEnter={() => setActiveIndex(index)}
                                 onClick={() => onOpenFile(vm.id)}
                             />
-                            {/* Render detailed Conflict Gutter ONLY for the active culprit causing the transaction abort */}
                             {vm.isRealConflict && vm.conflictDetails && (
                                 <ConflictGutter details={vm.conflictDetails} operationId={vm.id} />
                             )}

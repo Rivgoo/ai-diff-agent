@@ -12,6 +12,7 @@ export interface CommandMetadata {
     matchStrategy?: string;
     alreadyApplied?: boolean;
     confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning';
+    requiresAutoMerge?: boolean; 
 }
 
 export interface ITransactionCommand {

@@ -16,6 +16,7 @@ export interface ChangeStats {
 export type OperationStatus =
   | "pending"
   | "applied_dirty"
+  | "merged_dirty"
   | "saved"
   | "reverted"
   | "conflict"
@@ -30,28 +31,65 @@ export type OperationType =
   | "move_path"
   | "create_dir";
 
-export interface BehaviorSettings {
+export interface UiSettings {
   autoScroll: boolean;
   compactMode: boolean;
-  storeChatInWorkspace: boolean;
   showConfidenceBadges: boolean;
+  enableCodeLens: boolean;
+  phantomInlineDiffs: boolean; // Заділ для Фази 4
+  enableWalkthroughMode: boolean; // Заділ для Фази 4
+}
+
+export interface WorkflowSettings {
+  chatHistoryMode: 'workspace' | 'global' | 'disabled';
+  autoSaveAfterAccept: boolean;
+  formatBehavior: 'always' | 'onSaveOnly' | 'never';
+  cleanupEmptyDirectories: boolean;
+  backupRetentionDays: number;
+  executionMode: 'atomic' | 'tolerant'; // Заділ для Фази 3
+  clipboardWatcher: boolean; // Заділ для Фази 6
+  historyBranchAwareness: boolean; // Заділ для Фази 6
 }
 
 export interface EngineSettings {
+  payloadRecoveryMode: 'strict' | 'standard' | 'aggressive';
+  fallbackMatchLevel: 'none' | 'safe' | 'aggressive';
+  maxFileSizeMb: number;
+  useUnsavedBuffers: boolean; 
+  polyglotParsing: boolean; // Заділ для Фази 5
+  
+  // Legacy properties awaiting removal in final phases
   strictParsing: boolean;
-  maxBackupRetentionDays: number;
-  autoFixSyntax: boolean;
-  autoFormatOnApply: boolean;
-  enableAstMatching: boolean;
-  respectGitIgnore: boolean;
   allowCdataUnwrap: boolean;
   allowFuzzyMatching: boolean;
-  allowSlidingWindow: boolean; 
-  blockOnSyntaxErrors: boolean
+  allowSlidingWindow: boolean;
+  blockOnSyntaxErrors: boolean;
+  respectGitIgnore: boolean;
 }
+
+export interface AstSettings {
+  enableAstMatching: boolean;
+  enabledLanguages: string[];
+  sanityStrictness: 'ignore' | 'warn' | 'block_on_error' | 'block_on_missing';
+  validateEmbeddedScripts: boolean;
+  queryTolerance: 'exact' | 'allow_signature_drift';
+  strictSyntaxValidation: boolean;
+  autoFixSyntax: boolean;
+  lspValidation: boolean; // Заділ для Фази 5
+  autoStitchImports: boolean; // Заділ для Фази 5
+  blastRadiusAnalysis: boolean; // Заділ для Фази 5
+}
+
+export interface AiSettings {
+  feedbackLoopEnabled: boolean; // Заділ для Фази 6
+}
+
 export interface AgentSettings {
-  behavior: BehaviorSettings;
+  ui: UiSettings;
+  workflow: WorkflowSettings;
   engine: EngineSettings;
+  ast: AstSettings;
+  ai: AiSettings;
 }
 
 export interface ChangeBlock {
@@ -77,6 +115,7 @@ export interface DiffOperation {
   matchStrategy?: string;
   alreadyApplied?: boolean;
   confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning';
+  isPartiallyResolved?: boolean;
 }
 
 export interface ChatMessage {

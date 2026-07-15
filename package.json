@@ -66,56 +66,104 @@
     "configuration": {
       "title": "AI Diff Agent",
       "properties": {
-        "aiDiffAgent.behavior": {
+        "aiDiffAgent.ui": {
           "type": "object",
-          "description": "Agent behavior settings",
+          "description": "UI and Display settings",
           "properties": {
-            "autoScroll": {
-              "type": "boolean",
-              "default": true
-            },
-            "compactMode": {
-              "type": "boolean",
-              "default": false
-            },
-            "storeChatInWorkspace": {
-              "type": "boolean",
-              "default": false
-            },
-            "showConfidenceBadges": {
-              "type": "boolean",
-              "default": true
-            }
+            "autoScroll": { "type": "boolean", "default": true },
+            "compactMode": { "type": "boolean", "default": false },
+            "showConfidenceBadges": { "type": "boolean", "default": true },
+            "enableCodeLens": { "type": "boolean", "default": true },
+            "phantomInlineDiffs": { "type": "boolean", "default": true },
+            "enableWalkthroughMode": { "type": "boolean", "default": false }
           },
           "default": {
             "autoScroll": true,
             "compactMode": false,
-            "storeChatInWorkspace": false,
-            "showConfidenceBadges": true
+            "showConfidenceBadges": true,
+            "enableCodeLens": true,
+            "phantomInlineDiffs": true,
+            "enableWalkthroughMode": false
+          }
+        },
+        "aiDiffAgent.workflow": {
+          "type": "object",
+          "description": "Lifecycle and automation settings",
+          "properties": {
+            "chatHistoryMode": { "type": "string", "enum": ["workspace", "global", "disabled"], "default": "workspace" },
+            "autoSaveAfterAccept": { "type": "boolean", "default": true },
+            "formatBehavior": { "type": "string", "enum": ["always", "onSaveOnly", "never"], "default": "onSaveOnly" },
+            "cleanupEmptyDirectories": { "type": "boolean", "default": true },
+            "backupRetentionDays": { "type": "number", "default": 7 },
+            "executionMode": { "type": "string", "enum": ["atomic", "tolerant"], "default": "tolerant" },
+            "clipboardWatcher": { "type": "boolean", "default": false },
+            "historyBranchAwareness": { "type": "boolean", "default": true }
+          },
+          "default": {
+            "chatHistoryMode": "workspace",
+            "autoSaveAfterAccept": true,
+            "formatBehavior": "onSaveOnly",
+            "cleanupEmptyDirectories": true,
+            "backupRetentionDays": 7,
+            "executionMode": "tolerant",
+            "clipboardWatcher": false,
+            "historyBranchAwareness": true
           }
         },
         "aiDiffAgent.engine": {
           "type": "object",
-          "description": "Diff engine settings",
+          "description": "Text Parsing & Limits",
           "properties": {
-            "strictParsing": { "type": "boolean", "default": false },
-            "maxBackupRetentionDays": { "type": "number", "default": 7 },
-            "autoFixSyntax": { "type": "boolean", "default": true },
-            "autoFormatOnApply": { "type": "boolean", "default": true, "description": "Automatically format files in the background after operations are applied." },
-            "enableAstMatching": { "type": "boolean", "default": true, "description": "Enable structural Abstract Syntax Tree (AST) matching for extremely resilient code replacement. Disable to fallback to RegExp heuristics." },
-            "respectGitIgnore": { "type": "boolean", "default": true, "description": "If false, the agent will search for files even in ignored directories (like build/ or dist/)." },
-            "allowCdataUnwrap": { "type": "boolean", "default": true, "description": "Automatically unwrap and clean <![CDATA[ ... ]]> tags hallucinated by LLMs inside XML payloads." },
-            "blockOnSyntaxErrors": { "type": "boolean", "default": false, "description": "If true, strictly blocks the transaction if the AI introduces syntax errors (missing brackets, semicolons). If false, allows insertion so you can fix it manually via LSP." }
+            "payloadRecoveryMode": { "type": "string", "enum": ["strict", "standard", "aggressive"], "default": "aggressive" },
+            "fallbackMatchLevel": { "type": "string", "enum": ["none", "safe", "aggressive"], "default": "safe" },
+            "maxFileSizeMb": { "type": "number", "default": 5 },
+            "useUnsavedBuffers": { "type": "boolean", "default": true },
+            "polyglotParsing": { "type": "boolean", "default": true }
           },
           "default": {
-            "strictParsing": false,
-            "maxBackupRetentionDays": 7,
-            "autoFixSyntax": true,
-            "autoFormatOnApply": true,
+            "payloadRecoveryMode": "aggressive",
+            "fallbackMatchLevel": "safe",
+            "maxFileSizeMb": 5,
+            "useUnsavedBuffers": true,
+            "polyglotParsing": true
+          }
+        },
+        "aiDiffAgent.ast": {
+          "type": "object",
+          "description": "Tree-Sitter, Semantics and LSP",
+          "properties": {
+            "enableAstMatching": { "type": "boolean", "default": true },
+            "enabledLanguages": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": ["javascript", "typescript", "python", "c_sharp", "json", "html", "css", "bash", "c"]
+            },
+            "queryTolerance": { "type": "string", "enum": ["exact", "allow_signature_drift"], "default": "allow_signature_drift" },
+            "strictSyntaxValidation": { "type": "boolean", "default": false },
+            "autoFixSyntax": { "type": "boolean", "default": true },
+            "lspValidation": { "type": "boolean", "default": false },
+            "autoStitchImports": { "type": "boolean", "default": false },
+            "blastRadiusAnalysis": { "type": "boolean", "default": true }
+          },
+          "default": {
             "enableAstMatching": true,
-            "respectGitIgnore": true,
-            "allowCdataUnwrap": true,
-            "blockOnSyntaxErrors": false
+            "enabledLanguages": ["javascript", "typescript", "python", "c_sharp", "json", "html", "css", "bash", "c"],
+            "queryTolerance": "allow_signature_drift",
+            "strictSyntaxValidation": false,
+            "autoFixSyntax": true,
+            "lspValidation": false,
+            "autoStitchImports": false,
+            "blastRadiusAnalysis": true
+          }
+        },
+        "aiDiffAgent.ai": {
+          "type": "object",
+          "description": "AI Feedback Loop",
+          "properties": {
+            "feedbackLoopEnabled": { "type": "boolean", "default": false }
+          },
+          "default": {
+            "feedbackLoopEnabled": false
           }
         }
       }
@@ -141,7 +189,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.1",
     "@types/react": "^19.x",
     "@types/react-dom": "^19.x",
     "@types/vscode": "^1.x",

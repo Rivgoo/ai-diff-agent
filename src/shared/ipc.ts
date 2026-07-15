@@ -18,13 +18,13 @@ export type WebviewEvent =
   | { type: "REQUEST_SETTINGS_SYNC" }
   | {
       type: "UPDATE_SETTING";
-      category: "behavior" | "engine";
+      category: "ui" | "workflow" | "engine" | "ast" | "ai";
       key: string;
       value: any;
     }
   | { type: "SUBMIT_PAYLOAD"; payload: string }
   | { type: "CANCEL_PROCESSING" }
-  | { type: "ACTION_SAVE_ALL" }
+  | { type: "ACTION_SAVE_ALL"; hasConflicts?: boolean }
   | { type: "ACTION_REVERT_ALL" }
   | { type: "ACTION_ACCEPT_OPERATION"; operationId: string }
   | { type: "ACTION_REVERT_OPERATION"; operationId: string }
@@ -59,6 +59,7 @@ export type ExtensionEvent =
       isDirectory?: boolean;
       matchStrategy?: string;
       alreadyApplied?: boolean;
+      isPartiallyResolved?: boolean;
     }
   | { type: "AGENT_TYPING"; isTyping: boolean }
   | {
@@ -81,5 +82,6 @@ export type ExtensionEvent =
         isDirectory?: boolean;
         matchStrategy?: string;
         alreadyApplied?: boolean;
+        isPartiallyResolved?: boolean; 
       }>;
     };

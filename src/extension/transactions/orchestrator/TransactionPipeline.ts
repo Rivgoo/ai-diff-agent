@@ -33,13 +33,18 @@ export class TransactionPipeline {
         private readonly searchEngine: SearchEngine,
         private readonly pathResolver: ResilientPathResolver,
         private readonly snapshotService: SnapshotService,
-        private readonly editorService: EditorService,
-        private readonly directoryCleanupService: DirectoryCleanupService,
+        editorService: EditorService,
+        directoryCleanupService: DirectoryCleanupService,
         private readonly logger: ILogger,
         private readonly settingsManager: SettingsManager,
         private readonly onStatusUpdate: (event: OperationStatusUpdate) => void
     ) {
         this.commitPhase = new CommitPhase(store, decorationService, directoryCleanupService, editorService, onStatusUpdate);
+    }
+
+    public emergencyUnlock(): void {
+        this.transactionLock.releaseAll();
+        this.logger.warn("Emergency unlock triggered. All transaction locks cleared.");
     }
 
     public async applyBatch(operations: AnyOperation[]): Promise<void> {
@@ -79,33 +84,54 @@ export class TransactionPipeline {
             this.logger.info(`Starting transaction pipeline for ${commands.length} commands.`);
             
             const validationResult = await this.validationPhase.execute(commands, context);
-            if (!validationResult.success) {
-                this.logger.warn(`Validation failed for ${validationResult.error.failedId}. Aborting batch.`);
-                const conflictMap = new Map<string, ConflictDetails>();
-                conflictMap.set(validationResult.error.failedId, validationResult.error.conflict);
-                this.abortBatch(pendingOps, "Validation failed", conflictMap, validationResult.error.failedId);
+            const executionMode = this.settingsManager.getSettings().workflow.executionMode;
+            
+            if (validationResult.conflicts.size > 0 && executionMode === 'atomic') {
+                const firstConflictId = Array.from(validationResult.conflicts.keys())[0];
+                this.logger.warn(`Atomic Mode: Validation failed for ${firstConflictId}. Aborting entire batch.`);
+                this.abortBatch(pendingOps, "Validation failed (Atomic Mode)", validationResult.conflicts, firstConflictId);
                 return;
             }
 
-            await this.executionPhase.execute(commands, context);
-            await this.commitPhase.execute(commands, pendingOps, context, rootName, rootUri);
+            if (validationResult.conflicts.size > 0) {
+                this.logger.warn(`Tolerant Mode: Isolated ${validationResult.conflicts.size} conflicts.`);
+                const conflictOps = pendingOps.filter(op => validationResult.conflicts.has(op.id));
+                this.abortBatch(conflictOps, "Isolated conflict", validationResult.conflicts);
+            }
 
-            this.logger.info("Transaction pipeline executed successfully.");
+            const validCommands = validationResult.validCommands;
+            
+            if (validCommands.length === 0) {
+                this.logger.warn(`No valid operations left to execute. Stopping pipeline.`);
+                return;
+            }
+            await this.executionPhase.execute(validCommands, context);
+            
+            const validPendingOps = pendingOps.filter(op => validCommands.some(cmd => cmd.operationId === op.id));
+            await this.commitPhase.execute(validCommands, validPendingOps, context, rootName, rootUri);
+
+            this.logger.info(`Transaction pipeline executed successfully for ${validCommands.length} commands.`);
 
         } catch (err) {
             this.logger.error(`Pipeline execution crashed: ${err}`);
             
             for (const cmd of commands) {
-                await this.revertOperation(cmd.operationId); 
-
-                await this.snapshotService.purgeSnapshotForOp(cmd.operationId);
-                this.transactionLock.release(cmd.operationId);
-                this.onStatusUpdate({
-                    operationId: cmd.operationId,
-                    status: 'error',
-                    conflict: { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: String(err), originalSearchBlock: '' }
-                });
+                try {
+                    await this.revertOperation(cmd.operationId);
+                    await this.snapshotService.purgeSnapshotForOp(cmd.operationId);
+                } catch (revertErr) {
+                    this.logger.error(`Failed to revert operation ${cmd.operationId} during crash recovery: ${revertErr}`);
+                } finally {
+                    this.transactionLock.release(cmd.operationId);
+                    this.onStatusUpdate({
+                        operationId: cmd.operationId,
+                        status: 'error',
+                        conflict: { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: String(err), originalSearchBlock: '' }
+                    });
+                }
             }
+        } finally {
+            context.dispose();
         }
     }
 
@@ -163,16 +189,20 @@ export class TransactionPipeline {
         const tx = this.store.getTransaction(opId);
         if (!tx) return;
 
-        for (const act of tx.antiActions) {
-            const targetPath = (act as any).path || (act as any).destinationPath;
-            if (!targetPath) continue;
-            try {
-                const targetUri = this.getAbsoluteUri(targetPath);
-                if (targetUri) {
-                    const doc = await vscode.workspace.openTextDocument(targetUri);
-                    if (doc.isDirty) await doc.save();
-                }
-            } catch { /* safe ignore */ }
+        const autoSave = this.settingsManager.getSettings().workflow?.autoSaveAfterAccept ?? true;
+
+        if (autoSave) {
+            for (const act of tx.antiActions) {
+                const targetPath = (act as any).path || (act as any).destinationPath;
+                if (!targetPath) continue;
+                try {
+                    const targetUri = this.getAbsoluteUri(targetPath);
+                    if (targetUri) {
+                        const doc = await vscode.workspace.openTextDocument(targetUri);
+                        if (doc.isDirty) await doc.save();
+                    }
+                } catch { /* safe ignore */ }
+            }
         }
 
         this.onStatusUpdate({ operationId: opId, status: 'saved' });
@@ -191,8 +221,8 @@ export class TransactionPipeline {
         const directoriesToDelete: vscode.Uri[] = [];
         const directoriesToRestore: vscode.Uri[] = [];
         const filesToRestoreBinary: { uri: vscode.Uri, data: Uint8Array }[] = [];
+        const filesRestoredText: vscode.Uri[] = [];
 
-        // 1. Видаляємо сміття (те що ШІ створив) З КІНЦЯ В ПОЧАТОК
         for (let i = tx.antiActions.length - 1; i >= 0; i--) {
             const act = tx.antiActions[i];
             if (act.type === 'delete_created') {
@@ -213,7 +243,6 @@ export class TransactionPipeline {
             }
         }
 
-        // 2. Готуємо відновлення тексту
         for (const act of tx.antiActions) {
             let backupUri: vscode.Uri | undefined;
             let targetUri: vscode.Uri | null = null;
@@ -231,18 +260,16 @@ export class TransactionPipeline {
                     const backupData = await vscode.workspace.fs.readFile(backupUri);
                     try {
                         await vscode.workspace.fs.stat(targetUri);
-                        // Файл існує -> М'яка текстова заміна
                         const rawText = new TextDecoder('utf-8').decode(backupData);
                         const doc = await vscode.workspace.openTextDocument(targetUri);
                         
-                        // Зберігаємо CRLF для GIT
                         const isCRLF = doc.getText().includes('\r\n');
                         const normalizedText = rawText.replace(/\r?\n/g, isCRLF ? '\r\n' : '\n');
 
                         const fullRange = new vscode.Range(0, 0, doc.lineCount, 9999);
                         edit.replace(targetUri, fullRange, normalizedText);
+                        filesRestoredText.push(targetUri);
                     } catch {
-                        // ВИПРАВЛЕННЯ: Файлу немає. Ставимо в чергу на 100% бінарне створення на диску.
                         filesToRestoreBinary.push({ uri: targetUri, data: backupData });
                     }
                 } catch (e) {
@@ -253,17 +280,31 @@ export class TransactionPipeline {
 
         await vscode.workspace.applyEdit(edit);
 
-        // БІНАРНЕ ВІДНОВЛЕННЯ видалених файлів
+        for (const uri of filesRestoredText) {
+            try {
+                const doc = await vscode.workspace.openTextDocument(uri);
+                if (doc.isDirty) {
+                    await doc.save();
+                }
+            } catch (e) {
+                this.logger.error(`Failed to forcefully save reverted document ${uri.fsPath}: ${e}`);
+            }
+        }
+
         for (const file of filesToRestoreBinary) {
             await vscode.workspace.fs.writeFile(file.uri, file.data);
         }
 
-        directoriesToDelete.sort((a, b) => b.fsPath.length - a.fsPath.length);
-        for (const dirUri of directoriesToDelete) {
-            try {
-                const contents = await vscode.workspace.fs.readDirectory(dirUri);
-                if (contents.length === 0) await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
-            } catch { /* ignore */ }
+        const cleanupEnabled = this.settingsManager.getSettings().workflow?.cleanupEmptyDirectories ?? true;
+        
+        if (cleanupEnabled) {
+            directoriesToDelete.sort((a, b) => b.fsPath.length - a.fsPath.length);
+            for (const dirUri of directoriesToDelete) {
+                try {
+                    const contents = await vscode.workspace.fs.readDirectory(dirUri);
+                    if (contents.length === 0) await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
+                } catch { /* ignore */ }
+            }
         }
 
         directoriesToRestore.sort((a, b) => a.fsPath.length - b.fsPath.length);
