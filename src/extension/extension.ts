@@ -19,7 +19,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         OutputLogger.log(`[AST] Failed to initialize Tree-Sitter engine: ${error}`, 'ERROR');
     }
 
-    const tempSettingsManager = new SettingsManager(context, () => {});
+    let decorationService: DecorationService;
+    
+    const settingsManager = new SettingsManager(context, () => {
+        if (decorationService) {
+            decorationService.redrawDecorations();
+        }
+    });
 
     const config = vscode.workspace.getConfiguration('aiDiffAgent');
     const retentionDays = config.get<number>('workflow.backupRetentionDays') || 7;
@@ -30,7 +36,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     
     snapshotService.cleanStaleBackups(retentionDays, activeTxIds);
 
-    const decorationService = new DecorationService();
+    decorationService = new DecorationService();
+    
 
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(editor => {
@@ -54,7 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         )
     );
 
-    const codeLensProvider = new BlockCodeLensProvider(decorationService, tempSettingsManager);
+    const codeLensProvider = new BlockCodeLensProvider(decorationService, settingsManager);
     context.subscriptions.push(
         vscode.languages.registerCodeLensProvider({ scheme: 'file' }, codeLensProvider)
     );

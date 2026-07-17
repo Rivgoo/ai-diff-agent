@@ -1,5 +1,6 @@
 import type { AnyOperation, ChangeBlock } from '../models/operations';
 import { Result } from '../../shared/contracts';
+import type { EngineSettings, AstSettings } from '../../shared/models';
 
 export type FileNodeState = 'UNTOUCHED' | 'CREATED' | 'MODIFIED' | 'DELETED' | 'MOVED';
 
@@ -24,5 +25,8 @@ export interface CompilationResult {
 }
 
 export interface ITransactionCompiler {
-    compile(rawOperations: AnyOperation[], options?: { enableAstMatching: boolean }): Promise<Result<CompilationResult>>;
+    compile(
+        rawOperations: AnyOperation[], 
+        options?: { engineSettings?: EngineSettings, astSettings?: AstSettings }
+    ): Promise<Result<CompilationResult>>;
 }

@@ -9,7 +9,8 @@ export class OperationReducer {
     constructor(
         private readonly workspace: VirtualWorkspace,
         private readonly warnings: CompilerWarning[],
-        private readonly enableAstMatching: boolean 
+        private readonly engineSettings?: EngineSettings, // ФІКС
+        private readonly astSettings?: AstSettings       // ФІКС
     ) {}
 
     public applyCreate(op: CreateFileOperation): void {
@@ -40,7 +41,7 @@ export class OperationReducer {
         node.stagedChanges = [];
     }
 
-     public async applyUpdate(op: UpdateFileOperation): Promise<void> {
+    public async applyUpdate(op: UpdateFileOperation): Promise<void> {
         const node = this.workspace.getNode(op.path);
 
         if (node.state === 'DELETED') {
@@ -56,36 +57,14 @@ export class OperationReducer {
             for (const change of op.changes) {
                 const doc = new VirtualDocument(node.currentPath, currentContent);
                 
-                const fallbackAstSettings: AstSettings = { 
-                    enableAstMatching: this.enableAstMatching,
-                    enabledLanguages: ['javascript', 'typescript', 'python', 'c_sharp', 'json', 'html', 'css', 'bash', 'c'], 
-                    sanityStrictness: 'warn', 
-                    validateEmbeddedScripts: true, 
-                    queryTolerance: 'allow_signature_drift',
-                    strictSyntaxValidation: false,
-                    autoFixSyntax: true,
-                    lspValidation: false,
-                    autoStitchImports: false,
-                    blastRadiusAnalysis: false
-                };
+                // ФІКС: Використовуємо реальні налаштування, якщо вони передані
+                const actualAstSettings = this.astSettings || { enableAstMatching: true, enabledLanguages: [], sanityStrictness: 'ignore', validateEmbeddedScripts: false, queryTolerance: 'allow_signature_drift', strictSyntaxValidation: false, autoFixSyntax: false, lspValidation: false, autoStitchImports: false, blastRadiusAnalysis: false };
                 
-                const fallbackEngineSettings: EngineSettings = { 
-                    payloadRecoveryMode: 'aggressive', 
-                    fallbackMatchLevel: 'safe', 
-                    maxFileSizeMb: 5, 
-                    useUnsavedBuffers: true, 
-                    polyglotParsing: true, 
-                    strictParsing: false, 
-                    allowCdataUnwrap: true, 
-                    allowFuzzyMatching: true, 
-                    allowSlidingWindow: true, 
-                    blockOnSyntaxErrors: false, 
-                    respectGitIgnore: true 
-                };
+                const actualEngineSettings = this.engineSettings || { payloadRecoveryMode: 'aggressive', fallbackMatchLevel: 'safe', maxFileSizeMb: 5, useUnsavedBuffers: true, polyglotParsing: true, strictParsing: false, allowCdataUnwrap: true, allowFuzzyMatching: true, allowSlidingWindow: true, blockOnSyntaxErrors: false, respectGitIgnore: true };
 
                 const match = await searchEngine.findMatch(
                     doc, change.search, change.replace, 
-                    fallbackEngineSettings, fallbackAstSettings, undefined
+                    actualEngineSettings, actualAstSettings, undefined
                 );
                 
                 if (match.status === 'MATCHED') {

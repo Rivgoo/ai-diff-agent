@@ -24,6 +24,14 @@ export class SyntaxSanityChecker {
         fileExtension: string,
         astSettings: AstSettings
     ): Promise<boolean> {
+        const isStrict = astSettings.strictSyntaxValidation || astSettings.sanityStrictness === 'block_on_error';
+        
+        // ФІКС: Якщо валідація синтаксису вимкнена, ми миттєво дозволяємо застосування.
+        // Це рятує TSX/JSX файли від хибного блокування парсером Typescript.
+        if (!isStrict) {
+            return true;
+        }
+
         const langKey = LANGUAGE_DISPATCH_MAP[fileExtension.toLowerCase()];
         if (!langKey || !astSettings.enabledLanguages.includes(langKey)) return true;
 
@@ -31,7 +39,6 @@ export class SyntaxSanityChecker {
         if (!parser) return true;
 
         const newText = this.applyChange(originalText, matchRange, replaceBlock);
-        const isStrict = astSettings   .strictSyntaxValidation || astSettings.sanityStrictness === 'block_on_error';
 
         if (langKey === 'json') {
             try {
@@ -40,12 +47,8 @@ export class SyntaxSanityChecker {
                 tree.delete();
                 return !hasError;
             } catch {
-                return !isStrict;
+                return false; // Strict Mode блокує
             }
-        }
-
-        if (!isStrict && astSettings.sanityStrictness === 'ignore') {
-            return true;
         }
 
         try {
@@ -57,9 +60,14 @@ export class SyntaxSanityChecker {
             const newErrors = this.countErrors(newTree.rootNode);
             newTree.delete();
 
-            return newErrors <= originalErrors + 1;
+            // ФІКС: Блокуємо тільки якщо кількість помилок зросла
+            if (newErrors > originalErrors + 1) {
+                return false;
+            }
+
+            return true;
         } catch {
-            return !isStrict;
+            return false; // Strict Mode блокує при фатальному збої парсера
         }
     }
 
