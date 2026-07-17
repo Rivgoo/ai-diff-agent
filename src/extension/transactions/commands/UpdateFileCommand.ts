@@ -129,24 +129,15 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
 
         this.matchedBlocks.sort((a, b) => b.range.start.line - a.range.start.line);
 
-        const document = await context.getDocument(this.targetPath);
-        const docText = document.getText();
-
         for (const match of this.matchedBlocks) {
-            let contentToInsert = match.replace;
-            let lineDelta = match.replace.split(/\r?\n/).length;
-
-
-            if (match.requiresMerge) {
-                const currentText = this.extractFullLines(docText, match.range.start.line, match.range.end.line);
-                contentToInsert = `<<<<<<< CURRENT (Your Changes)\n${currentText}\n=======\n${match.replace}\n>>>>>>> INCOMING (AI Changes)`;
-                lineDelta = contentToInsert.split(/\r?\n/).length;
-                context.logger.warn(`[Semantic Merge] Inserted merge markers for block in ${this.targetPath}`);
-            }
+            const contentToInsert = match.replace;
+            const lineDelta = match.replace.split(/\r?\n/).length;
 
             context.uow.replace(this.targetPath, match.range, contentToInsert);
             
-            const originalChange = this.operation.changes.find(c => TextNormalizerV2.aggressiveNormalizeSearchBlock(c.replace) === TextNormalizerV2.aggressiveNormalizeSearchBlock(match.replace));
+            const originalChange = this.operation.changes.find(c => 
+                TextNormalizerV2.aggressiveNormalizeSearchBlock(c.replace) === TextNormalizerV2.aggressiveNormalizeSearchBlock(match.replace)
+            );
 
             context.uow.addAppliedBlock(this.operationId, this.targetPath, {
                 range: {

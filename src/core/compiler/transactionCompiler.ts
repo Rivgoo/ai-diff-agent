@@ -12,13 +12,12 @@ import { OperationReducer } from './operationReducer';
 
 export class TransactionCompiler implements ITransactionCompiler {
     
-    public async compile(rawOperations: AnyOperation[], options?: { enableAstMatching: boolean }): Promise<Result<CompilationResult>> {
+    public async compile(rawOperations: AnyOperation[], options?: { engineSettings?: any, astSettings?: any }): Promise<Result<CompilationResult>> {
         try {
             const workspace = new VirtualWorkspace();
             const warnings: CompilerWarning[] = [];
             
-            const isAstEnabled = options?.enableAstMatching ?? true;
-            const reducer = new OperationReducer(workspace, warnings, isAstEnabled);
+            const reducer = new OperationReducer(workspace, warnings, options?.engineSettings, options?.astSettings);
 
             for (const op of rawOperations) {
                 if (isCreateFileOperation(op)) {

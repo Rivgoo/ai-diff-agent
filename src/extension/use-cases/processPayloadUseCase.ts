@@ -11,7 +11,6 @@ import { OutputLogger } from '../../infrastructure/logging/outputLogger';
 import { PayloadAutoFixer } from '../../core/parser/payloadAutoFixer';
 import { SettingsManager } from '../settings/settingsManager';
 
-// Кастомний клас для помилок, які вже були виведені в UI
 class HandledUIError extends Error {
     constructor(message: string) {
         super(message);
@@ -40,10 +39,11 @@ export class ProcessPayloadUseCase {
         await new Promise(resolve => setTimeout(resolve, 0));
 
         try {
-            const settings = this.settingsManager.getSettings().engine;
+            const engineSettings = this.settingsManager.getSettings().engine;
+            const astSettings = this.settingsManager.getSettings().ast;
             
             const parseResult = await this.parser.parse(payload, {
-                recoveryMode: settings.payloadRecoveryMode
+                recoveryMode: engineSettings.payloadRecoveryMode
             });
 
             if (!parseResult.success) {
@@ -56,7 +56,6 @@ export class ProcessPayloadUseCase {
                 };
                 this.sessionManager.addMessage(userFailMsg);
                 this.syncState();
-                // ФІКС: Кидаємо спеціальну помилку, щоб нижній catch її проігнорував
                 throw new HandledUIError(`DSL Parsing failed: ${parseResult.error.message}`);
             }
 
@@ -64,8 +63,10 @@ export class ProcessPayloadUseCase {
 
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'resolving', current: 0, total: parsedOperations.length });
             
+            // ФІКС: Передаємо реальні налаштування AST та Engine
             const compilationResult = await this.compiler.compile(parsedOperations, { 
-                enableAstMatching: this.settingsManager.getSettings().ast.enableAstMatching 
+                engineSettings,
+                astSettings
             });
             
             if (!compilationResult.success) {
@@ -102,7 +103,6 @@ export class ProcessPayloadUseCase {
 
             const operations = validationResult.value;
             
-            const astSettings = this.settingsManager.getSettings().ast;
             if (astSettings.autoFixSyntax) {
                 for (const op of operations) {
                     if (op.type === 'create_file' && op.content) {
@@ -171,7 +171,6 @@ export class ProcessPayloadUseCase {
             }
 
         } catch (error) {
-            // ФІКС: Якщо це наша HandledUIError, ми просто логуємо її в консоль, але не виводимо дублікат в чат
             if (error instanceof HandledUIError) {
                 OutputLogger.log(`Payload processing stopped: ${error.message}`, 'WARN');
             } else {

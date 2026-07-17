@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 export interface OpDecoration {
-    id: string; // ФІКС: Унікальний ID блоку
+    id: string; 
     opId: string;
     range: vscode.Range;
     originalSearch: string; 
@@ -9,6 +9,8 @@ export interface OpDecoration {
 
 export class DecorationService {
     private decorationType: vscode.TextEditorDecorationType;
+    private phantomDecorationType: vscode.TextEditorDecorationType; 
+    
     private activeDecorations = new Map<string, OpDecoration[]>();
 
     private _onDidChangeDecorations = new vscode.EventEmitter<void>();
@@ -21,6 +23,8 @@ export class DecorationService {
             overviewRulerColor: new vscode.ThemeColor('diffEditor.insertedTextBorder'),
             overviewRulerLane: vscode.OverviewRulerLane.Right
         });
+
+        this.phantomDecorationType = vscode.window.createTextEditorDecorationType({});
     }
 
     public addDecorations(uri: vscode.Uri, opId: string, blocks: { range: vscode.Range, originalSearch: string }[]): void {
@@ -94,16 +98,24 @@ export class DecorationService {
         return this.activeDecorations.get(uri.toString()) || [];
     }
 
+    public redrawDecorations(): void {
+        this.triggerUpdateDecorations();
+    }
+
     public updateDecorationsForEditor(editor: vscode.TextEditor): void {
         const key = editor.document.uri.toString();
         const decs = this.activeDecorations.get(key);
-        if (!decs) {
+        
+        if (!decs || decs.length === 0) {
             editor.setDecorations(this.decorationType, []);
+            editor.setDecorations(this.phantomDecorationType, []);
             return;
         }
 
         const ranges = decs.map(d => d.range);
         editor.setDecorations(this.decorationType, ranges);
+        
+        editor.setDecorations(this.phantomDecorationType, []);
     }
 
     private triggerUpdateDecorations(): void {

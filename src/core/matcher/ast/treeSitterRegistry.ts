@@ -56,22 +56,6 @@ export interface IParserTree {
     delete(): void;
 }
 
-export interface IQueryMatch {
-    pattern: number;
-    captures: IQueryCapture[];
-}
-
-export interface IQueryCapture {
-    name: string;
-    node: ISyntaxNode;
-}
-
-export interface ITreeSitterQuery {
-    matches(node: ISyntaxNode, startPosition?: ITreeSitterPoint, endPosition?: ITreeSitterPoint): IQueryMatch[];
-    captures(node: ISyntaxNode, startPosition?: ITreeSitterPoint, endPosition?: ITreeSitterPoint): IQueryCapture[];
-    delete(): void;
-}
-
 export interface ITreeSitterParser {
     setLanguage(language: any): void;
     getLanguage(): any;
@@ -152,21 +136,6 @@ export class AstParserRegistry {
             return parser;
         } catch (error) {
             logger?.error(`[AST] Failed to compile WASM grammar for '${language}': ${error}`);
-            return null;
-        }
-    }
-
-    public static createQuery(language: string, queryString: string, logger?: any): ITreeSitterQuery | null {
-        if (!this.languages.has(language)) {
-            logger?.warn(`[AST] Cannot create query. Language '${language}' is not loaded.`);
-            return null;
-        }
-
-        try {
-            const langObj = this.languages.get(language);
-            return langObj.query(queryString);
-        } catch (error) {
-            logger?.error(`[AST] Query compilation failed for pattern:\n${queryString}\nError: ${error}`);
             return null;
         }
     }

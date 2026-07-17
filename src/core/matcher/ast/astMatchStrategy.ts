@@ -1,6 +1,7 @@
-import type { IMatchStrategy, MatchContext, IMatcherLogger } from '../types';
+import type { IMatchStrategy, MatchContext } from '../types';
 import type { MatchResult } from '@/shared/contracts';
 import { AstParserRegistry, type IParserTree, type ISyntaxNode, type ITreeSitterParser } from './treeSitterRegistry';
+import { AstQueryEngine, type SemanticSignature } from './astQueryEngine';
 
 const LANGUAGE_DISPATCH_MAP: Record<string, string> = {
     '.json': 'json',
@@ -16,18 +17,14 @@ const LANGUAGE_DISPATCH_MAP: Record<string, string> = {
     '.bash': 'bash'
 };
 
-interface SemanticSignature {
-    readonly type: string;
-    readonly name: string;
-}
-
 const BANNED_SIGNATURE_TYPES = new Set([
     'identifier', 'qualified_name', 'type_identifier', 'primitive_type',
     'string_literal', 'number_literal', 'boolean_literal',
     'using_directive', 'import_statement', 'expression_statement', 
     'namespace_declaration', 'file_scoped_namespace_declaration',
     'member_access_expression', 'call_expression', 'assignment_expression',
-    'binary_expression', 'property_identifier', 'argument_list', 'variable_declaration'
+    'binary_expression', 'property_identifier', 'argument_list', 'variable_declaration',
+    'type_parameter'
 ]);
 
 export class AstMatchStrategy implements IMatchStrategy {
@@ -47,14 +44,13 @@ export class AstMatchStrategy implements IMatchStrategy {
         const parser = await AstParserRegistry.getParser(langKey, context.logger);
         if (!parser) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
-        context.logger?.info(`[AST] Initiating S-expression query analysis for ${context.document.path}`);
+        context.logger?.info(`[AST] Initiating semantic analysis for ${context.document.path}`);
 
         let documentTree: IParserTree | undefined;
 
         try {
             documentTree = parser.parse(context.document.getText());
             
-            // ФІКС: Видалено аргумент context.logger
             const signature = this.extractSignatureFromFragment(parser, context.searchBlock, context.fileExtension);
             
             if (!signature) {
@@ -65,19 +61,19 @@ export class AstMatchStrategy implements IMatchStrategy {
 
             context.logger?.info(`[AST] Extracted semantic target: [${signature.type}] named '${signature.name}'`);
 
-            let candidates = this.executeSExpressionQuery(langKey, documentTree.rootNode, signature, context.logger);
+            let candidates = AstQueryEngine.findTargetNode(documentTree.rootNode, signature);
             let confidenceScore: 'High' | 'Medium' | 'Low' | 'Warning' = 'High';
             
             if (candidates.length === 0 && context.astSettings.queryTolerance === 'allow_signature_drift') {
-                context.logger?.warn(`[AST] Strict query failed. Attempting Signature Drift wildcard query for '${signature.name}'...`);
-                candidates = this.executeWildcardQuery(langKey, documentTree.rootNode, signature, context.logger);
+                context.logger?.warn(`[AST] Strict match failed. Attempting Signature Drift wildcard search for '${signature.name}'...`);
+                candidates = AstQueryEngine.findWildcardNodes(documentTree.rootNode, signature);
                 if (candidates.length > 0) {
                     confidenceScore = 'Medium'; 
                 }
             }
 
             if (candidates.length === 0) {
-                context.logger?.warn(`[AST] Target '${signature.name}' not found via queries.`);
+                context.logger?.warn(`[AST] Target '${signature.name}' not found.`);
                 this.cleanup(documentTree);
                 return {
                     status: 'FAILED',
@@ -88,7 +84,7 @@ export class AstMatchStrategy implements IMatchStrategy {
             }
 
             if (candidates.length > 1) {
-                context.logger?.warn(`[AST] Ambiguous query match. Found ${candidates.length} entities named '${signature.name}'.`);
+                context.logger?.warn(`[AST] Ambiguous match. Found ${candidates.length} entities named '${signature.name}'.`);
                 this.cleanup(documentTree);
                 return { status: 'FAILED', reason: 'AMBIGUOUS_MATCH', matchesFound: candidates.length };
             }
@@ -126,7 +122,7 @@ export class AstMatchStrategy implements IMatchStrategy {
             
             this.cleanup(documentTree);
 
-            context.logger?.info(`[AST] Successful query match. Coordinates bounded securely.`);
+            context.logger?.info(`[AST] Successful semantic match. Coordinates bounded securely.`);
 
             return {
                 status: 'MATCHED',
@@ -139,58 +135,10 @@ export class AstMatchStrategy implements IMatchStrategy {
             };
 
         } catch (e) {
-            context.logger?.error(`[AST] Fatal query execution error: ${e}`);
+            context.logger?.error(`[AST] Fatal execution error: ${e}`);
             this.cleanup(documentTree);
             return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
         }
-    }
-
-    private executeSExpressionQuery(language: string, rootNode: ISyntaxNode, signature: SemanticSignature, logger?: IMatcherLogger): ISyntaxNode[] {
-        const queryString = `(${signature.type}) @target`;
-        const query = AstParserRegistry.createQuery(language, queryString, logger);
-        if (!query) return [];
-
-        const matches: ISyntaxNode[] = [];
-        try {
-            const captures = query.captures(rootNode);
-            for (const capture of captures) {
-                const nameNode = capture.node.childForFieldName('name');
-                if (nameNode && nameNode.text === signature.name) {
-                    matches.push(capture.node);
-                }
-            }
-        } finally {
-            query.delete();
-        }
-        return matches;
-    }
-
-    private executeWildcardQuery(language: string, rootNode: ISyntaxNode, signature: SemanticSignature, logger?: IMatcherLogger): ISyntaxNode[] {
-        const queryString = `
-            ([
-                (function_declaration)
-                (method_definition)
-                (class_declaration)
-                (interface_declaration)
-                (variable_declarator)
-            ]) @target
-        `;
-        const query = AstParserRegistry.createQuery(language, queryString, logger);
-        if (!query) return [];
-
-        const matches: ISyntaxNode[] = [];
-        try {
-            const captures = query.captures(rootNode);
-            for (const capture of captures) {
-                const nameNode = capture.node.childForFieldName('name');
-                if (nameNode && nameNode.text === signature.name) {
-                    matches.push(capture.node);
-                }
-            }
-        } finally {
-            query.delete();
-        }
-        return matches;
     }
 
     private extractImports(parser: ITreeSitterParser, code: string): { cleanCode: string, imports: string[] } {
@@ -248,7 +196,6 @@ export class AstMatchStrategy implements IMatchStrategy {
         return originalNode.startIndex;
     }
 
-    // ФІКС: Видалено параметр logger
     private extractSignatureFromFragment(parser: ITreeSitterParser, code: string, extension: string): SemanticSignature | null {
         let tree: IParserTree | undefined;
         
