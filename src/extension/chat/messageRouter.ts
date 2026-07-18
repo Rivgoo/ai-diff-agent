@@ -31,6 +31,7 @@ export class MessageRouter {
     private readonly processPayloadUseCase: ProcessPayloadUseCase;
     private readonly snapshotService: SnapshotService;
     private isProcessingLens = false;
+    private isWalkthroughActive = false; 
 
     private statusUpdateQueue: any[] = [];
     private updateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -92,6 +93,10 @@ export class MessageRouter {
                         this.flushStatusUpdates();
                     }, 50);
                 }
+            },
+            () => {
+                this.isWalkthroughActive = false;
+                this.postMessageCallback({ type: 'WALKTHROUGH_COMPLETED' });
             }
         );
 
@@ -170,8 +175,8 @@ export class MessageRouter {
                 }
                 break;
             case 'ACTION_REVERT_ALL': this.transactionPipeline.revertBatch(); break;
-            case 'ACTION_ACCEPT_OPERATION': this.transactionPipeline.saveOperation(event.operationId); break;
-            case 'ACTION_REVERT_OPERATION': this.transactionPipeline.revertOperation(event.operationId); break;
+            case 'ACTION_ACCEPT_OPERATION': this.transactionPipeline.saveOperation(event.operationId, event.isWalkthrough); break;
+            case 'ACTION_REVERT_OPERATION': this.transactionPipeline.revertOperation(event.operationId, event.isWalkthrough); break;
             case 'OPEN_FILE': this.handleOpenFile(event.operationId); break;
             case 'OPEN_DIFF': this.handleOpenDiff(event.operationId); break;
             case 'COPY_PROMPT': this.handleCopyPrompt(event.mode || 'stable'); break; 
@@ -181,6 +186,12 @@ export class MessageRouter {
                 vscode.env.openExternal(vscode.Uri.parse(event.url));
                 break;
             case 'SMART_RETRY_CONTEXT': this.handleSmartRetry(event.operationId); break; 
+            case 'SET_WALKTHROUGH_STATE': 
+                this.isWalkthroughActive = event.isActive; 
+                break;
+            case 'ACTION_JUMP_TO_NEXT_BLOCK': 
+                this.transactionPipeline.jumpToNextDirtyBlock(); 
+                break;
         }
     }
 
@@ -375,6 +386,10 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         try {
             this.decorationService.removeDecorationBlock(uri, blockId);
             this.checkPartialState(opId, uri);
+
+            if (this.isWalkthroughActive) {
+                await this.transactionPipeline.jumpToNextDirtyBlock();
+            }
         } finally {
             this.isProcessingLens = false;
         }
@@ -384,7 +399,6 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         if (this.isProcessingLens) return;
         this.isProcessingLens = true;
         try {
-            // ФІКС: Беремо найсвіжіші координати з DecorationService
             const decs = this.decorationService.getDecorationsForDocument(uri);
             const freshDec = decs.find(d => d.id === blockId);
             if (!freshDec) return; // Блок вже опрацьований
@@ -440,6 +454,9 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
             this.decorationService.removeDecorationBlock(uri, blockId);
             this.checkPartialState(opId, uri);
 
+            if (this.isWalkthroughActive) {
+                await this.transactionPipeline.jumpToNextDirtyBlock();
+            }
         } catch (e) {
             OutputLogger.log(`Partial rollback failed: ${e}`, 'ERROR');
         } finally {

@@ -156,4 +156,14 @@ export class DecorationService {
             this.triggerUpdateDecorations();
         }
     }
+
+    public getAllActiveDecorations(): { uriString: string, decoration: OpDecoration }[] {
+        const results: { uriString: string, decoration: OpDecoration }[] = [];
+        for (const [uriStr, decs] of this.activeDecorations.entries()) {
+            for (const dec of decs) {
+                results.push({ uriString: uriStr, decoration: dec });
+            }
+        }
+        return results;
+    }
 }

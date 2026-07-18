@@ -14,7 +14,7 @@ interface OperationRowProps {
 
 export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps) => {
     const { sendEvent } = useIPC();
-    // ФІКС: Звертаємось до нової категорії ui замість застарілої behavior
+    const isWalkthroughActive = useAgentStore(state => state.isWalkthroughActive);
     const showConfidenceBadges = useAgentStore(s => s.settings.ui?.showConfidenceBadges ?? true); 
     
     const classNames = [styles.row];
@@ -105,10 +105,10 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
                 )}
                 {isDirty && (
                     <>
-                        <button type="button" className={`${styles.actionBtn} ${styles.btnAccept}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_ACCEPT_OPERATION', operationId: vm.id }); }}>
+                        <button type="button" className={`${styles.actionBtn} ${styles.btnAccept}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_ACCEPT_OPERATION', operationId: vm.id, isWalkthrough: isWalkthroughActive }); }}>
                             <IconCheck size={12} />
                         </button>
-                        <button type="button" className={`${styles.actionBtn} ${styles.btnReject}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_REVERT_OPERATION', operationId: vm.id }); }}>
+                        <button type="button" className={`${styles.actionBtn} ${styles.btnReject}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_REVERT_OPERATION', operationId: vm.id, isWalkthrough: isWalkthroughActive }); }}>
                             <IconX size={12} />
                         </button>
                     </>

@@ -37,7 +37,8 @@ export class TransactionPipeline {
         directoryCleanupService: DirectoryCleanupService,
         private readonly logger: ILogger,
         private readonly settingsManager: SettingsManager,
-        private readonly onStatusUpdate: (event: OperationStatusUpdate) => void
+        private readonly onStatusUpdate: (event: OperationStatusUpdate) => void,
+        private readonly onWalkthroughComplete: () => void 
     ) {
         this.commitPhase = new CommitPhase(store, decorationService, directoryCleanupService, editorService, onStatusUpdate);
     }
@@ -185,7 +186,7 @@ export class TransactionPipeline {
         return vscode.Uri.joinPath(workspaceFolders[0].uri, cleanPath);
     }
 
-    public async saveOperation(opId: string): Promise<void> {
+    public async saveOperation(opId: string, isWalkthrough: boolean = false): Promise<void> {
         const tx = this.store.getTransaction(opId);
         if (!tx) return;
 
@@ -211,9 +212,13 @@ export class TransactionPipeline {
         
         this.store.clearTransaction(opId);
         await this.snapshotService.purgeSnapshotForOp(opId);
+
+        if (isWalkthrough) {
+            await this.jumpToNextDirtyBlock();
+        }
     }
 
-    public async revertOperation(opId: string): Promise<void> {
+    public async revertOperation(opId: string, isWalkthrough: boolean = false): Promise<void> {
         const tx = this.store.getTransaction(opId);
         if (!tx) return;
 
@@ -317,5 +322,33 @@ export class TransactionPipeline {
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
         await this.snapshotService.purgeSnapshotForOp(opId);
+
+        if (isWalkthrough) {
+            await this.jumpToNextDirtyBlock();
+        }
+    }
+
+    public async jumpToNextDirtyBlock(): Promise<void> {
+        const allDecorations = this.decorationService.getAllActiveDecorations();
+        
+        if (allDecorations.length === 0) {
+            this.logger.info("Walkthrough complete: No more dirty blocks left.");
+            this.onWalkthroughComplete(); 
+            return;
+        }
+
+        const nextTarget = allDecorations[0];
+
+        const uri = vscode.Uri.parse(nextTarget.uriString);
+
+        try {
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+            editor.revealRange(nextTarget.decoration.range, vscode.TextEditorRevealType.InCenter);
+            editor.selection = new vscode.Selection(nextTarget.decoration.range.start, nextTarget.decoration.range.start);
+        } catch (e) {
+            this.logger.warn(`Walkthrough jump failed: ${e}`);
+        }
     }
 }

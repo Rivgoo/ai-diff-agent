@@ -18,6 +18,9 @@ interface AgentState {
     isPromptCopied: boolean;
     pipelineProgress: PipelineProgress;
     composerDraft: string;
+    isWalkthroughActive: boolean;
+    startWalkthrough: () => void;
+    stopWalkthrough: () => void;
     updateOperationBatch: (updates: any[]) => void;
 
     hydrateSession: (sessions: Record<string, ChatSession>, activeId: string) => void;
@@ -99,6 +102,11 @@ export const useAgentStore = create<AgentState>((set) => ({
     isPromptCopied: false,
     pipelineProgress: { stage: 'idle', current: 0, total: 0 },
     composerDraft: '',
+
+    isWalkthroughActive: false,
+
+    startWalkthrough: () => set({ isWalkthroughActive: true }),
+    stopWalkthrough: () => set({ isWalkthroughActive: false }),
 
     hydrateSession: (sessions, activeId) => set({ sessions, activeSessionId: activeId }),
     hydrateSettings: (settings) => set({ settings }),

@@ -56,6 +56,9 @@ export const useIPC = () => {
                 case 'OPERATION_BATCH_UPDATED':
                     updateOperationBatch(message.updates);
                     break;
+                case 'WALKTHROUGH_COMPLETED':
+                    useAgentStore.getState().stopWalkthrough();
+                    break;
             }
         };
 

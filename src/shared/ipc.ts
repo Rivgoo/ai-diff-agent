@@ -26,8 +26,8 @@ export type WebviewEvent =
   | { type: "CANCEL_PROCESSING" }
   | { type: "ACTION_SAVE_ALL"; hasConflicts?: boolean }
   | { type: "ACTION_REVERT_ALL" }
-  | { type: "ACTION_ACCEPT_OPERATION"; operationId: string }
-  | { type: "ACTION_REVERT_OPERATION"; operationId: string }
+  | { type: "ACTION_ACCEPT_OPERATION"; operationId: string; isWalkthrough?: boolean }
+  | { type: "ACTION_REVERT_OPERATION"; operationId: string; isWalkthrough?: boolean }
   | { type: "OPEN_FILE"; operationId: string }
   | { type: "OPEN_DIFF"; operationId: string }
   | { type: "CLEAR_SESSION" }
@@ -38,7 +38,9 @@ export type WebviewEvent =
   | { type: "DOWNLOAD_INSTRUCTIONS" }
   | { type: "SHOW_OUTPUT_LOG" }
   | { type: "OPEN_EXTERNAL_LINK"; url: string }
-  | { type: "SMART_RETRY_CONTEXT"; operationId: string };
+  | { type: "SMART_RETRY_CONTEXT"; operationId: string }
+  | { type: "ACTION_JUMP_TO_NEXT_BLOCK" }
+  | { type: "SET_WALKTHROUGH_STATE"; isActive: boolean };
    
 
 export type ExtensionEvent =
@@ -84,4 +86,6 @@ export type ExtensionEvent =
         alreadyApplied?: boolean;
         isPartiallyResolved?: boolean; 
       }>;
-    };
+    }
+    | { type: "WALKTHROUGH_COMPLETED" };
+    
