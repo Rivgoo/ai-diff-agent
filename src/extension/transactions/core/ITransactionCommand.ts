@@ -13,6 +13,7 @@ export interface CommandMetadata {
     alreadyApplied?: boolean;
     confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning';
     requiresAutoMerge?: boolean; 
+    blastRadiusWarning?: string;
 }
 
 export interface ITransactionCommand {

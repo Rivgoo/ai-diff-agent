@@ -115,7 +115,8 @@ export interface DiffOperation {
   matchStrategy?: string;
   alreadyApplied?: boolean;
   confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning';
-  isPartiallyResolved?: boolean;
+    isPartiallyResolved?: boolean;
+    blastRadiusWarning?: string;
 }
 
 export interface ChatMessage {

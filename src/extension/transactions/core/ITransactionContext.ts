@@ -4,15 +4,17 @@ import type { SearchEngine } from '@/core/matcher/searchEngine';
 import type { ResilientPathResolver } from '@/core/resolver/resilientPathResolver';
 import type { SettingsManager } from '@/extension/settings/settingsManager';
 import type { IDocument } from '@/core/matcher/documentPort';
+import type * as vscode from 'vscode';
 
 export interface ITransactionContext {
-    readonly rootName: string;
+    readonly rootName: string;  
     readonly uow: IUnitOfWork;
     readonly searchEngine: SearchEngine;
     readonly pathResolver: ResilientPathResolver;
     readonly logger: ILogger;
     readonly settingsManager: SettingsManager;
 
+    getAbsoluteUri(relativePath: string): vscode.Uri;
     getResolvedPath(rawPath: string): string | undefined;
     setResolvedPath(rawPath: string, actualPath: string): void;
     getDocument(relativePath: string): Promise<IDocument>;

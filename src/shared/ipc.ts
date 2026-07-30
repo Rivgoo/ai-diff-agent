@@ -62,6 +62,7 @@ export type ExtensionEvent =
       matchStrategy?: string;
       alreadyApplied?: boolean;
       isPartiallyResolved?: boolean;
+      blastRadiusWarning?: string;
     }
   | { type: "AGENT_TYPING"; isTyping: boolean }
   | {
@@ -85,6 +86,7 @@ export type ExtensionEvent =
         matchStrategy?: string;
         alreadyApplied?: boolean;
         isPartiallyResolved?: boolean; 
+        blastRadiusWarning?: string;
       }>;
     }
     | { type: "WALKTHROUGH_COMPLETED" };

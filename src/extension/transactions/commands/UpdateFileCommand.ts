@@ -5,6 +5,7 @@ import { BaseCommand } from './BaseCommand';
 import type { UpdateFileOperation } from '@/core/models/operations';
 import { PathNormalizer } from '@/core/workspace/pathNormalizer';
 import { TextNormalizerV2 } from '@/core/matcher/heuristics/textNormalizerV2';
+import * as vscode from 'vscode';
 
 interface MatchedBlock {
     range: Range;
@@ -81,6 +82,29 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                 
                 const excerpt = change.search.split(/\r?\n/).slice(0, 3).join('\n');
                 return Result.fail(this.buildConflict(reason as any, undefined, i + 1, this.operation.changes.length, excerpt, match.semanticDiagnostic));
+            }
+
+            if (astSettings.blastRadiusAnalysis && match.strategy === 'SEMANTIC_AST_MATCH') {
+                try {
+                    const targetUri = context.getAbsoluteUri(this.targetPath);
+                    const refs = await vscode.commands.executeCommand<vscode.Location[]>(
+                        'vscode.executeReferenceProvider',
+                        targetUri,
+                        new vscode.Position(match.range.start.line, match.range.start.character)
+                    );
+                    
+                    if (refs && refs.length > 0) {
+                        const uniqueFiles = new Set(refs.map(r => r.uri.fsPath));
+                        uniqueFiles.delete(targetUri.fsPath);
+                        
+                        if (uniqueFiles.size > 0) {
+                            this.metadata.blastRadiusWarning = `⚠️ Blast Radius: Modifying this entity may affect ${uniqueFiles.size} other file(s).`;
+                            context.logger.warn(`[Blast Radius] Entity in ${this.targetPath} is referenced in ${uniqueFiles.size} external files.`);
+                        }
+                    }
+                } catch (e) {
+                    context.logger.info(`[Blast Radius] Provider not available or failed: ${e}`);
+                }
             }
 
             allBlocksAlreadyApplied = false;

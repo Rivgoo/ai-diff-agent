@@ -5,11 +5,12 @@ import { PathSanitizer } from '../workspace/pathSanitizer';
 
 export interface ParserOptions {
     recoveryMode: 'strict' | 'standard' | 'aggressive';
+    polyglotParsing?: boolean; // ФІКС: Додано прапорець для поліглота
 }
 
 export class DSLParser {
     private readonly scanner = new StreamScanner();
-    private options: ParserOptions = { recoveryMode: 'aggressive' };
+    private options: ParserOptions = { recoveryMode: 'aggressive', polyglotParsing: true };
 
     public async parse(rawInput: string, options?: Partial<ParserOptions>): Promise<Result<AnyOperation[]>> {
         if (options) {
@@ -36,11 +37,46 @@ export class DSLParser {
             }
 
             const looseResult = this.parseOperationsList(tokens, 0, tokens.length);
+            
+            // ФІКС: Якщо стандартний парсер XML не знайшов ЖОДНОЇ операції, 
+            // і ввімкнено polyglotParsing, запускаємо резервний Markdown парсер!
+            if (looseResult.operations.length === 0 && this.options.polyglotParsing) {
+                const fallbackOps = this.parseMarkdownFallback(rawInput);
+                if (fallbackOps.length > 0) {
+                    return Result.ok(fallbackOps);
+                }
+            }
+
             return Result.ok(looseResult.operations);
 
         } catch (error) {
             return Result.fail(error instanceof Error ? error : new Error('Unknown structural parse error'));
         }
+    }
+
+    private parseMarkdownFallback(rawInput: string): AnyOperation[] {
+        const operations: AnyOperation[] = [];
+        
+        const regex = /([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)[^\n]*\r?\n```[a-zA-Z0-9_]*\r?\n([\s\S]*?)\r?\n```/g;
+        
+        let match;
+        while ((match = regex.exec(rawInput)) !== null) {
+            const rawPath = match[1];
+            const content = match[2];
+            
+            const path = PathSanitizer.sanitize(rawPath);
+            if (path && content) {
+                operations.push({
+                    id: this.generateId(),
+                    type: 'create_file',
+                    path,
+                    content,
+                    status: 'pending'
+                });
+            }
+        }
+        
+        return operations;
     }
 
     private parseWorkspaceEdit(tokens: Token[], startIdx: number): Result<{ operations: AnyOperation[]; nextIndex: number }> {
@@ -243,7 +279,6 @@ export class DSLParser {
     private preprocessPayload(content: string): string {
         let cleaned = content;
         
-        // Видалення Markdown обгорток, якщо вони є (без повного .trim() щоб зберегти відступи)
         cleaned = cleaned.replace(/^\s*```[a-zA-Z0-9_-]*\r?\n/g, '');
         cleaned = cleaned.replace(/\r?\n\s*```\s*$/g, '');
 
@@ -259,8 +294,6 @@ export class DSLParser {
     private postprocessBlock(content: string): string {
         let cleaned = content;
 
-        // ФІКС: Відкушуємо ТІЛЬКИ одне перенесення рядка на початку і в кінці, 
-        // залишаючи всі внутрішні пробіли (критично для Python)
         if (cleaned.startsWith('\n')) cleaned = cleaned.substring(1);
         else if (cleaned.startsWith('\r\n')) cleaned = cleaned.substring(2);
         

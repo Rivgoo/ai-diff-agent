@@ -19,12 +19,14 @@ import type { SettingsManager } from '@/extension/settings/settingsManager';
 import { ValidationPhase } from './phases/ValidationPhase';
 import { ExecutionPhase } from './phases/ExecutionPhase';
 import { CommitPhase } from './phases/CommitPhase';
+import { LspValidationPhase } from './phases/LspValidationPhase';
 
 export class TransactionPipeline {
     private readonly transactionLock = new TransactionLock();
     
     private readonly validationPhase = new ValidationPhase();
     private readonly executionPhase = new ExecutionPhase();
+    private readonly lspPhase = new LspValidationPhase();
     private readonly commitPhase: CommitPhase;
 
     constructor(
@@ -110,6 +112,48 @@ export class TransactionPipeline {
             
             const validPendingOps = pendingOps.filter(op => validCommands.some(cmd => cmd.operationId === op.id));
             await this.commitPhase.execute(validCommands, validPendingOps, context, rootName, rootUri);
+
+            const astSettings = this.settingsManager.getSettings().ast;
+            if (astSettings.lspValidation || astSettings.autoStitchImports) {
+                this.logger.info(`Waiting 1500ms for Language Servers (LSP) to analyze dirty buffers...`);
+                await new Promise(res => setTimeout(res, 1500));
+                
+                const lspFailures = await this.lspPhase.execute(validCommands, context);
+                
+                if (lspFailures.length > 0) {
+                    if (executionMode === 'atomic') {
+                        this.logger.warn(`Atomic Mode: LSP Validation failed. Rolling back the entire batch.`);
+                        await this.revertBatch(); // Відкочуємо ВСЕ
+                        
+                        for (const cmd of validCommands) {
+                            const failure = lspFailures.find(f => f.cmd.operationId === cmd.operationId);
+                            this.onStatusUpdate({
+                                operationId: cmd.operationId,
+                                status: 'conflict',
+                                conflict: failure ? {
+                                    reason: 'LSP_ERROR', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'LSP Compilation Failed', originalSearchBlock: '',
+                                    semanticDiagnostic: failure.diagnostic
+                                } : {
+                                    reason: 'ABORTED', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'Batch aborted due to LSP errors in other files.', originalSearchBlock: '', wasValidated: true
+                                }
+                            });
+                        }
+                    } else {
+                        this.logger.warn(`Tolerant Mode: Isolating ${lspFailures.length} files with LSP errors.`);
+                        for (const failure of lspFailures) {
+                            await this.revertOperation(failure.cmd.operationId);
+                            this.onStatusUpdate({
+                                operationId: failure.cmd.operationId,
+                                status: 'conflict',
+                                conflict: {
+                                    reason: 'LSP_ERROR', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'LSP Compilation Failed', originalSearchBlock: '',
+                                    semanticDiagnostic: failure.diagnostic
+                                }
+                            });
+                        }
+                    }
+                }
+            }
 
             this.logger.info(`Transaction pipeline executed successfully for ${validCommands.length} commands.`);
 

@@ -12,4 +12,5 @@ export interface OperationStatusUpdate {
     alreadyApplied?: boolean;
     confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning';
     isPartiallyResolved?: boolean; 
+    blastRadiusWarning?: string;
 }

@@ -42,6 +42,7 @@ interface AgentState {
         matchStrategy?: string,
         alreadyApplied?: boolean,
         isPartiallyResolved?: boolean,
+        blastRadiusWarning?: string
     ) => void;
     updateLocalSetting: (category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai', key: string, value: any) => void;
 }
@@ -127,7 +128,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         }
     })),
 
-    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied, isPartiallyResolved) =>
+    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied, isPartiallyResolved, blastRadiusWarning) =>
         set((state) => {
             const activeSession = state.sessions[state.activeSessionId];
             if (!activeSession) return state;
@@ -149,7 +150,8 @@ export const useAgentStore = create<AgentState>((set) => ({
                     matchStrategy: matchStrategy ?? updatedOps[opIndex].matchStrategy,
                     alreadyApplied: alreadyApplied ?? updatedOps[opIndex].alreadyApplied,
                     confidenceScore: updatedOps[opIndex].confidenceScore,
-                    isPartiallyResolved: isPartiallyResolved ?? updatedOps[opIndex].isPartiallyResolved
+                    isPartiallyResolved: isPartiallyResolved ?? updatedOps[opIndex].isPartiallyResolved,
+                    blastRadiusWarning: blastRadiusWarning ?? updatedOps[opIndex].blastRadiusWarning
                 };
                 return { ...msg, operations: updatedOps };
             });
@@ -191,7 +193,9 @@ export const useAgentStore = create<AgentState>((set) => ({
                         isDirectory: update.isDirectory ?? op.isDirectory,
                         matchStrategy: update.matchStrategy ?? op.matchStrategy,
                         confidenceScore: update.confidenceScore ?? op.confidenceScore,
-                        isPartiallyResolved: update.isPartiallyResolved ?? op.isPartiallyResolved
+                        isPartiallyResolved: update.isPartiallyResolved ?? op.isPartiallyResolved,
+                        blastRadiusWarning: update.blastRadiusWarning ?? op.blastRadiusWarning
+                        
                     };
                 }
                 return op;

@@ -68,6 +68,15 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
                 
                 {confBadge}
 
+                {vm.blastRadiusWarning && (
+                    <span 
+                        style={{ color: 'var(--vscode-editorWarning-foreground)', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '4px', cursor: 'help' }} 
+                        title={vm.blastRadiusWarning}
+                    >
+                        <IconAlertTriangle size={11} /> {vm.blastRadiusWarning.replace(/[^0-9]/g, '')} refs
+                    </span>
+                )}
+
                 {vm.statusIcon === 'merge' && (
                     <Badge backgroundColor="#b180d7" color="#fff">AUTO-MERGE</Badge>
                 )}

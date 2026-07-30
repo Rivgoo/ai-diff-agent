@@ -43,7 +43,8 @@ export class ProcessPayloadUseCase {
             const astSettings = this.settingsManager.getSettings().ast;
             
             const parseResult = await this.parser.parse(payload, {
-                recoveryMode: engineSettings.payloadRecoveryMode
+                recoveryMode: engineSettings.payloadRecoveryMode,
+                polyglotParsing: engineSettings.polyglotParsing
             });
 
             if (!parseResult.success) {
