@@ -14,15 +14,17 @@ import styles from './SettingsView.module.css';
 type TabId = 'ui' | 'workflow' | 'engine' | 'ast' | 'ai';
 
 const AVAILABLE_LANGUAGES = [
-    { id: 'javascript', label: 'JavaScript' },
+    { id: 'javascript', label: 'JavaScript / JSX' },
     { id: 'typescript', label: 'TypeScript' },
+    { id: 'tsx', label: 'TSX (React)' },
     { id: 'python', label: 'Python' },
     { id: 'c_sharp', label: 'C#' },
+    { id: 'cpp', label: 'C++' },
+    { id: 'c', label: 'C' },
     { id: 'json', label: 'JSON' },
     { id: 'html', label: 'HTML' },
     { id: 'css', label: 'CSS' },
-    { id: 'bash', label: 'Bash' },
-    { id: 'c', label: 'C / C++' }
+    { id: 'bash', label: 'Bash' }
 ];
 
 export const SettingsView = () => {
@@ -33,6 +35,8 @@ export const SettingsView = () => {
     const [activeTab, setActiveTab] = useState<TabId>('ui');
     const [retentionInput, setRetentionInput] = useState(settings.workflow.backupRetentionDays.toString());
     const [fileSizeInput, setFileSizeInput] = useState(settings.engine.maxFileSizeMb.toString());
+    const [candidatesInput, setCandidatesInput] = useState(settings.engine.maxGlobalSearchCandidates.toString());
+    const [historyInput, setHistoryInput] = useState(settings.workflow.historyKeepCount.toString());
     
     // ФІКС: Реф для перехоплення коліщатка миші
     const tabBarRef = useRef<HTMLDivElement>(null);
@@ -40,7 +44,9 @@ export const SettingsView = () => {
     useEffect(() => {
         setRetentionInput(settings.workflow.backupRetentionDays.toString());
         setFileSizeInput(settings.engine.maxFileSizeMb.toString());
-    }, [settings.workflow.backupRetentionDays, settings.engine.maxFileSizeMb]);
+        setCandidatesInput(settings.engine.maxGlobalSearchCandidates.toString());
+        setHistoryInput(settings.workflow.historyKeepCount.toString());
+    }, [settings.workflow.backupRetentionDays, settings.engine.maxFileSizeMb, settings.engine.maxGlobalSearchCandidates, settings.workflow.historyKeepCount]);
 
     const handleNumberChange = (category: 'workflow' | 'engine', key: string, val: string, setter: (val: string) => void) => {
         setter(val);
@@ -65,7 +71,6 @@ export const SettingsView = () => {
         updateSetting('ast', 'enabledLanguages', newLangs);
     };
 
-    // ФІКС: Трансляція вертикального скролу коліщатком у горизонтальний
     const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
         if (tabBarRef.current) {
             // Запобігаємо скролу сторінки, якщо ми крутимо над табами
@@ -140,6 +145,16 @@ export const SettingsView = () => {
                             </VSCodeCheckbox>
                             <p className={styles.description}>Allows step-by-step camera jumps between edited blocks for large file batches.</p>
                         </div>
+
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>Diagnostics Level (Problems Panel)</label>
+                            <VSCodeDropdown value={settings.ui.diagnosticsLevel} onChange={(e: any) => updateSetting('ui', 'diagnosticsLevel', e.target.value)}>
+                                <VSCodeOption value="all">All (Critical + Warnings)</VSCodeOption>
+                                <VSCodeOption value="critical">Critical Errors Only</VSCodeOption>
+                                <VSCodeOption value="none">Disabled</VSCodeOption>
+                            </VSCodeDropdown>
+                            <p className={styles.description}>Controls how much feedback the AI Diff Agent pushes to the VS Code Problems panel.</p>
+                        </div>
                     </section>
                 )}
                 
@@ -210,6 +225,12 @@ export const SettingsView = () => {
                             <VSCodeTextField value={retentionInput} onInput={(e: any) => handleNumberChange('workflow', 'backupRetentionDays', e.target.value, setRetentionInput)} />
                             <p className={styles.description}>Number of days to preserve rollback file snapshots.</p>
                         </div>
+
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>History Keep Count (Messages)</label>
+                            <VSCodeTextField value={historyInput} onInput={(e: any) => handleNumberChange('workflow', 'historyKeepCount', e.target.value, setHistoryInput)} />
+                            <p className={styles.description}>Maximum number of chat messages to keep in history. Prevents memory leaks in long sessions.</p>
+                        </div>
                     </section>
                 )}
 
@@ -256,6 +277,12 @@ export const SettingsView = () => {
                             <label className={styles.label}>Max File Size Limit (MB)</label>
                             <VSCodeTextField value={fileSizeInput} onInput={(e: any) => handleNumberChange('engine', 'maxFileSizeMb', e.target.value, setFileSizeInput)} />
                             <p className={styles.description}>Files larger than this limit will be bypassed to prevent Out-Of-Memory crashes.</p>
+                        </div>
+
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>Max Global Search Candidates</label>
+                            <VSCodeTextField value={candidatesInput} onInput={(e: any) => handleNumberChange('engine', 'maxGlobalSearchCandidates', e.target.value, setCandidatesInput)} />
+                            <p className={styles.description}>If an exact path is not found, the agent searches the whole project. If it finds more files than this limit, it aborts to prevent memory issues.</p>
                         </div>
                     </section>
                 )}

@@ -17,7 +17,10 @@ export class MovePathCommand extends BaseCommand<MovePathOperation> {
         const resolution = await context.pathResolver.resolvePath(
                 this.normalizedPath, 
                 undefined, 
-                { respectGitIgnore: context.settingsManager.getSettings().engine.respectGitIgnore }
+                { 
+                    respectGitIgnore: context.settingsManager.getSettings().engine.respectGitIgnore,
+                    maxGlobalSearchCandidates: context.settingsManager.getSettings().engine.maxGlobalSearchCandidates
+                }
             );
         if (resolution.status === 'AMBIGUOUS_MATCH') return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));
         
@@ -41,7 +44,6 @@ export class MovePathCommand extends BaseCommand<MovePathOperation> {
             return Result.fail(this.buildConflict('FILE_NOT_FOUND'));
         }
 
-        // ФІКС: Захист незбережених змін!
         const uri = context.getAbsoluteUri(this.targetPath);
         const isOpenAndDirty = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString() && doc.isDirty);
         if (isOpenAndDirty) {

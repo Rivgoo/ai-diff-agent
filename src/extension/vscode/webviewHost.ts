@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { ExtensionEvent, WebviewEvent } from '@/shared/ipc';
 import { MessageRouter } from '@/extension/chat/messageRouter';
 import { DecorationService } from '@/extension/transactions/services/DecorationService';
+import { DiagnosticService } from '@/extension/transactions/services/DiagnosticService';
 
 export class SidebarWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'ai-diff-agent-sidebar-view';
@@ -10,9 +11,11 @@ export class SidebarWebviewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly context: vscode.ExtensionContext,
-        decorationService: DecorationService
+        decorationService: DecorationService,
+        diagnosticService: DiagnosticService 
+        
     ) {
-        this.router = new MessageRouter(context, decorationService, (event) => {
+        this.router = new MessageRouter(context, decorationService, diagnosticService, (event) => {
             this.postMessage(event);
         });
     }

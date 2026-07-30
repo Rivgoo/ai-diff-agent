@@ -19,6 +19,7 @@ export class CompensationStore {
 
     constructor(private readonly storage: vscode.Memento) {
         this.load();
+        this.cleanupOldTransactions(7);
     }
 
     public addSaga(saga: TransactionSaga): void {
@@ -115,6 +116,24 @@ export class CompensationStore {
         this.clearSaga(operationId);
     }
 
+    public cleanupOldTransactions(retentionDays: number): void {
+        const now = Date.now();
+        const msInDay = 1000 * 60 * 60 * 24;
+        let requiresPersist = false;
+
+        for (const [id, saga] of this.memoryStore.entries()) {
+            const ageDays = (now - saga.timestamp) / msInDay;
+            if (ageDays > retentionDays) {
+                this.memoryStore.delete(id);
+                requiresPersist = true;
+            }
+        }
+
+        if (requiresPersist) {
+            this.persist();
+        }
+    }
+
     private load(): void {
         try {
             const rawData = this.storage.get<any[]>(SYSTEM_CONSTANTS.STORAGE_KEY_TRANSACTIONS, []);
@@ -139,4 +158,5 @@ export class CompensationStore {
             Array.from(this.memoryStore.values())
         );
     }
+
 }

@@ -22,7 +22,8 @@ export const StatusBarMinimal = () => {
     const messages = useAgentStore((state) => state.sessions[activeSessionId]?.messages) || [];
 
     const latestMsgWithOps = [...messages].reverse().find(msg => msg.operations && msg.operations.length > 0);
-    const activeOps = latestMsgWithOps ? (latestMsgWithOps.operations || []) : [];
+    const operationsMap = useAgentStore((state) => state.operationsMap);
+    const activeOps = latestMsgWithOps ? (latestMsgWithOps.operations?.map(op => operationsMap[op.id] || op) || []) : [];
 
     const dirtyOps = activeOps.filter(op => op.status === 'applied_dirty' || op.status === 'merged_dirty');
     const hasConflicts = activeOps.some(op => op.status === 'conflict' || op.status === 'error');

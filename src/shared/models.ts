@@ -37,6 +37,7 @@ export interface UiSettings {
   showConfidenceBadges: boolean;
   enableCodeLens: boolean;
   enableWalkthroughMode: boolean; 
+  diagnosticsLevel: 'all' | 'critical' | 'none';
 }
 
 export interface WorkflowSettings {
@@ -46,14 +47,16 @@ export interface WorkflowSettings {
   cleanupEmptyDirectories: boolean;
   backupRetentionDays: number;
   executionMode: 'atomic' | 'tolerant'; 
-  clipboardWatcher: boolean; // Заділ для Фази 6
-  historyBranchAwareness: boolean; // Заділ для Фази 6
+  clipboardWatcher: boolean; 
+  historyBranchAwareness: boolean; 
+  historyKeepCount: number;
 }
 
 export interface EngineSettings {
   payloadRecoveryMode: 'strict' | 'standard' | 'aggressive';
   fallbackMatchLevel: 'none' | 'safe' | 'aggressive';
   maxFileSizeMb: number;
+  maxGlobalSearchCandidates: number;
   useUnsavedBuffers: boolean; 
   polyglotParsing: boolean; 
   

@@ -17,17 +17,18 @@ export const ComposerProvider = ({ children }: ComposerProviderProps) => {
 
     const toggleSettings = useAgentStore((state) => state.toggleSettings);
     
-    // БЕЗПЕЧНЕ ОТРИМАННЯ ПОВІДОМЛЕНЬ
     const activeSessionId = useAgentStore((state) => state.activeSessionId);
-    const messages = useAgentStore((state) => state.sessions[activeSessionId]?.messages) || [];
+    const messagesLength = useAgentStore((state) => state.sessions[activeSessionId]?.messages?.length || 0);
     
-    const { stage } = useAgentStore((state) => state.pipelineProgress);
+    const isProcessing = useAgentStore((state) => {
+        const stage = state.pipelineProgress.stage;
+        return stage !== 'idle' && stage !== 'error';
+    });
+
     const composerDraft = useAgentStore((state) => state.composerDraft);
     const setComposerDraft = useAgentStore((state) => state.setComposerDraft);
 
-    const activeStages = ['parsing', 'validating', 'resolving', 'applying'];
-    const isProcessing = activeStages.includes(stage);
-    const isClearDisabled = messages.length === 0;
+    const isClearDisabled = messagesLength === 0;
 
     useAutoResize(inputRef, value);
 

@@ -70,32 +70,95 @@
           "type": "object",
           "description": "UI and Display settings",
           "properties": {
-            "autoScroll": { "type": "boolean", "default": true },
-            "compactMode": { "type": "boolean", "default": false },
-            "showConfidenceBadges": { "type": "boolean", "default": true },
-            "enableCodeLens": { "type": "boolean", "default": true },
-            "enableWalkthroughMode": { "type": "boolean", "default": false }
+            "autoScroll": {
+              "type": "boolean",
+              "default": true
+            },
+            "compactMode": {
+              "type": "boolean",
+              "default": false
+            },
+            "showConfidenceBadges": {
+              "type": "boolean",
+              "default": true
+            },
+            "enableCodeLens": {
+              "type": "boolean",
+              "default": true
+            },
+            "enableWalkthroughMode": {
+              "type": "boolean",
+              "default": false
+            },
+            "diagnosticsLevel": { 
+              "type": "string", 
+              "enum": ["all", "critical", "none"], 
+              "default": "all" 
+            }
           },
           "default": {
             "autoScroll": true,
             "compactMode": false,
             "showConfidenceBadges": true,
             "enableCodeLens": true,
-            "enableWalkthroughMode": false
+            "enableWalkthroughMode": false,
+            "diagnosticsLevel": "all"
           }
         },
         "aiDiffAgent.workflow": {
           "type": "object",
           "description": "Lifecycle and automation settings",
           "properties": {
-            "chatHistoryMode": { "type": "string", "enum": ["workspace", "global", "disabled"], "default": "workspace" },
-            "autoSaveAfterAccept": { "type": "boolean", "default": true },
-            "formatBehavior": { "type": "string", "enum": ["always", "onSaveOnly", "never"], "default": "onSaveOnly" },
-            "cleanupEmptyDirectories": { "type": "boolean", "default": true },
-            "backupRetentionDays": { "type": "number", "default": 7 },
-            "executionMode": { "type": "string", "enum": ["atomic", "tolerant"], "default": "tolerant" },
-            "clipboardWatcher": { "type": "boolean", "default": false },
-            "historyBranchAwareness": { "type": "boolean", "default": true }
+            "chatHistoryMode": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "global",
+                "disabled"
+              ],
+              "default": "workspace"
+            },
+            "autoSaveAfterAccept": {
+              "type": "boolean",
+              "default": true
+            },
+            "formatBehavior": {
+              "type": "string",
+              "enum": [
+                "always",
+                "onSaveOnly",
+                "never"
+              ],
+              "default": "onSaveOnly"
+            },
+            "cleanupEmptyDirectories": {
+              "type": "boolean",
+              "default": true
+            },
+            "backupRetentionDays": {
+              "type": "number",
+              "default": 7
+            },
+            "executionMode": {
+              "type": "string",
+              "enum": [
+                "atomic",
+                "tolerant"
+              ],
+              "default": "tolerant"
+            },
+            "clipboardWatcher": {
+              "type": "boolean",
+              "default": false
+            },
+            "historyBranchAwareness": {
+              "type": "boolean",
+              "default": true
+            },
+            "historyKeepCount": { 
+              "type": "number", 
+              "default": 50 
+            }
           },
           "default": {
             "chatHistoryMode": "workspace",
@@ -105,23 +168,54 @@
             "backupRetentionDays": 7,
             "executionMode": "tolerant",
             "clipboardWatcher": false,
-            "historyBranchAwareness": true
+            "historyBranchAwareness": true,
+            "historyKeepCount": 50
           }
         },
         "aiDiffAgent.engine": {
           "type": "object",
           "description": "Text Parsing & Limits",
           "properties": {
-            "payloadRecoveryMode": { "type": "string", "enum": ["strict", "standard", "aggressive"], "default": "aggressive" },
-            "fallbackMatchLevel": { "type": "string", "enum": ["none", "safe", "aggressive"], "default": "safe" },
-            "maxFileSizeMb": { "type": "number", "default": 5 },
-            "useUnsavedBuffers": { "type": "boolean", "default": true },
-            "polyglotParsing": { "type": "boolean", "default": true }
+            "payloadRecoveryMode": {
+              "type": "string",
+              "enum": [
+                "strict",
+                "standard",
+                "aggressive"
+              ],
+              "default": "aggressive"
+            },
+            "fallbackMatchLevel": {
+              "type": "string",
+              "enum": [
+                "none",
+                "safe",
+                "aggressive"
+              ],
+              "default": "safe"
+            },
+            "maxFileSizeMb": {
+              "type": "number",
+              "default": 5
+            },
+            "maxGlobalSearchCandidates": {
+              "type": "number",
+              "default": 5
+            },
+            "useUnsavedBuffers": {
+              "type": "boolean",
+              "default": true
+            },
+            "polyglotParsing": {
+              "type": "boolean",
+              "default": true
+            }
           },
           "default": {
             "payloadRecoveryMode": "aggressive",
             "fallbackMatchLevel": "safe",
             "maxFileSizeMb": 5,
+            "maxGlobalSearchCandidates": 5,
             "useUnsavedBuffers": true,
             "polyglotParsing": true
           }
@@ -130,22 +224,73 @@
           "type": "object",
           "description": "Tree-Sitter, Semantics and LSP",
           "properties": {
-            "enableAstMatching": { "type": "boolean", "default": true },
+            "enableAstMatching": {
+              "type": "boolean",
+              "default": true
+            },
             "enabledLanguages": {
               "type": "array",
-              "items": { "type": "string" },
-              "default": ["javascript", "typescript", "python", "c_sharp", "json", "html", "css", "bash", "c"]
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "javascript",
+                "typescript",
+                "tsx",
+                "python",
+                "c_sharp",
+                "cpp",
+                "json",
+                "html",
+                "css",
+                "bash",
+                "c"
+              ]
             },
-            "queryTolerance": { "type": "string", "enum": ["exact", "allow_signature_drift"], "default": "allow_signature_drift" },
-            "strictSyntaxValidation": { "type": "boolean", "default": false },
-            "autoFixSyntax": { "type": "boolean", "default": true },
-            "lspValidation": { "type": "boolean", "default": false },
-            "autoStitchImports": { "type": "boolean", "default": false },
-            "blastRadiusAnalysis": { "type": "boolean", "default": true }
+            "queryTolerance": {
+              "type": "string",
+              "enum": [
+                "exact",
+                "allow_signature_drift"
+              ],
+              "default": "allow_signature_drift"
+            },
+            "strictSyntaxValidation": {
+              "type": "boolean",
+              "default": false
+            },
+            "autoFixSyntax": {
+              "type": "boolean",
+              "default": true
+            },
+            "lspValidation": {
+              "type": "boolean",
+              "default": false
+            },
+            "autoStitchImports": {
+              "type": "boolean",
+              "default": false
+            },
+            "blastRadiusAnalysis": {
+              "type": "boolean",
+              "default": true
+            }
           },
           "default": {
             "enableAstMatching": true,
-            "enabledLanguages": ["javascript", "typescript", "python", "c_sharp", "json", "html", "css", "bash", "c"],
+            "enabledLanguages": [
+              "javascript",
+              "typescript",
+              "tsx",
+              "python",
+              "c_sharp",
+              "cpp",
+              "json",
+              "html",
+              "css",
+              "bash",
+              "c"
+            ],
             "queryTolerance": "allow_signature_drift",
             "strictSyntaxValidation": false,
             "autoFixSyntax": true,
@@ -158,7 +303,10 @@
           "type": "object",
           "description": "AI Feedback Loop",
           "properties": {
-            "feedbackLoopEnabled": { "type": "boolean", "default": false }
+            "feedbackLoopEnabled": {
+              "type": "boolean",
+              "default": false
+            }
           },
           "default": {
             "feedbackLoopEnabled": false
@@ -179,6 +327,7 @@
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
+    "@tanstack/react-virtual": "^3.14.9",
     "@vscode/webview-ui-toolkit": "^1.4.0",
     "react": "^19.x",
     "react-dom": "^19.x",

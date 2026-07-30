@@ -26,7 +26,10 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
             const resolution = await context.pathResolver.resolvePath(
                 this.normalizedPath, 
                 firstSearchBlock, 
-                { respectGitIgnore: context.settingsManager.getSettings().engine.respectGitIgnore }
+                { 
+                    respectGitIgnore: context.settingsManager.getSettings().engine.respectGitIgnore,
+                    maxGlobalSearchCandidates: context.settingsManager.getSettings().engine.maxGlobalSearchCandidates
+                }
             );
             
             if (resolution.status === 'AMBIGUOUS_MATCH') return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));

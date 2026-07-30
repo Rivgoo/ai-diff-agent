@@ -13,6 +13,7 @@ export class ConfigurationService {
       showConfidenceBadges: ui.showConfidenceBadges ?? true,
       enableCodeLens: ui.enableCodeLens ?? true,
       enableWalkthroughMode: ui.enableWalkthroughMode ?? false,
+      diagnosticsLevel: ui.diagnosticsLevel ?? 'all',
     };
   }
 
@@ -29,6 +30,7 @@ export class ConfigurationService {
       executionMode: workflow.executionMode ?? 'tolerant',
       clipboardWatcher: workflow.clipboardWatcher ?? false,
       historyBranchAwareness: workflow.historyBranchAwareness ?? true,
+      historyKeepCount: workflow.historyKeepCount ?? 50,
     };
   }
 
@@ -40,6 +42,7 @@ export class ConfigurationService {
       payloadRecoveryMode: engine.payloadRecoveryMode ?? 'aggressive',
       fallbackMatchLevel: engine.fallbackMatchLevel ?? 'safe',
       maxFileSizeMb: engine.maxFileSizeMb ?? 5,
+      maxGlobalSearchCandidates: engine.maxGlobalSearchCandidates ?? 5,
       useUnsavedBuffers: engine.useUnsavedBuffers ?? true,
       polyglotParsing: engine.polyglotParsing ?? true,
       
@@ -58,7 +61,7 @@ export class ConfigurationService {
 
     return {
       enableAstMatching: ast.enableAstMatching ?? true,
-      enabledLanguages: ast.enabledLanguages ?? ['javascript', 'typescript', 'python', 'c_sharp', 'json', 'html', 'css', 'bash', 'c'],
+      enabledLanguages: ast.enabledLanguages ?? ['javascript', 'typescript', 'tsx', 'python', 'c_sharp', 'cpp', 'json', 'html', 'css', 'bash', 'c'],
       sanityStrictness: ast.sanityStrictness ?? 'warn',
       validateEmbeddedScripts: ast.validateEmbeddedScripts ?? true,
       queryTolerance: ast.queryTolerance ?? 'allow_signature_drift',

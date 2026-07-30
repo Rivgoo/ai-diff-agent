@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChatSession, AgentSettings, OperationStatus } from '../../shared/models';
+import type { ChatSession, AgentSettings, OperationStatus, DiffOperation } from '../../shared/models';
 import type { PipelineStage } from '../../shared/ipc';
 import type { ConflictDetails } from '../../shared/contracts';
 
@@ -11,6 +11,7 @@ interface PipelineProgress {
 
 interface AgentState {
     sessions: Record<string, ChatSession>;
+    operationsMap: Record<string, DiffOperation>; 
     activeSessionId: string;
     isAgentTyping: boolean;
     settings: AgentSettings;
@@ -19,6 +20,7 @@ interface AgentState {
     pipelineProgress: PipelineProgress;
     composerDraft: string;
     isWalkthroughActive: boolean;
+
     startWalkthrough: () => void;
     stopWalkthrough: () => void;
     updateOperationBatch: (updates: any[]) => void;
@@ -49,6 +51,7 @@ interface AgentState {
 
 export const useAgentStore = create<AgentState>((set) => ({
     sessions: {},
+    operationsMap: {}, 
     activeSessionId: '',
     isAgentTyping: false,
     settings: { 
@@ -57,7 +60,8 @@ export const useAgentStore = create<AgentState>((set) => ({
             compactMode: false, 
             showConfidenceBadges: true, 
             enableCodeLens: true,
-            enableWalkthroughMode: false
+            enableWalkthroughMode: false,
+            diagnosticsLevel: 'all'
         },
         workflow: { 
             chatHistoryMode: 'workspace', 
@@ -67,12 +71,14 @@ export const useAgentStore = create<AgentState>((set) => ({
             backupRetentionDays: 7,
             executionMode: 'tolerant',
             clipboardWatcher: false,
-            historyBranchAwareness: true
+            historyBranchAwareness: true,
+            historyKeepCount: 50 
         },
         engine: { 
             payloadRecoveryMode: 'aggressive',
             fallbackMatchLevel: 'safe',
             maxFileSizeMb: 5,
+            maxGlobalSearchCandidates: 5,
             useUnsavedBuffers: true,
             polyglotParsing: true,
             strictParsing: false, 
@@ -84,7 +90,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         },
         ast: {
             enableAstMatching: true,
-            enabledLanguages: ['javascript', 'typescript', 'python', 'c_sharp', 'json', 'html', 'css', 'bash', 'c'],
+            enabledLanguages: ['javascript', 'typescript', 'tsx', 'python', 'c_sharp', 'cpp', 'json', 'html', 'css', 'bash', 'c'],
             sanityStrictness: 'warn',
             validateEmbeddedScripts: true,
             queryTolerance: 'allow_signature_drift',
@@ -102,17 +108,26 @@ export const useAgentStore = create<AgentState>((set) => ({
     isPromptCopied: false,
     pipelineProgress: { stage: 'idle', current: 0, total: 0 },
     composerDraft: '',
-
     isWalkthroughActive: false,
 
     startWalkthrough: () => set({ isWalkthroughActive: true }),
     stopWalkthrough: () => set({ isWalkthroughActive: false }),
 
-    hydrateSession: (sessions, activeId) => set({ sessions, activeSessionId: activeId }),
+    hydrateSession: (sessions, activeId) => set((state) => {
+        const newOpsMap = { ...state.operationsMap };
+        Object.values(sessions).forEach(session => {
+            session.messages.forEach(msg => {
+                msg.operations?.forEach(op => {
+                    newOpsMap[op.id] = op;
+                });
+            });
+        });
+        return { sessions, activeSessionId: activeId, operationsMap: newOpsMap };
+    }),
+
     hydrateSettings: (settings) => set({ settings }),
     setAgentTyping: (isTyping) => set({ isAgentTyping: isTyping }),
     setPromptCopied: (copied) => set({ isPromptCopied: copied }),
-    
     toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
     setPipelineProgress: (progress) => set({ pipelineProgress: progress }),
     setComposerDraft: (draft) => set({ composerDraft: draft }),
@@ -127,92 +142,55 @@ export const useAgentStore = create<AgentState>((set) => ({
         }
     })),
 
-    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied, isPartiallyResolved, blastRadiusWarning) =>
+    updateOperationStatus: (opId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied, isPartiallyResolved, blastRadiusWarning) =>
         set((state) => {
-            const activeSession = state.sessions[state.activeSessionId];
-            if (!activeSession) return state;
-
-            const updatedMessages = activeSession.messages.map((msg) => {
-                if (!msg.operations) return msg;
-                const opIndex = msg.operations.findIndex((o) => o.id === operationId);
-                if (opIndex === -1) return msg;
-                
-                const updatedOps = [...msg.operations];
-                updatedOps[opIndex] = { 
-                    ...updatedOps[opIndex], 
-                    status,
-                    resolvedResiliently: resolvedResiliently ?? updatedOps[opIndex].resolvedResiliently,
-                    originalPath: originalPath ?? updatedOps[opIndex].originalPath,
-                    path: path ?? updatedOps[opIndex].path,
-                    conflict: conflict ?? updatedOps[opIndex].conflict,
-                    isDirectory: isDirectory ?? updatedOps[opIndex].isDirectory,
-                    matchStrategy: matchStrategy ?? updatedOps[opIndex].matchStrategy,
-                    alreadyApplied: alreadyApplied ?? updatedOps[opIndex].alreadyApplied,
-                    confidenceScore: updatedOps[opIndex].confidenceScore,
-                    isPartiallyResolved: isPartiallyResolved ?? updatedOps[opIndex].isPartiallyResolved,
-                    blastRadiusWarning: blastRadiusWarning ?? updatedOps[opIndex].blastRadiusWarning
-                };
-                return { ...msg, operations: updatedOps };
-            });
+            const currentOp = state.operationsMap[opId];
+            if (!currentOp) return state;
 
             return {
-                sessions: {
-                    ...state.sessions,
-                    [state.activeSessionId]: {
-                        ...activeSession,
-                        messages: updatedMessages
+                operationsMap: {
+                    ...state.operationsMap,
+                    [opId]: {
+                        ...currentOp,
+                        status,
+                        resolvedResiliently: resolvedResiliently ?? currentOp.resolvedResiliently,
+                        originalPath: originalPath ?? currentOp.originalPath,
+                        path: path ?? currentOp.path,
+                        conflict: conflict ?? currentOp.conflict,
+                        isDirectory: isDirectory ?? currentOp.isDirectory,
+                        matchStrategy: matchStrategy ?? currentOp.matchStrategy,
+                        alreadyApplied: alreadyApplied ?? currentOp.alreadyApplied,
+                        isPartiallyResolved: isPartiallyResolved ?? currentOp.isPartiallyResolved,
+                        blastRadiusWarning: blastRadiusWarning ?? currentOp.blastRadiusWarning
                     }
                 }
             };
         }),
 
     updateOperationBatch: (updates) => set((state) => {
-        const activeSession = state.sessions[state.activeSessionId];
-        if (!activeSession) return state;
+        const newOpsMap = { ...state.operationsMap };
+        let hasChanges = false;
 
-        const updatesMap = new Map(updates.map(u => [u.operationId, u]));
-        let sessionChanged = false;
-
-        const updatedMessages = activeSession.messages.map((msg) => {
-            if (!msg.operations) return msg;
-
-            let messageChanged = false;
-            const updatedOps = msg.operations.map(op => {
-                const update = updatesMap.get(op.id);
-                if (update) {
-                    messageChanged = true;
-                    sessionChanged = true;
-                    return {
-                        ...op,
-                        status: update.status,
-                        resolvedResiliently: update.resolvedResiliently ?? op.resolvedResiliently,
-                        originalPath: update.originalPath ?? op.originalPath,
-                        path: update.path ?? op.path,
-                        conflict: update.conflict ?? op.conflict,
-                        isDirectory: update.isDirectory ?? op.isDirectory,
-                        matchStrategy: update.matchStrategy ?? op.matchStrategy,
-                        confidenceScore: update.confidenceScore ?? op.confidenceScore,
-                        isPartiallyResolved: update.isPartiallyResolved ?? op.isPartiallyResolved,
-                        blastRadiusWarning: update.blastRadiusWarning ?? op.blastRadiusWarning
-                        
-                    };
-                }
-                return op;
-            });
-
-            return messageChanged ? { ...msg, operations: updatedOps } : msg;
-        });
-
-        if (!sessionChanged) return state;
-
-        return {
-            sessions: {
-                ...state.sessions,
-                [state.activeSessionId]: {
-                    ...activeSession,
-                    messages: updatedMessages
-                }
+        for (const update of updates) {
+            const currentOp = newOpsMap[update.operationId];
+            if (currentOp) {
+                hasChanges = true;
+                newOpsMap[update.operationId] = {
+                    ...currentOp,
+                    status: update.status,
+                    resolvedResiliently: update.resolvedResiliently ?? currentOp.resolvedResiliently,
+                    originalPath: update.originalPath ?? currentOp.originalPath,
+                    path: update.path ?? currentOp.path,
+                    conflict: update.conflict ?? currentOp.conflict,
+                    isDirectory: update.isDirectory ?? currentOp.isDirectory,
+                    matchStrategy: update.matchStrategy ?? currentOp.matchStrategy,
+                    confidenceScore: update.confidenceScore ?? currentOp.confidenceScore,
+                    isPartiallyResolved: update.isPartiallyResolved ?? currentOp.isPartiallyResolved,
+                    blastRadiusWarning: update.blastRadiusWarning ?? currentOp.blastRadiusWarning
+                };
             }
-        };
+        }
+
+        return hasChanges ? { operationsMap: newOpsMap } : state;
     })
 }));

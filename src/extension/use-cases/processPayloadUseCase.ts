@@ -32,7 +32,7 @@ export class ProcessPayloadUseCase {
         private readonly syncState: () => void
     ) {}
 
-    public async execute(payload: string): Promise<void> {
+    public async execute(payload: string, abortSignal?: AbortSignal): Promise<void> {
         this.postMessage({ type: 'AGENT_TYPING', isTyping: true });
         this.postMessage({ type: 'PIPELINE_STATE', stage: 'parsing', current: 0, total: 0 });
 
@@ -142,7 +142,9 @@ export class ProcessPayloadUseCase {
 
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'applying', current: 0, total: operations.length });
 
-            await this.transactionPipeline.applyBatch(operations);
+            if (abortSignal?.aborted) throw new HandledUIError('ABORTED_BY_USER');
+
+            await this.transactionPipeline.applyBatch(operations, abortSignal);
 
             const currentSession = this.sessionManager.getActiveSession();
             const lastMessage = currentSession.messages[currentSession.messages.length - 1];

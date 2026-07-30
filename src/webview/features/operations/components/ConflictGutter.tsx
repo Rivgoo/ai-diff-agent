@@ -24,12 +24,11 @@ export const ConflictGutter = ({ details, operationId }: ConflictGutterProps) =>
                 {details.reason === 'UNSAVED_CHANGES' && 'Cannot delete/move file with unsaved changes. Please save or close it first.'}
                 {details.reason === 'SYNTAX_CORRUPTION_PREVENTED' && 'AI payload contains critical syntax errors.'}
                 {details.reason === 'LSP_ERROR' && 'LSP compilation failed after applying changes. Code contains logical errors or missing dependencies.'}
-                
             </div>
 
-            {details.semanticDiagnostic && (
+            {details.diagnostic && (
                 <div className={styles.reasonTitle} style={{ marginTop: '4px', color: 'var(--vscode-testing-iconFailed)' }}>
-                    Diagnostics: {details.semanticDiagnostic}
+                    Diagnostics: {details.diagnostic.detailedMessage}
                 </div>
             )}
 

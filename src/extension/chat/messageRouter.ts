@@ -22,6 +22,8 @@ import { LoggerAdapter } from '@/extension/transactions/context/LoggerAdapter';
 import { CompensationStore } from '@/extension/transactions/store/CompensationStore';
 import type { DecorationService } from '@/extension/transactions/services/DecorationService';
 import type { OperationStatusUpdate } from '@/extension/transactions/core/TransactionEvents';
+import type { DiagnosticService } from '@/extension/transactions/services/DiagnosticService';``
+
 
 export class MessageRouter {
     private readonly sessionManager: ChatSessionManager;
@@ -32,6 +34,7 @@ export class MessageRouter {
     private readonly snapshotService: SnapshotService;
     private isProcessingLens = false;
     private isWalkthroughActive = false; 
+    private activeAbortController: AbortController | null = null;
 
     private statusUpdateQueue: any[] = [];
     private updateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -41,6 +44,7 @@ export class MessageRouter {
     constructor(
         private readonly context: vscode.ExtensionContext,
         private readonly decorationService: DecorationService,
+        private readonly diagnosticService: DiagnosticService,
         private readonly postMessageCallback: (event: ExtensionEvent) => void
     ) {
         const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -62,7 +66,6 @@ export class MessageRouter {
         const logger = new LoggerAdapter();
         const searchEngine = new SearchEngine();
 
-        // ФІКС: Динамічне отримання налаштування для File System Adapter
         const pathResolver = new ResilientPathResolver(
             new VsCodeFileSystemAdapter(() => this.settingsManager.getSettings().engine.useUnsavedBuffers), 
             new VsCodeWorkspaceSearchAdapter()
@@ -83,6 +86,7 @@ export class MessageRouter {
             directoryCleanupService,
             logger,
             this.settingsManager,
+            this.diagnosticService, // <--- ПЕРЕДАНО В ПАЙПЛАЙН
             (update: OperationStatusUpdate) => {
                 this.sessionManager.updateOperationFromEvent(update);
                 
@@ -134,9 +138,14 @@ export class MessageRouter {
                 }
                 break;
             case 'SUBMIT_PAYLOAD': 
-                this.processPayloadUseCase.execute(event.payload); 
+                this.activeAbortController = new AbortController();
+                this.processPayloadUseCase.execute(event.payload, this.activeAbortController.signal); 
                 break;
             case 'CANCEL_PROCESSING': 
+                if (this.activeAbortController) {
+                    this.activeAbortController.abort();
+                    this.activeAbortController = null;
+                }
                 this.transactionPipeline.emergencyUnlock();
                 break;
             case 'NEW_SESSION':

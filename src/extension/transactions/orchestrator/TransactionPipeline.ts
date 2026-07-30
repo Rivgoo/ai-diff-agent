@@ -13,8 +13,9 @@ import type { SnapshotService } from '@/extension/transactions/services/Snapshot
 import type { EditorService } from '@/extension/transactions/services/EditorService';
 import type { DirectoryCleanupService } from '@/extension/transactions/services/DirectoryCleanupService';
 import type { ILogger } from '@/extension/transactions/core/ILogger';
-import type { ConflictDetails } from '@/shared/models';
+import type { ConflictDetails, CoreDiagnostic } from '@/shared/contracts';
 import type { SettingsManager } from '@/extension/settings/settingsManager'; 
+import type { DiagnosticService } from '../services/DiagnosticService';
 
 import { ValidationPhase } from './phases/ValidationPhase';
 import { ExecutionPhase } from './phases/ExecutionPhase';
@@ -39,6 +40,7 @@ export class TransactionPipeline {
         directoryCleanupService: DirectoryCleanupService,
         private readonly logger: ILogger,
         private readonly settingsManager: SettingsManager,
+        private readonly diagnosticService: DiagnosticService, // ФІКС: Інжект сервісу
         private readonly onStatusUpdate: (event: OperationStatusUpdate) => void,
         private readonly onWalkthroughComplete: () => void 
     ) {
@@ -50,7 +52,7 @@ export class TransactionPipeline {
         this.logger.warn("Emergency unlock triggered. All transaction locks cleared.");
     }
 
-    public async applyBatch(operations: AnyOperation[]): Promise<void> {
+    public async applyBatch(operations: AnyOperation[], abortSignal?: AbortSignal): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
             this.logger.error("No open workspace found.");
@@ -70,6 +72,9 @@ export class TransactionPipeline {
             return;
         }
 
+        // Очищаємо старі діагностики перед новою транзакцією
+        this.diagnosticService.clearDiagnostics();
+
         const commands = pendingOps.map(op => CommandFactory.create(op));
         const uow = new VsCodeUnitOfWork(rootUri);
         const context = new TransactionContext(
@@ -86,6 +91,8 @@ export class TransactionPipeline {
         try {
             this.logger.info(`Starting transaction pipeline for ${commands.length} commands.`);
             
+            if (abortSignal?.aborted) throw new Error('ABORTED_BY_USER');
+
             const validationResult = await this.validationPhase.execute(commands, context);
             const executionMode = this.settingsManager.getSettings().workflow.executionMode;
             
@@ -108,9 +115,15 @@ export class TransactionPipeline {
                 this.logger.warn(`No valid operations left to execute. Stopping pipeline.`);
                 return;
             }
+
+            if (abortSignal?.aborted) throw new Error('ABORTED_BY_USER');
+
             await this.executionPhase.execute(validCommands, context);
             
             const validPendingOps = pendingOps.filter(op => validCommands.some(cmd => cmd.operationId === op.id));
+            
+            if (abortSignal?.aborted) throw new Error('ABORTED_BY_USER');
+
             await this.commitPhase.execute(validCommands, validPendingOps, context, rootName, rootUri);
 
             const astSettings = this.settingsManager.getSettings().ast;
@@ -139,12 +152,26 @@ export class TransactionPipeline {
                         
                         for (const cmd of validCommands) {
                             const failure = lspFailures.find(f => f.cmd.operationId === cmd.operationId);
+                            
+                            // ФІКС ТИПІВ ДЛЯ ДІАГНОСТИКИ LSP
+                            let diagnosticObj: CoreDiagnostic | undefined = undefined;
+                            if (failure) {
+                                diagnosticObj = {
+                                    operationId: cmd.operationId,
+                                    path: cmd.metadata.path || cmd.operation.path,
+                                    severity: 'critical',
+                                    title: 'LSP Compilation Failed',
+                                    detailedMessage: failure.diagnostic,
+                                    code: 'LSP_ERROR'
+                                };
+                            }
+
                             this.onStatusUpdate({
                                 operationId: cmd.operationId,
                                 status: 'conflict',
                                 conflict: failure ? {
                                     reason: 'LSP_ERROR', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'LSP Compilation Failed', originalSearchBlock: '',
-                                    semanticDiagnostic: failure.diagnostic
+                                    diagnostic: diagnosticObj
                                 } : {
                                     reason: 'ABORTED', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'Batch aborted due to LSP errors in other files.', originalSearchBlock: '', wasValidated: true
                                 }
@@ -154,12 +181,22 @@ export class TransactionPipeline {
                         this.logger.warn(`Tolerant Mode: Isolating ${lspFailures.length} files with LSP errors.`);
                         for (const failure of lspFailures) {
                             await this.revertOperation(failure.cmd.operationId);
+
+                            const diagnosticObj: CoreDiagnostic = {
+                                operationId: failure.cmd.operationId,
+                                path: failure.cmd.metadata.path || failure.cmd.operation.path,
+                                severity: 'critical',
+                                title: 'LSP Compilation Failed',
+                                detailedMessage: failure.diagnostic,
+                                code: 'LSP_ERROR'
+                            };
+
                             this.onStatusUpdate({
                                 operationId: failure.cmd.operationId,
                                 status: 'conflict',
                                 conflict: {
                                     reason: 'LSP_ERROR', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'LSP Compilation Failed', originalSearchBlock: '',
-                                    semanticDiagnostic: failure.diagnostic
+                                    diagnostic: diagnosticObj
                                 }
                             });
                         }
@@ -170,7 +207,13 @@ export class TransactionPipeline {
             this.logger.info(`Transaction pipeline executed successfully for ${validCommands.length} commands.`);
 
         } catch (err) {
-            this.logger.error(`Pipeline execution crashed: ${err}`);
+            const isAborted = err instanceof Error && err.message === 'ABORTED_BY_USER';
+            
+            if (isAborted) {
+                this.logger.warn(`Transaction cancelled by user. Rolling back applied operations.`);
+            } else {
+                this.logger.error(`Pipeline execution crashed: ${err}`);
+            }
             
             for (const cmd of commands) {
                 try {
@@ -182,8 +225,10 @@ export class TransactionPipeline {
                     this.transactionLock.release(cmd.operationId);
                     this.onStatusUpdate({
                         operationId: cmd.operationId,
-                        status: 'error',
-                        conflict: { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: String(err), originalSearchBlock: '' }
+                        status: isAborted ? 'reverted' : 'error',
+                        conflict: isAborted 
+                            ? { reason: 'ABORTED', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'Operation cancelled by user.', originalSearchBlock: '' }
+                            : { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: String(err), originalSearchBlock: '' }
                     });
                 }
             }
@@ -198,6 +243,8 @@ export class TransactionPipeline {
         conflictMap: Map<string, ConflictDetails>,
         culpritId?: string
     ): void {
+        const diagnosticsToReport: CoreDiagnostic[] = [];
+
         for (const op of operations) {
             this.transactionLock.release(op.id);
             let conflictData = conflictMap.get(op.id);
@@ -215,7 +262,15 @@ export class TransactionPipeline {
                 conflictData = { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: failReason, originalSearchBlock: '' };
             }
 
+            if (conflictData.diagnostic) {
+                diagnosticsToReport.push(conflictData.diagnostic);
+            }
+
             this.onStatusUpdate({ operationId: op.id, status: 'conflict', conflict: conflictData });
+        }
+
+        if (diagnosticsToReport.length > 0) {
+            this.diagnosticService.reportDiagnostics(diagnosticsToReport);
         }
     }
 
@@ -257,6 +312,9 @@ export class TransactionPipeline {
                     if (targetUri) {
                         const doc = await vscode.workspace.openTextDocument(targetUri);
                         if (doc.isDirty) await doc.save();
+                        
+                        // Знімаємо діагностику для успішного файлу
+                        this.diagnosticService.clearDiagnostics(targetUri);
                     }
                 } catch { /* safe ignore */ }
             }
@@ -347,6 +405,8 @@ export class TransactionPipeline {
                 if (doc.isDirty) {
                     await doc.save();
                 }
+                // Після відкату також очищаємо діагностику
+                this.diagnosticService.clearDiagnostics(uri);
             } catch (e) {
                 this.logger.error(`Failed to forcefully save reverted document ${uri.fsPath}: ${e}`);
             }
@@ -354,6 +414,7 @@ export class TransactionPipeline {
 
         for (const file of filesToRestoreBinary) {
             await vscode.workspace.fs.writeFile(file.uri, file.data);
+            this.diagnosticService.clearDiagnostics(file.uri);
         }
 
         const cleanupEnabled = this.settingsManager.getSettings().workflow?.cleanupEmptyDirectories ?? true;

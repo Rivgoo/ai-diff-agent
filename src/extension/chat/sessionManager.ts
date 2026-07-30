@@ -3,6 +3,8 @@ import type { ChatSession, ChatMessage, DiffOperation } from '../../shared/model
 import { SYSTEM_CONSTANTS } from '../../shared/constants';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
 
+const MAX_MESSAGES_PER_SESSION = 50;
+
 export class ChatSessionManager {
     private sessions: Record<string, ChatSession> = {};
     private activeSessionId: string = '';
@@ -20,7 +22,7 @@ export class ChatSessionManager {
     }
 
     public async reload(): Promise<void> {
-        this.forceSave(); // Зберігаємо поточний стан перед перезавантаженням
+        this.forceSave(); 
 
         if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
             try {
@@ -97,6 +99,10 @@ export class ChatSessionManager {
         const session = this.getActiveSession();
         session.messages.push(message);
         
+        if (session.messages.length > MAX_MESSAGES_PER_SESSION) {
+            session.messages = session.messages.slice(-MAX_MESSAGES_PER_SESSION);
+        }
+        
         if (session.messages.length === 1 && message.role === 'user') {
             const preview = message.text.substring(0, 20).replace(/\n/g, ' ');
             session.title = preview.length > 0 ? `${preview}...` : session.title;
@@ -162,7 +168,7 @@ export class ChatSessionManager {
         }
         this.saveTimer = setTimeout(() => {
             this.executeSave();
-        }, 500); // Чекаємо 500мс тиші перед записом
+        }, 1000); 
     }
 
     private forceSave(): void {
@@ -175,14 +181,20 @@ export class ChatSessionManager {
 
     private executeSave(): void {
         this.saveQueue = this.saveQueue.then(async () => {
+            const dataToSave = {
+                sessions: this.sessions,
+                activeSessionId: this.activeSessionId
+            };
+            
+            const content = await new Promise<string>((resolve) => {
+                setTimeout(() => {
+                    resolve(JSON.stringify(dataToSave, null, 2));
+                }, 0);
+            });
+
             if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
                 try {
                     const fileUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-history.json');
-                    const content = JSON.stringify({
-                        sessions: this.sessions,
-                        activeSessionId: this.activeSessionId
-                    }, null, 2);
-                    
                     const data = new TextEncoder().encode(content);
                     await vscode.workspace.fs.writeFile(fileUri, data);
                 } catch (e) {

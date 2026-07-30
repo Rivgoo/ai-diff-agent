@@ -1,5 +1,5 @@
 export type OperationType = 'create_file' | 'update_file' | 'delete_path' | 'move_path' | 'create_dir';
-export type OperationStatus = 'pending' | 'applied_dirty' | 'saved' | 'reverted' | 'conflict' | 'error';
+export type OperationStatus = 'pending' | 'applied_dirty' | 'merged_dirty' | 'saved' | 'reverted' | 'conflict' | 'error';
 
 export interface Position {
     readonly line: number;
@@ -13,6 +13,18 @@ export interface Range {
 
 export type ConflictReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'PATH_TRAVERSAL' | 'FILE_NOT_FOUND' | 'UNKNOWN' | 'ABORTED' | 'SYNTAX_CORRUPTION_PREVENTED' | 'LSP_ERROR' | 'UNSAVED_CHANGES';
 
+export type DiagnosticSeverity = 'critical' | 'warning' | 'info';
+
+export interface CoreDiagnostic {
+    readonly operationId?: string;
+    readonly path: string;
+    readonly severity: DiagnosticSeverity;
+    readonly title: string;
+    readonly detailedMessage: string;
+    readonly range?: Range;
+    readonly code?: string;
+}
+
 export interface ConflictDetails {
     readonly reason: ConflictReason;
     readonly blockIndex: number;
@@ -22,7 +34,7 @@ export interface ConflictDetails {
     readonly matchesFound?: number;
     readonly candidatePaths?: string[];
     readonly wasValidated?: boolean;
-    readonly semanticDiagnostic?: string;
+    readonly diagnostic?: CoreDiagnostic; 
 }
 
 export interface BaseOperation {
@@ -38,6 +50,7 @@ export interface BaseOperation {
 export type MatchFailureReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'EMPTY_SEARCH_BLOCK' | 'SYNTAX_CORRUPTION_PREVENTED';
 
 export type ConfidenceScore = 'High' | 'Medium' | 'Low' | 'Warning';
+
 export interface MatchSuccess {
     readonly status: 'MATCHED';
     readonly range: Range;
@@ -52,7 +65,7 @@ export interface MatchFailure {
     readonly status: 'FAILED';
     readonly reason: MatchFailureReason;
     readonly matchesFound: number;
-    readonly semanticDiagnostic?: string;
+    readonly diagnostic?: CoreDiagnostic; 
 }
 
 export type MatchResult = MatchSuccess | MatchFailure;

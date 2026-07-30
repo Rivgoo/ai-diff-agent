@@ -182,8 +182,10 @@ export class StreamScanner {
                     const quote = attrString[i];
                     i++; 
                     const valStart = i;
-                    while (i < len && attrString[i] !== quote && attrString[i] !== '>') i++;
+                    while (i < len && attrString[i] !== quote) i++;
+                    
                     attributes[name] = attrString.substring(valStart, i);
+                    
                     if (i < len && attrString[i] === quote) i++; 
                 } else {
                     const valStart = i;

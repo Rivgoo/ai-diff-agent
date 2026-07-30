@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import type { DiffOperation } from '@/shared/models';
+import { useAgentStore } from '@/webview/store/agentStore';
 import { mapToOperationRowViewModel } from '../view-models/operationMapper';
 import { OperationRow } from './OperationRow';
 import { ConflictGutter } from './ConflictGutter';
@@ -13,7 +14,13 @@ interface OperationListProps {
 
 export const OperationList = ({ operations, onOpenFile }: OperationListProps) => {
     const listRef = useRef<HTMLDivElement>(null);
-    const viewModels = operations.map(mapToOperationRowViewModel);
+    
+    const operationsMap = useAgentStore(state => state.operationsMap);
+    
+    const viewModels = operations.map(op => {
+        const liveOp = operationsMap[op.id] || op;
+        return mapToOperationRowViewModel(liveOp);
+    });
     
     const handleSelect = (index: number) => {
         onOpenFile(viewModels[index].id);

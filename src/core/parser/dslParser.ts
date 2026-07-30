@@ -56,15 +56,43 @@ export class DSLParser {
 
     private parseMarkdownFallback(rawInput: string): AnyOperation[] {
         const operations: AnyOperation[] = [];
-        
-        const regex = /([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)[^\n]*\r?\n```[a-zA-Z0-9_]*\r?\n([\s\S]*?)\r?\n```/g;
-        
-        let match;
-        while ((match = regex.exec(rawInput)) !== null) {
-            const rawPath = match[1];
-            const content = match[2];
-            
-            const path = PathSanitizer.sanitize(rawPath);
+        let currentIndex = 0;
+
+        while (true) {
+            const blockStart = rawInput.indexOf('```', currentIndex);
+            if (blockStart === -1) break;
+
+            const blockEnd = rawInput.indexOf('```', blockStart + 3);
+            if (blockEnd === -1) break; 
+
+            const firstNewline = rawInput.indexOf('\n', blockStart);
+            if (firstNewline === -1 || firstNewline > blockEnd) {
+                currentIndex = blockEnd + 3;
+                continue;
+            }
+
+            const contentStart = firstNewline + 1;
+            let content = rawInput.substring(contentStart, blockEnd);
+
+            if (content.endsWith('\n')) content = content.slice(0, -1);
+            if (content.endsWith('\r')) content = content.slice(0, -1);
+
+            const textBefore = rawInput.substring(currentIndex, blockStart);
+            const linesBefore = textBefore.split(/\r?\n/);
+            let rawPath = '';
+
+            for (let i = linesBefore.length - 1; i >= 0; i--) {
+                const line = linesBefore[i].trim();
+                if (line.length > 0) {
+                    const match = line.match(/([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/);
+                    if (match) {
+                        rawPath = match[1];
+                    }
+                    break;
+                }
+            }
+
+            const path = rawPath ? PathSanitizer.sanitize(rawPath) : undefined;
             if (path && content) {
                 operations.push({
                     id: this.generateId(),
@@ -74,8 +102,10 @@ export class DSLParser {
                     status: 'pending'
                 });
             }
+
+            currentIndex = blockEnd + 3;
         }
-        
+
         return operations;
     }
 
