@@ -74,7 +74,6 @@
             "compactMode": { "type": "boolean", "default": false },
             "showConfidenceBadges": { "type": "boolean", "default": true },
             "enableCodeLens": { "type": "boolean", "default": true },
-            "phantomInlineDiffs": { "type": "boolean", "default": true },
             "enableWalkthroughMode": { "type": "boolean", "default": false }
           },
           "default": {
@@ -82,7 +81,6 @@
             "compactMode": false,
             "showConfidenceBadges": true,
             "enableCodeLens": true,
-            "phantomInlineDiffs": true,
             "enableWalkthroughMode": false
           }
         },

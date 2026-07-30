@@ -21,8 +21,10 @@ export const ConflictGutter = ({ details, operationId }: ConflictGutterProps) =>
                 {details.reason === 'NOT_FOUND' && 'Target pattern not found. Context may have changed.'}
                 {details.reason === 'AMBIGUOUS_MATCH' && `Pattern matched ${details.matchesFound || 2} times. Provide more context lines.`}
                 {details.reason === 'FILE_NOT_FOUND' && 'Target file does not exist on disk.'}
+                {details.reason === 'UNSAVED_CHANGES' && 'Cannot delete/move file with unsaved changes. Please save or close it first.'}
                 {details.reason === 'SYNTAX_CORRUPTION_PREVENTED' && 'AI payload contains critical syntax errors.'}
                 {details.reason === 'LSP_ERROR' && 'LSP compilation failed after applying changes. Code contains logical errors or missing dependencies.'}
+                
             </div>
 
             {details.semanticDiagnostic && (

@@ -12,7 +12,6 @@ export class ConfigurationService {
       compactMode: ui.compactMode ?? false,
       showConfidenceBadges: ui.showConfidenceBadges ?? true,
       enableCodeLens: ui.enableCodeLens ?? true,
-      phantomInlineDiffs: ui.phantomInlineDiffs ?? true,
       enableWalkthroughMode: ui.enableWalkthroughMode ?? false,
     };
   }

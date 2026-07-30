@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { Result } from '@/shared/contracts';
 import type { ConflictDetails } from '@/shared/models';
 import type { ITransactionContext } from '../core/ITransactionContext';
@@ -32,7 +33,6 @@ export class MovePathCommand extends BaseCommand<MovePathOperation> {
         if (!sourceExists) {
             const destExists = await context.fileExists(this.destPath);
             if (destExists) {
-                // ІДЕМПОТЕНТНІСТЬ: Файл вже на новому місці.
                 context.logger.info(`[Idempotency] File already moved to ${this.destPath}. Marked as applied.`);
                 this.metadata.alreadyApplied = true;
                 context.setResolvedPath(this.normalizedPath, this.destPath);
@@ -41,12 +41,19 @@ export class MovePathCommand extends BaseCommand<MovePathOperation> {
             return Result.fail(this.buildConflict('FILE_NOT_FOUND'));
         }
 
+        // ФІКС: Захист незбережених змін!
+        const uri = context.getAbsoluteUri(this.targetPath);
+        const isOpenAndDirty = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString() && doc.isDirty);
+        if (isOpenAndDirty) {
+            return Result.fail(this.buildConflict('UNSAVED_CHANGES'));
+        }
+
         context.setResolvedPath(this.normalizedPath, this.destPath);
         return Result.ok(undefined);
     }
 
     public async apply(context: ITransactionContext): Promise<void> {
-        if (this.metadata.alreadyApplied) return; // Блокуємо мутацію
+        if (this.metadata.alreadyApplied) return; 
         context.uow.renameFile(this.targetPath, this.destPath, { overwrite: true });
         this.antiActions.push({ type: 'restore_move', sourcePath: this.targetPath, destinationPath: this.destPath, relativeSourcePath: this.normalizedPath });
     }

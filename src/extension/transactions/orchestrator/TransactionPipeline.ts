@@ -115,15 +115,27 @@ export class TransactionPipeline {
 
             const astSettings = this.settingsManager.getSettings().ast;
             if (astSettings.lspValidation || astSettings.autoStitchImports) {
-                this.logger.info(`Waiting 1500ms for Language Servers (LSP) to analyze dirty buffers...`);
-                await new Promise(res => setTimeout(res, 1500));
+                this.logger.info(`Polling Language Servers (LSP) for diagnostics (up to 2000ms)...`);
                 
-                const lspFailures = await this.lspPhase.execute(validCommands, context);
+                const maxWaitMs = 2000;
+                const pollInterval = 250;
+                let elapsed = 0;
+                let lspFailures: any[] = [];
+
+                while (elapsed < maxWaitMs) {
+                    await new Promise(res => setTimeout(res, pollInterval));
+                    elapsed += pollInterval;
+                    
+                    lspFailures = await this.lspPhase.execute(validCommands, context);
+                    if (lspFailures.length > 0) {
+                        break; 
+                    }
+                }
                 
                 if (lspFailures.length > 0) {
                     if (executionMode === 'atomic') {
                         this.logger.warn(`Atomic Mode: LSP Validation failed. Rolling back the entire batch.`);
-                        await this.revertBatch(); // Відкочуємо ВСЕ
+                        await this.revertBatch(); 
                         
                         for (const cmd of validCommands) {
                             const failure = lspFailures.find(f => f.cmd.operationId === cmd.operationId);

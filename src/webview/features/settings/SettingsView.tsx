@@ -135,13 +135,6 @@ export const SettingsView = () => {
                         </div>
 
                         <div className={styles.settingItem}>
-                            <VSCodeCheckbox checked={settings.ui.phantomInlineDiffs} onChange={(e: any) => updateSetting('ui', 'phantomInlineDiffs', e.target.checked)}>
-                                Enable Phantom Inline Diffs
-                            </VSCodeCheckbox>
-                            <p className={styles.description}>Shows deleted text as red transparent overlays directly above the new code in the editor.</p>
-                        </div>
-
-                        <div className={styles.settingItem}>
                             <VSCodeCheckbox checked={settings.ui.enableWalkthroughMode} onChange={(e: any) => updateSetting('ui', 'enableWalkthroughMode', e.target.checked)}>
                                 Enable Walkthrough Mode
                             </VSCodeCheckbox>

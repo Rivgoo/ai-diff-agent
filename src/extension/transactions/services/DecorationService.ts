@@ -9,8 +9,6 @@ export interface OpDecoration {
 
 export class DecorationService {
     private decorationType: vscode.TextEditorDecorationType;
-    private phantomDecorationType: vscode.TextEditorDecorationType; 
-    
     private activeDecorations = new Map<string, OpDecoration[]>();
 
     private _onDidChangeDecorations = new vscode.EventEmitter<void>();
@@ -23,8 +21,6 @@ export class DecorationService {
             overviewRulerColor: new vscode.ThemeColor('diffEditor.insertedTextBorder'),
             overviewRulerLane: vscode.OverviewRulerLane.Right
         });
-
-        this.phantomDecorationType = vscode.window.createTextEditorDecorationType({});
     }
 
     public addDecorations(uri: vscode.Uri, opId: string, blocks: { range: vscode.Range, originalSearch: string }[]): void {
@@ -98,6 +94,16 @@ export class DecorationService {
         return this.activeDecorations.get(uri.toString()) || [];
     }
 
+    public getAllActiveDecorations(): { uriString: string, decoration: OpDecoration }[] {
+        const results: { uriString: string, decoration: OpDecoration }[] = [];
+        for (const [uriStr, decs] of this.activeDecorations.entries()) {
+            for (const dec of decs) {
+                results.push({ uriString: uriStr, decoration: dec });
+            }
+        }
+        return results;
+    }
+
     public redrawDecorations(): void {
         this.triggerUpdateDecorations();
     }
@@ -108,14 +114,11 @@ export class DecorationService {
         
         if (!decs || decs.length === 0) {
             editor.setDecorations(this.decorationType, []);
-            editor.setDecorations(this.phantomDecorationType, []);
             return;
         }
 
         const ranges = decs.map(d => d.range);
         editor.setDecorations(this.decorationType, ranges);
-        
-        editor.setDecorations(this.phantomDecorationType, []);
     }
 
     private triggerUpdateDecorations(): void {
@@ -155,15 +158,5 @@ export class DecorationService {
             this.activeDecorations.set(key, decs);
             this.triggerUpdateDecorations();
         }
-    }
-
-    public getAllActiveDecorations(): { uriString: string, decoration: OpDecoration }[] {
-        const results: { uriString: string, decoration: OpDecoration }[] = [];
-        for (const [uriStr, decs] of this.activeDecorations.entries()) {
-            for (const dec of decs) {
-                results.push({ uriString: uriStr, decoration: dec });
-            }
-        }
-        return results;
     }
 }

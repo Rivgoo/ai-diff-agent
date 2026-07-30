@@ -36,8 +36,7 @@ export interface UiSettings {
   compactMode: boolean;
   showConfidenceBadges: boolean;
   enableCodeLens: boolean;
-  phantomInlineDiffs: boolean; // Заділ для Фази 4
-  enableWalkthroughMode: boolean; // Заділ для Фази 4
+  enableWalkthroughMode: boolean; 
 }
 
 export interface WorkflowSettings {
@@ -46,7 +45,7 @@ export interface WorkflowSettings {
   formatBehavior: 'always' | 'onSaveOnly' | 'never';
   cleanupEmptyDirectories: boolean;
   backupRetentionDays: number;
-  executionMode: 'atomic' | 'tolerant'; // Заділ для Фази 3
+  executionMode: 'atomic' | 'tolerant'; 
   clipboardWatcher: boolean; // Заділ для Фази 6
   historyBranchAwareness: boolean; // Заділ для Фази 6
 }
@@ -56,7 +55,7 @@ export interface EngineSettings {
   fallbackMatchLevel: 'none' | 'safe' | 'aggressive';
   maxFileSizeMb: number;
   useUnsavedBuffers: boolean; 
-  polyglotParsing: boolean; // Заділ для Фази 5
+  polyglotParsing: boolean; 
   
   // Legacy properties awaiting removal in final phases
   strictParsing: boolean;
@@ -75,9 +74,9 @@ export interface AstSettings {
   queryTolerance: 'exact' | 'allow_signature_drift';
   strictSyntaxValidation: boolean;
   autoFixSyntax: boolean;
-  lspValidation: boolean; // Заділ для Фази 5
-  autoStitchImports: boolean; // Заділ для Фази 5
-  blastRadiusAnalysis: boolean; // Заділ для Фази 5
+  lspValidation: boolean; 
+  autoStitchImports: boolean; 
+  blastRadiusAnalysis: boolean; 
 }
 
 export interface AiSettings {

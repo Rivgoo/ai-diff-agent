@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { Result } from '@/shared/contracts';
 import type { ConflictDetails } from '@/shared/models';
 import type { ITransactionContext } from '../core/ITransactionContext';
@@ -25,10 +26,16 @@ export class DeletePathCommand extends BaseCommand<DeletePathOperation> {
 
         const exists = await context.fileExists(this.targetPath);
         if (!exists) {
-            // ІДЕМПОТЕНТНІСТЬ: Якщо файлу вже немає, значить його вже видалили. Пропускаємо.
             context.logger.info(`[Idempotency] File ${this.targetPath} already deleted. Marked as applied.`);
             this.metadata.alreadyApplied = true;
             return Result.ok(undefined);
+        }
+
+        // ФІКС: Захист незбережених змін!
+        const uri = context.getAbsoluteUri(this.targetPath);
+        const isOpenAndDirty = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString() && doc.isDirty);
+        if (isOpenAndDirty) {
+            return Result.fail(this.buildConflict('UNSAVED_CHANGES'));
         }
 
         this.metadata = { ...this.metadata, isDirectory: false }; 
@@ -36,7 +43,7 @@ export class DeletePathCommand extends BaseCommand<DeletePathOperation> {
     }
 
     public async apply(context: ITransactionContext): Promise<void> {
-        if (this.metadata.alreadyApplied) return; // Блокуємо мутацію
+        if (this.metadata.alreadyApplied) return; 
         context.uow.deleteFile(this.targetPath, { recursive: true, ignoreIfNotExists: true });
         this.antiActions.push({ type: 'restore_file', path: this.targetPath, relativePath: this.normalizedPath });
     }

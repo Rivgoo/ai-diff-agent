@@ -57,7 +57,6 @@ export const useAgentStore = create<AgentState>((set) => ({
             compactMode: false, 
             showConfidenceBadges: true, 
             enableCodeLens: true,
-            phantomInlineDiffs: true,
             enableWalkthroughMode: false
         },
         workflow: { 

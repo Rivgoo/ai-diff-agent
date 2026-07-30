@@ -11,7 +11,7 @@ export interface Range {
     readonly end: Position;
 }
 
-export type ConflictReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'PATH_TRAVERSAL' | 'FILE_NOT_FOUND' | 'UNKNOWN' | 'ABORTED' | 'SYNTAX_CORRUPTION_PREVENTED' | 'LSP_ERROR';
+export type ConflictReason = 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'PATH_TRAVERSAL' | 'FILE_NOT_FOUND' | 'UNKNOWN' | 'ABORTED' | 'SYNTAX_CORRUPTION_PREVENTED' | 'LSP_ERROR' | 'UNSAVED_CHANGES';
 
 export interface ConflictDetails {
     readonly reason: ConflictReason;
