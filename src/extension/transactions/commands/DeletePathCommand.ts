@@ -11,14 +11,24 @@ export class DeletePathCommand extends BaseCommand<DeletePathOperation> {
         this.normalizedPath = PathNormalizer.normalize(this.operation.path);
         
         const resolution = await context.pathResolver.resolvePath(
-                this.normalizedPath, 
-                undefined, 
-                { 
-                    respectGitIgnore: context.settingsManager.getSettings().engine.respectGitIgnore,
-                    maxGlobalSearchCandidates: context.settingsManager.getSettings().engine.maxGlobalSearchCandidates
-                }
-            );
-        if (resolution.status === 'AMBIGUOUS_MATCH') return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));
+            this.normalizedPath, 
+            undefined, 
+            { 
+                respectGitIgnore: context.settingsManager.getSettings().engine.respectGitIgnore,
+                maxGlobalSearchCandidates: context.settingsManager.getSettings().engine.maxGlobalSearchCandidates
+            }
+        );
+            
+        if (resolution.status === 'AMBIGUOUS_MATCH') {
+            return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths, 0, 0, 'N/A', {
+                operationId: this.operationId,
+                path: this.operation.path,
+                severity: 'warning',
+                title: 'Ambiguous File Target',
+                detailedMessage: `Found multiple files matching this name. Cannot safely delete.`,
+                code: 'AMBIGUOUS_FILE'
+            }));
+        }
         
         if (resolution.status === 'RESOLVED_RESILIENTLY') {
             this.metadata = { resolvedResiliently: true, originalPath: this.operation.path, path: resolution.resolvedPath };
@@ -34,11 +44,17 @@ export class DeletePathCommand extends BaseCommand<DeletePathOperation> {
             return Result.ok(undefined);
         }
 
-        // ФІКС: Захист незбережених змін!
         const uri = context.getAbsoluteUri(this.targetPath);
         const isOpenAndDirty = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString() && doc.isDirty);
         if (isOpenAndDirty) {
-            return Result.fail(this.buildConflict('UNSAVED_CHANGES'));
+            return Result.fail(this.buildConflict('UNSAVED_CHANGES', undefined, 0, 0, 'N/A', {
+                operationId: this.operationId,
+                path: this.targetPath,
+                severity: 'critical',
+                title: 'Unsaved Changes',
+                detailedMessage: `Cannot delete file with unsaved changes. Please save or close it first.`,
+                code: 'UNSAVED_CHANGES'
+            }));
         }
 
         this.metadata = { ...this.metadata, isDirectory: false }; 

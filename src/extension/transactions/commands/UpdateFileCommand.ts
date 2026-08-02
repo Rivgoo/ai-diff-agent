@@ -1,4 +1,4 @@
-import { Result, type Range } from '@/shared/contracts';
+import { Result, type Range, type CoreDiagnostic } from '@/shared/contracts';
 import type { ConflictDetails } from '@/shared/models';
 import type { ITransactionContext } from '../core/ITransactionContext';
 import { BaseCommand } from './BaseCommand';
@@ -32,8 +32,26 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                 }
             );
             
-            if (resolution.status === 'AMBIGUOUS_MATCH') return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));
-            if (resolution.status === 'NOT_FOUND') return Result.fail(this.buildConflict('FILE_NOT_FOUND'));
+            if (resolution.status === 'AMBIGUOUS_MATCH') {
+                return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths, 0, 0, 'N/A', {
+                    operationId: this.operationId,
+                    path: this.operation.path,
+                    severity: 'warning',
+                    title: 'Ambiguous File Target',
+                    detailedMessage: `Found multiple files matching this name. Cannot safely determine the target.`,
+                    code: 'AMBIGUOUS_FILE'
+                }));
+            }
+            if (resolution.status === 'NOT_FOUND') {
+                return Result.fail(this.buildConflict('FILE_NOT_FOUND', undefined, 0, 0, 'N/A', {
+                    operationId: this.operationId,
+                    path: this.operation.path,
+                    severity: 'warning',
+                    title: 'File Not Found',
+                    detailedMessage: `Target file does not exist on disk and could not be resolved.`,
+                    code: 'FILE_NOT_FOUND'
+                }));
+            }
             
             if (resolution.status === 'RESOLVED_RESILIENTLY') {
                 this.metadata = {
@@ -49,7 +67,16 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
         this.targetPath = currentPath;
 
         const exists = await context.fileExists(this.targetPath);
-        if (!exists) return Result.fail(this.buildConflict('FILE_NOT_FOUND'));
+        if (!exists) {
+            return Result.fail(this.buildConflict('FILE_NOT_FOUND', undefined, 0, 0, 'N/A', {
+                operationId: this.operationId,
+                path: this.targetPath,
+                severity: 'warning',
+                title: 'File Not Found',
+                detailedMessage: `Target file does not exist on disk.`,
+                code: 'FILE_NOT_FOUND'
+            }));
+        }
 
         const document = await context.getDocument(this.targetPath);
         const docText = document.getText();
@@ -84,7 +111,20 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                                match.reason === 'SYNTAX_CORRUPTION_PREVENTED' ? 'SYNTAX_CORRUPTION_PREVENTED' : 'NOT_FOUND';
                 
                 const excerpt = change.search.split(/\r?\n/).slice(0, 3).join('\n');
-                return Result.fail(this.buildConflict(reason as any, undefined, i + 1, this.operation.changes.length, excerpt, match.semanticDiagnostic));
+                
+                // ФІКС: Створюємо CoreDiagnostic для відправки в панель Problems
+                const diagnosticObj: CoreDiagnostic = match.diagnostic || {
+                    operationId: this.operationId,
+                    path: this.targetPath,
+                    severity: 'warning',
+                    title: reason === 'NOT_FOUND' ? 'Pattern Not Found' : 'Ambiguous Pattern',
+                    detailedMessage: reason === 'NOT_FOUND' 
+                        ? `Could not find the target code block in the file (Block ${i + 1}/${this.operation.changes.length}). The context may have changed.` 
+                        : `The target code block matches multiple places in the file (Block ${i + 1}/${this.operation.changes.length}). Cannot safely replace.`,
+                    code: reason
+                };
+
+                return Result.fail(this.buildConflict(reason as any, undefined, i + 1, this.operation.changes.length, excerpt, diagnosticObj));
             }
 
             if (astSettings.blastRadiusAnalysis && match.strategy === 'SEMANTIC_AST_MATCH') {

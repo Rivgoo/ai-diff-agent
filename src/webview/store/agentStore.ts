@@ -3,6 +3,7 @@ import type { ChatSession, AgentSettings, OperationStatus, DiffOperation } from 
 import type { PipelineStage } from '../../shared/ipc';
 import type { ConflictDetails } from '../../shared/contracts';
 
+
 interface PipelineProgress {
     stage: PipelineStage;
     current: number;
@@ -20,6 +21,8 @@ interface AgentState {
     pipelineProgress: PipelineProgress;
     composerDraft: string;
     isWalkthroughActive: boolean;
+    isDiagnosticsOpen: boolean;
+
 
     startWalkthrough: () => void;
     stopWalkthrough: () => void;
@@ -32,6 +35,7 @@ interface AgentState {
     toggleSettings: () => void;
     setPipelineProgress: (progress: PipelineProgress) => void;
     setComposerDraft: (draft: string) => void;
+    toggleDiagnosticsWindow: (forceState?: boolean) => void;
     
     updateOperationStatus: (
         operationId: string, 
@@ -54,6 +58,13 @@ export const useAgentStore = create<AgentState>((set) => ({
     operationsMap: {}, 
     activeSessionId: '',
     isAgentTyping: false,
+
+    isDiagnosticsOpen: false,
+
+    toggleDiagnosticsWindow: (forceState) => set((state) => ({ 
+        isDiagnosticsOpen: forceState !== undefined ? forceState : !state.isDiagnosticsOpen 
+    })),
+
     settings: { 
         ui: { 
             autoScroll: true, 

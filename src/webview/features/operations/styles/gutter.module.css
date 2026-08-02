@@ -1,8 +1,8 @@
 .gutter {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 6px 8px 6px 12px;
+    gap: 4px; /* Зменшено з 6px */
+    padding: 4px 8px 4px 12px; /* Зменшено вертикальні відступи */
     margin: 0;
     border-left: 2px solid var(--vscode-editorError-foreground);
     background-color: var(--vscode-editor-background);

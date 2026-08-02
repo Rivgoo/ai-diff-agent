@@ -9,6 +9,7 @@ import { StatusBarMinimal } from '@/webview/features/status-bar/StatusBarMinimal
 import { FeatureComposer } from '@/webview/features/composer/FeatureComposer';
 import { SessionTabs } from '@/webview/features/sessions/SessionTabs';
 import { SettingsView } from '@/webview/features/settings/SettingsView';
+import { DiagnosticsView } from '@/webview/features/diagnostics/DiagnosticsView';
 import styles from './App.module.css';
 
 export const App = () => {
@@ -35,6 +36,8 @@ export const App = () => {
         <main className={styles.container}>
             {state.isSettingsOpen ? (
                 <SettingsView />
+            ) : state.isDiagnosticsOpen ? (
+                <DiagnosticsView />
             ) : (
                 <>
                     <SessionTabs />

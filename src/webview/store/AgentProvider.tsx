@@ -10,6 +10,7 @@ export interface AgentContextContract {
         settings: AgentSettings;
         isSettingsOpen: boolean;
         isPromptCopied: boolean;
+        isDiagnosticsOpen: boolean; 
     };
     actions: {
         toggleSettings: () => void;
@@ -19,14 +20,13 @@ export interface AgentContextContract {
 export const AgentContext = createContext<AgentContextContract | null>(null);
 
 export const AgentProvider = ({ children }: { children: ReactNode }) => {
-    // Провайдер — єдине місце, яке знає про Zustand.
-    // UI-компоненти знатимуть лише про AgentContext.
     const activeSessionId = useAgentStore((s) => s.activeSessionId);
     const sessions = useAgentStore((s) => s.sessions);
     const isAgentTyping = useAgentStore((s) => s.isAgentTyping);
     const settings = useAgentStore((s) => s.settings);
     const isSettingsOpen = useAgentStore((s) => s.isSettingsOpen);
     const isPromptCopied = useAgentStore((s) => s.isPromptCopied);
+    const isDiagnosticsOpen = useAgentStore((s) => s.isDiagnosticsOpen);
     const toggleSettings = useAgentStore((s) => s.toggleSettings);
 
     const value: AgentContextContract = {
@@ -36,7 +36,8 @@ export const AgentProvider = ({ children }: { children: ReactNode }) => {
             isAgentTyping,
             settings,
             isSettingsOpen,
-            isPromptCopied
+            isPromptCopied,
+            isDiagnosticsOpen,
         },
         actions: {
             toggleSettings
@@ -44,8 +45,8 @@ export const AgentProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <AgentContext value={value}>
+        <AgentContext.Provider value={value}>
             {children}
-        </AgentContext>
+        </AgentContext.Provider>
     );
 };

@@ -3,7 +3,7 @@ import type {
   OperationStatus,
   AgentSettings,
 } from "../shared/models";
-import type { ConflictDetails } from "../shared/contracts";
+import type { ConflictDetails, CoreDiagnostic, Range } from "../shared/contracts";
 
 export type PipelineStage =
   | "idle"
@@ -30,6 +30,7 @@ export type WebviewEvent =
   | { type: "ACTION_REVERT_OPERATION"; operationId: string; isWalkthrough?: boolean }
   | { type: "OPEN_FILE"; operationId: string }
   | { type: "OPEN_DIFF"; operationId: string }
+  | { type: "OPEN_FILE_AT_RANGE"; path: string; range?: Range }
   | { type: "CLEAR_SESSION" }
   | { type: "NEW_SESSION" }
   | { type: "SWITCH_SESSION"; sessionId: string }
@@ -40,7 +41,8 @@ export type WebviewEvent =
   | { type: "OPEN_EXTERNAL_LINK"; url: string }
   | { type: "SMART_RETRY_CONTEXT"; operationId: string }
   | { type: "ACTION_JUMP_TO_NEXT_BLOCK" }
-  | { type: "SET_WALKTHROUGH_STATE"; isActive: boolean };
+  | { type: "SET_WALKTHROUGH_STATE"; isActive: boolean }
+  | { type: "OPEN_PROBLEMS_PANEL" };
    
 
 export type ExtensionEvent =
@@ -72,6 +74,7 @@ export type ExtensionEvent =
       total: number;
     }
   | { type: "PROMPT_COPIED" }
+  | { type: "DIAGNOSTICS_UPDATED"; diagnostics: CoreDiagnostic[] }
   | { type: "ERROR_OCCURRED"; message: string }
   | {
       type: "OPERATION_BATCH_UPDATED";

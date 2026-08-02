@@ -59,6 +59,10 @@ export const useIPC = () => {
                 case 'WALKTHROUGH_COMPLETED':
                     useAgentStore.getState().stopWalkthrough();
                     break;
+                case 'DIAGNOSTICS_UPDATED': 
+                    useAgentStore.getState().setDiagnostics(message.diagnostics); 
+                    break;
+                    
             }
         };
 

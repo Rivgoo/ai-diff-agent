@@ -6,7 +6,6 @@ import { SnapshotService } from '@/extension/transactions/services/SnapshotServi
 import { BlockCodeLensProvider } from '@/extension/vscode/BlockCodeLensProvider'; 
 import { SettingsManager } from '@/extension/settings/settingsManager'; 
 import { AstParserRegistry } from '@/core/matcher/ast/treeSitterRegistry';
-import { DiagnosticService } from '@/extension/transactions/services/DiagnosticService';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     OutputLogger.initialize();
@@ -21,9 +20,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     let decorationService: DecorationService;
-    
-    const diagnosticService = new DiagnosticService();
-    context.subscriptions.push(diagnosticService);
     
     const settingsManager = new SettingsManager(context, () => {
         if (decorationService) {
@@ -41,7 +37,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     snapshotService.cleanStaleBackups(retentionDays, activeTxIds);
 
     decorationService = new DecorationService();
-    
 
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(editor => {
@@ -55,7 +50,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    const sidebarProvider = new SidebarWebviewProvider(context, decorationService, diagnosticService);
+    // ФІКС: Рівно 2 аргументи
+    const sidebarProvider = new SidebarWebviewProvider(context, decorationService);
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(

@@ -15,7 +15,6 @@ import type { DirectoryCleanupService } from '@/extension/transactions/services/
 import type { ILogger } from '@/extension/transactions/core/ILogger';
 import type { ConflictDetails, CoreDiagnostic } from '@/shared/contracts';
 import type { SettingsManager } from '@/extension/settings/settingsManager'; 
-import type { DiagnosticService } from '../services/DiagnosticService';
 
 import { ValidationPhase } from './phases/ValidationPhase';
 import { ExecutionPhase } from './phases/ExecutionPhase';
@@ -40,7 +39,6 @@ export class TransactionPipeline {
         directoryCleanupService: DirectoryCleanupService,
         private readonly logger: ILogger,
         private readonly settingsManager: SettingsManager,
-        private readonly diagnosticService: DiagnosticService, // ФІКС: Інжект сервісу
         private readonly onStatusUpdate: (event: OperationStatusUpdate) => void,
         private readonly onWalkthroughComplete: () => void 
     ) {
@@ -71,9 +69,6 @@ export class TransactionPipeline {
             this.abortBatch(pendingOps, "Lock held by other operations.", new Map());
             return;
         }
-
-        // Очищаємо старі діагностики перед новою транзакцією
-        this.diagnosticService.clearDiagnostics();
 
         const commands = pendingOps.map(op => CommandFactory.create(op));
         const uow = new VsCodeUnitOfWork(rootUri);
@@ -153,7 +148,6 @@ export class TransactionPipeline {
                         for (const cmd of validCommands) {
                             const failure = lspFailures.find(f => f.cmd.operationId === cmd.operationId);
                             
-                            // ФІКС ТИПІВ ДЛЯ ДІАГНОСТИКИ LSP
                             let diagnosticObj: CoreDiagnostic | undefined = undefined;
                             if (failure) {
                                 diagnosticObj = {
@@ -243,8 +237,6 @@ export class TransactionPipeline {
         conflictMap: Map<string, ConflictDetails>,
         culpritId?: string
     ): void {
-        const diagnosticsToReport: CoreDiagnostic[] = [];
-
         for (const op of operations) {
             this.transactionLock.release(op.id);
             let conflictData = conflictMap.get(op.id);
@@ -262,15 +254,7 @@ export class TransactionPipeline {
                 conflictData = { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: failReason, originalSearchBlock: '' };
             }
 
-            if (conflictData.diagnostic) {
-                diagnosticsToReport.push(conflictData.diagnostic);
-            }
-
             this.onStatusUpdate({ operationId: op.id, status: 'conflict', conflict: conflictData });
-        }
-
-        if (diagnosticsToReport.length > 0) {
-            this.diagnosticService.reportDiagnostics(diagnosticsToReport);
         }
     }
 
@@ -312,9 +296,6 @@ export class TransactionPipeline {
                     if (targetUri) {
                         const doc = await vscode.workspace.openTextDocument(targetUri);
                         if (doc.isDirty) await doc.save();
-                        
-                        // Знімаємо діагностику для успішного файлу
-                        this.diagnosticService.clearDiagnostics(targetUri);
                     }
                 } catch { /* safe ignore */ }
             }
@@ -405,8 +386,6 @@ export class TransactionPipeline {
                 if (doc.isDirty) {
                     await doc.save();
                 }
-                // Після відкату також очищаємо діагностику
-                this.diagnosticService.clearDiagnostics(uri);
             } catch (e) {
                 this.logger.error(`Failed to forcefully save reverted document ${uri.fsPath}: ${e}`);
             }
@@ -414,7 +393,6 @@ export class TransactionPipeline {
 
         for (const file of filesToRestoreBinary) {
             await vscode.workspace.fs.writeFile(file.uri, file.data);
-            this.diagnosticService.clearDiagnostics(file.uri);
         }
 
         const cleanupEnabled = this.settingsManager.getSettings().workflow?.cleanupEmptyDirectories ?? true;
