@@ -118,9 +118,10 @@
               ],
               "default": "workspace"
             },
-            "autoSaveAfterAccept": {
-              "type": "boolean",
-              "default": true
+            "autoSaveMode": {
+              "type": "string",
+              "enum": ["off", "on_accept", "on_batch_success", "aggressive"],
+              "default": "on_accept"
             },
             "formatBehavior": {
               "type": "string",
@@ -162,7 +163,7 @@
           },
           "default": {
             "chatHistoryMode": "workspace",
-            "autoSaveAfterAccept": true,
+            "autoSaveMode": "on_accept",
             "formatBehavior": "onSaveOnly",
             "cleanupEmptyDirectories": true,
             "backupRetentionDays": 7,

@@ -11,9 +11,11 @@ export interface AgentContextContract {
         isSettingsOpen: boolean;
         isPromptCopied: boolean;
         isDiagnosticsOpen: boolean; 
+        isHistoryOpen: boolean; 
     };
     actions: {
         toggleSettings: () => void;
+        toggleHistoryWindow: (forceState?: boolean) => void;
     };
 }
 
@@ -27,7 +29,10 @@ export const AgentProvider = ({ children }: { children: ReactNode }) => {
     const isSettingsOpen = useAgentStore((s) => s.isSettingsOpen);
     const isPromptCopied = useAgentStore((s) => s.isPromptCopied);
     const isDiagnosticsOpen = useAgentStore((s) => s.isDiagnosticsOpen);
+    const isHistoryOpen = useAgentStore((s) => s.isHistoryOpen);
+    
     const toggleSettings = useAgentStore((s) => s.toggleSettings);
+    const toggleHistoryWindow = useAgentStore((s) => s.toggleHistoryWindow);
 
     const value: AgentContextContract = {
         state: {
@@ -38,9 +43,11 @@ export const AgentProvider = ({ children }: { children: ReactNode }) => {
             isSettingsOpen,
             isPromptCopied,
             isDiagnosticsOpen,
+            isHistoryOpen
         },
         actions: {
-            toggleSettings
+            toggleSettings,
+            toggleHistoryWindow
         }
     };
 

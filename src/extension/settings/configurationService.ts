@@ -23,7 +23,7 @@ export class ConfigurationService {
 
     return {
       chatHistoryMode: workflow.chatHistoryMode ?? 'workspace',
-      autoSaveAfterAccept: workflow.autoSaveAfterAccept ?? true,
+      autoSaveMode: workflow.autoSaveMode ?? 'on_accept', // ФІКС
       formatBehavior: workflow.formatBehavior ?? 'onSaveOnly',
       cleanupEmptyDirectories: workflow.cleanupEmptyDirectories ?? true,
       backupRetentionDays: workflow.backupRetentionDays ?? 7,
@@ -45,7 +45,6 @@ export class ConfigurationService {
       maxGlobalSearchCandidates: engine.maxGlobalSearchCandidates ?? 5,
       useUnsavedBuffers: engine.useUnsavedBuffers ?? true,
       polyglotParsing: engine.polyglotParsing ?? true,
-      
       strictParsing: engine.strictParsing ?? false,
       allowCdataUnwrap: engine.allowCdataUnwrap ?? true,
       allowFuzzyMatching: engine.allowFuzzyMatching ?? true,

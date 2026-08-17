@@ -55,7 +55,9 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
 
     const isDirty = vm.statusIcon === 'edit' || vm.statusIcon === 'merge';
     const isSaved = vm.statusIcon === 'check';
-    const canDiff = isDirty || isSaved; 
+    
+    // ФІКС: Тепер кнопку Diff можна натиснути навіть при реальному конфлікті (для Virtual Diff)
+    const canDiff = isDirty || isSaved || vm.isRealConflict; 
 
     return (
         <div className={rowClass} onMouseEnter={onMouseEnter} onClick={onClick} role="gridcell">

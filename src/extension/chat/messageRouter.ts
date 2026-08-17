@@ -21,6 +21,7 @@ import { LoggerAdapter } from '@/extension/transactions/context/LoggerAdapter';
 import { CompensationStore } from '@/extension/transactions/store/CompensationStore';
 import type { DecorationService } from '@/extension/transactions/services/DecorationService';
 import type { OperationStatusUpdate } from '@/extension/transactions/core/TransactionEvents';
+import { VirtualConflictProvider } from '@/extension/vscode/VirtualConflictProvider';
 
 export class MessageRouter {
     private readonly sessionManager: ChatSessionManager;
@@ -107,18 +108,34 @@ export class MessageRouter {
         );
     }
 
+    public getPendingOperation(opId: string): AnyOperation | undefined {
+        return this.pendingOperations.get(opId);
+    }
+
     private flushStatusUpdates(): void {
         this.updateTimer = null;
         if (this.statusUpdateQueue.length === 0) return;
         const batch = [...this.statusUpdateQueue];
         this.statusUpdateQueue = [];
         this.postMessageCallback({ type: 'OPERATION_BATCH_UPDATED', updates: batch });
+        
+        this.syncHistory();
     }
 
     public handleMessage(event: WebviewEvent): void {
         switch (event.type) {
             case 'REQUEST_STATE_SYNC': this.syncState(); break;
             case 'REQUEST_SETTINGS_SYNC': this.syncSettings(); break;
+            case 'REQUEST_HISTORY_SYNC': this.syncHistory(); break; 
+            case 'ROLLBACK_SAGA': 
+                // ФІКС: Відновлено логіку відкату масиву транзакцій
+                (async () => {
+                    for (const id of event.transactionIds) {
+                        await this.transactionPipeline.revertOperation(id);
+                    }
+                    this.syncHistory();
+                })();
+                break; 
             case 'UPDATE_SETTING': 
                 this.settingsManager.updateSetting(event.category, event.key, event.value);
                 if (event.key === 'chatHistoryMode') this.sessionManager.reload();
@@ -147,6 +164,7 @@ export class MessageRouter {
                 this.sessionManager.deleteSession(event.sessionId);
                 this.transactionPipeline.emergencyUnlock(); 
                 this.syncState();
+                this.syncHistory();
                 break;
             case 'CLEAR_SESSION': 
                 this.revertActiveSessionOperations(this.sessionManager.getActiveSessionId());
@@ -154,6 +172,7 @@ export class MessageRouter {
                 this.pendingOperations.clear();
                 this.transactionPipeline.emergencyUnlock();
                 this.syncState();
+                this.syncHistory();
                 break;
             case 'ACTION_SAVE_ALL': 
                 if (event.hasConflicts) {
@@ -172,9 +191,8 @@ export class MessageRouter {
             case 'ACTION_REVERT_OPERATION': this.transactionPipeline.revertOperation(event.operationId, event.isWalkthrough); break;
             case 'OPEN_FILE': this.handleOpenFile(event.operationId); break;
             case 'OPEN_DIFF': this.handleOpenDiff(event.operationId); break;
-            
+            case 'OPEN_HISTORY_DIFF': this.handleOpenHistoryDiff(event.operationId, event.filePath); break;
             case 'OPEN_FILE_AT_RANGE': this.handleOpenFileAtRange(event.path, event.range); break;
-            
             case 'COPY_PROMPT': this.handleCopyPrompt(event.mode || 'stable'); break; 
             case 'DOWNLOAD_INSTRUCTIONS': this.handleDownloadInstructions(); break;
             case 'SHOW_OUTPUT_LOG': vscode.commands.executeCommand('ai-diff-agent.showLog'); break;
@@ -182,6 +200,32 @@ export class MessageRouter {
             case 'SMART_RETRY_CONTEXT': this.handleSmartRetry(event.operationId); break; 
             case 'SET_WALKTHROUGH_STATE': this.isWalkthroughActive = event.isActive; break;
             case 'ACTION_JUMP_TO_NEXT_BLOCK': this.transactionPipeline.jumpToNextDirtyBlock(); break;
+            case 'OPEN_PROBLEMS_PANEL': vscode.commands.executeCommand('workbench.actions.view.problems'); break;
+        }
+    }
+
+    private syncHistory(): void {
+        const history = this.store.getAllSagas();
+        const currentBranch = this.store.getCurrentBranch();
+        this.postMessageCallback({ type: 'HISTORY_HYDRATE', history, currentBranch });
+    }
+
+    private async handleOpenHistoryDiff(operationId: string, filePath: string): Promise<void> {
+        try {
+            const normalized = PathNormalizer.normalize(filePath);
+            const targetUri = PathSandbox.validate(normalized);
+            const backupUri = this.snapshotService.getBackupUri(operationId, normalized);
+
+            try {
+                await vscode.workspace.fs.stat(backupUri);
+                await vscode.commands.executeCommand('vscode.diff', backupUri, targetUri, `${normalized} (History ↔ Current)`);
+            } catch {
+                const doc = await vscode.workspace.openTextDocument(targetUri);
+                await vscode.window.showTextDocument(doc, { preview: false });
+                OutputLogger.log(`No backup found for ${normalized}. Opened file directly.`, 'INFO');
+            }
+        } catch (e) {
+            OutputLogger.log(`Failed to open history diff: ${e}`, 'ERROR');
         }
     }
 
@@ -320,22 +364,23 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
 
         try {
             let targetPath = rawOp.path;
-            if (rawOp.type === 'move_path') {
-                const sessionOp = this.sessionManager.getActiveSession().messages
-                    .flatMap(m => m.operations || [])
-                    .find(o => o.id === operationId);
+            const sessionOp = this.sessionManager.getActiveSession().messages
+                .flatMap(m => m.operations || [])
+                .find(o => o.id === operationId);
 
-                if (sessionOp && (sessionOp.status === 'applied_dirty' || sessionOp.status === 'saved')) {
-                    targetPath = (rawOp as any).destinationPath;
-                }
+            if (rawOp.type === 'move_path' && sessionOp && (sessionOp.status === 'applied_dirty' || sessionOp.status === 'saved')) {
+                targetPath = (rawOp as any).destinationPath;
             }
 
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (!workspaceFolders) return;
-            
             const normalized = PathNormalizer.normalize(targetPath);
             const targetUri = PathSandbox.validate(normalized);
-            
+
+            if (sessionOp && (sessionOp.status === 'conflict' || sessionOp.status === 'error')) {
+                const virtualUri = vscode.Uri.parse(`${VirtualConflictProvider.scheme}://preview/${normalized}?opId=${operationId}`);
+                await vscode.commands.executeCommand('vscode.diff', targetUri, virtualUri, `${normalized} (Current ↔ AI Proposal)`);
+                return;
+            }
+
             const backupUri = this.snapshotService.getBackupUri(operationId, normalized);
 
             try {
@@ -408,7 +453,7 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         try {
             const decs = this.decorationService.getDecorationsForDocument(uri);
             const freshDec = decs.find(d => d.id === blockId);
-            if (!freshDec) return; // Блок вже опрацьований
+            if (!freshDec) return; 
 
             const sessionOp = this.sessionManager.getActiveSession().messages
                 .flatMap(m => m.operations || [])

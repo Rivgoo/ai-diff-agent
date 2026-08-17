@@ -6,6 +6,7 @@ import { SnapshotService } from '@/extension/transactions/services/SnapshotServi
 import { BlockCodeLensProvider } from '@/extension/vscode/BlockCodeLensProvider'; 
 import { SettingsManager } from '@/extension/settings/settingsManager'; 
 import { AstParserRegistry } from '@/core/matcher/ast/treeSitterRegistry';
+import { VirtualConflictProvider } from '@/extension/vscode/VirtualConflictProvider';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     OutputLogger.initialize();
@@ -50,7 +51,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         })
     );
 
-    // ФІКС: Рівно 2 аргументи
     const sidebarProvider = new SidebarWebviewProvider(context, decorationService);
 
     context.subscriptions.push(
@@ -58,6 +58,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             SidebarWebviewProvider.viewType,
             sidebarProvider,
             { webviewOptions: { retainContextWhenHidden: true } }
+        )
+    );
+
+    // ФІКС: Реєстрація Virtual Conflict Diff Provider
+    const virtualConflictProvider = new VirtualConflictProvider((id) => sidebarProvider.router.getPendingOperation(id));
+    context.subscriptions.push(
+        vscode.workspace.registerTextDocumentContentProvider(
+            VirtualConflictProvider.scheme,
+            virtualConflictProvider
         )
     );
 

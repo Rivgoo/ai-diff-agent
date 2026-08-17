@@ -35,6 +35,9 @@ export const useIPC = () => {
                     hydrateSession(message.sessions, message.activeSessionId); 
                     break;
                 case 'SETTINGS_HYDRATE': hydrateSettings(message.settings); break;
+                case 'HISTORY_HYDRATE': 
+                    useAgentStore.getState().hydrateHistory(message.history, message.currentBranch); 
+                    break;
                 case 'AGENT_TYPING': setAgentTyping(message.isTyping); break;
                 case 'OPERATION_UPDATED': 
                     updateOperationStatus(
@@ -44,7 +47,11 @@ export const useIPC = () => {
                         message.originalPath,
                         message.path,
                         message.conflict,
-                        message.isDirectory
+                        message.isDirectory,
+                        message.matchStrategy,
+                        message.alreadyApplied,
+                        message.isPartiallyResolved,
+                        message.blastRadiusWarning
                     ); 
                     break;
                 case 'PIPELINE_STATE': setPipelineProgress({ stage: message.stage, current: message.current, total: message.total }); break;
@@ -59,16 +66,13 @@ export const useIPC = () => {
                 case 'WALKTHROUGH_COMPLETED':
                     useAgentStore.getState().stopWalkthrough();
                     break;
-                case 'DIAGNOSTICS_UPDATED': 
-                    useAgentStore.getState().setDiagnostics(message.diagnostics); 
-                    break;
-                    
             }
         };
 
         window.addEventListener('message', handleMessage);
         sendEvent({ type: 'REQUEST_STATE_SYNC' });
         sendEvent({ type: 'REQUEST_SETTINGS_SYNC' });
+        sendEvent({ type: 'REQUEST_HISTORY_SYNC' });
 
         return () => window.removeEventListener('message', handleMessage);
     }, []);

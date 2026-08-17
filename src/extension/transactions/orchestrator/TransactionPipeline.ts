@@ -15,6 +15,8 @@ import type { DirectoryCleanupService } from '@/extension/transactions/services/
 import type { ILogger } from '@/extension/transactions/core/ILogger';
 import type { ConflictDetails, CoreDiagnostic } from '@/shared/contracts';
 import type { SettingsManager } from '@/extension/settings/settingsManager'; 
+import type { ITransactionCommand } from '../core/ITransactionCommand';
+import type { ITransactionContext } from '../core/ITransactionContext';
 
 import { ValidationPhase } from './phases/ValidationPhase';
 import { ExecutionPhase } from './phases/ExecutionPhase';
@@ -122,13 +124,14 @@ export class TransactionPipeline {
             await this.commitPhase.execute(validCommands, validPendingOps, context, rootName, rootUri);
 
             const astSettings = this.settingsManager.getSettings().ast;
+            let lspFailures: any[] = [];
+
             if (astSettings.lspValidation || astSettings.autoStitchImports) {
                 this.logger.info(`Polling Language Servers (LSP) for diagnostics (up to 2000ms)...`);
                 
                 const maxWaitMs = 2000;
                 const pollInterval = 250;
                 let elapsed = 0;
-                let lspFailures: any[] = [];
 
                 while (elapsed < maxWaitMs) {
                     await new Promise(res => setTimeout(res, pollInterval));
@@ -198,6 +201,16 @@ export class TransactionPipeline {
                 }
             }
 
+            const autoSaveMode = this.settingsManager.getSettings().workflow.autoSaveMode;
+            const batchHasAnyConflicts = validationResult.conflicts.size > 0 || lspFailures.length > 0;
+
+            if (autoSaveMode === 'aggressive' || (autoSaveMode === 'on_batch_success' && !batchHasAnyConflicts)) {
+                const failedOpIds = new Set(lspFailures.map(f => f.cmd.operationId));
+                const successCommands = validCommands.filter(c => !failedOpIds.has(c.operationId));
+                
+                await this.saveModifiedDocuments(successCommands, context);
+            }
+
             this.logger.info(`Transaction pipeline executed successfully for ${validCommands.length} commands.`);
 
         } catch (err) {
@@ -212,7 +225,6 @@ export class TransactionPipeline {
             for (const cmd of commands) {
                 try {
                     await this.revertOperation(cmd.operationId);
-                    await this.snapshotService.purgeSnapshotForOp(cmd.operationId);
                 } catch (revertErr) {
                     this.logger.error(`Failed to revert operation ${cmd.operationId} during crash recovery: ${revertErr}`);
                 } finally {
@@ -261,7 +273,10 @@ export class TransactionPipeline {
     public async saveBatch(): Promise<void> {
         const txIds = this.store.getAllIds();
         for (const id of txIds) {
-            await this.saveOperation(id);
+            const tx = this.store.getSaga(id);
+            if (tx && tx.status === 'pending') {
+                await this.saveOperation(id);
+            }
         }
         this.logger.info('Batch saved successfully.');
     }
@@ -269,7 +284,10 @@ export class TransactionPipeline {
     public async revertBatch(): Promise<void> {
         const txIds = this.store.getAllIds().reverse(); 
         for (const id of txIds) {
-            await this.revertOperation(id);
+            const tx = this.store.getSaga(id);
+            if (tx && tx.status === 'pending') {
+                await this.revertOperation(id);
+            }
         }
         this.logger.info('Batch reverted successfully.');
     }
@@ -281,13 +299,27 @@ export class TransactionPipeline {
         return vscode.Uri.joinPath(workspaceFolders[0].uri, cleanPath);
     }
 
+    private async saveModifiedDocuments(commands: ITransactionCommand[], context?: ITransactionContext): Promise<void> {
+        for (const cmd of commands) {
+            const targetPath = cmd.metadata.path || cmd.operation.path;
+            if (!targetPath) continue;
+            try {
+                const targetUri = context ? context.getAbsoluteUri(targetPath) : this.getAbsoluteUri(targetPath);
+                if (targetUri) {
+                    const doc = await vscode.workspace.openTextDocument(targetUri);
+                    if (doc.isDirty) await doc.save();
+                }
+            } catch { /* safe ignore */ }
+        }
+    }
+
     public async saveOperation(opId: string, isWalkthrough: boolean = false): Promise<void> {
         const tx = this.store.getTransaction(opId);
         if (!tx) return;
 
-        const autoSave = this.settingsManager.getSettings().workflow?.autoSaveAfterAccept ?? true;
+        const autoSaveMode = this.settingsManager.getSettings().workflow?.autoSaveMode ?? 'on_accept';
 
-        if (autoSave) {
+        if (autoSaveMode !== 'off') {
             for (const act of tx.antiActions) {
                 const targetPath = (act as any).path || (act as any).destinationPath;
                 if (!targetPath) continue;
@@ -305,8 +337,8 @@ export class TransactionPipeline {
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
         
-        this.store.clearTransaction(opId);
-        await this.snapshotService.purgeSnapshotForOp(opId);
+        // ФІКС: ЗБЕРІГАЄМО ІСТОРІЮ. Змінюємо статус на saved замість видалення
+        this.store.updateSagaStatus(opId, 'saved');
 
         if (isWalkthrough) {
             await this.jumpToNextDirtyBlock();
@@ -380,10 +412,12 @@ export class TransactionPipeline {
 
         await vscode.workspace.applyEdit(edit);
 
+        const autoSaveMode = this.settingsManager.getSettings().workflow?.autoSaveMode ?? 'on_accept';
+        
         for (const uri of filesRestoredText) {
             try {
                 const doc = await vscode.workspace.openTextDocument(uri);
-                if (doc.isDirty) {
+                if (doc.isDirty && autoSaveMode !== 'off') {
                     await doc.save();
                 }
             } catch (e) {
@@ -413,10 +447,11 @@ export class TransactionPipeline {
         }
 
         this.onStatusUpdate({ operationId: opId, status: 'reverted' });
-        this.store.clearTransaction(opId);
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
-        await this.snapshotService.purgeSnapshotForOp(opId);
+        
+        // ФІКС: ЗБЕРІГАЄМО ІСТОРІЮ. Змінюємо статус на reverted замість видалення
+        this.store.updateSagaStatus(opId, 'reverted');
 
         if (isWalkthrough) {
             await this.jumpToNextDirtyBlock();

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { ChatSession, AgentSettings, OperationStatus, DiffOperation } from '../../shared/models';
 import type { PipelineStage } from '../../shared/ipc';
 import type { ConflictDetails } from '../../shared/contracts';
-
+import type { TransactionSaga } from '../../core/models/saga';
 
 interface PipelineProgress {
     stage: PipelineStage;
@@ -22,12 +22,15 @@ interface AgentState {
     composerDraft: string;
     isWalkthroughActive: boolean;
     isDiagnosticsOpen: boolean;
+    history: TransactionSaga[];
+    currentBranch?: string;
+    isHistoryOpen: boolean;
 
-
+    toggleHistoryWindow: (forceState?: boolean) => void;
+    hydrateHistory: (history: TransactionSaga[], currentBranch?: string) => void;
     startWalkthrough: () => void;
     stopWalkthrough: () => void;
     updateOperationBatch: (updates: any[]) => void;
-
     hydrateSession: (sessions: Record<string, ChatSession>, activeId: string) => void;
     hydrateSettings: (settings: AgentSettings) => void;
     setAgentTyping: (isTyping: boolean) => void;
@@ -57,9 +60,18 @@ export const useAgentStore = create<AgentState>((set) => ({
     sessions: {},
     operationsMap: {}, 
     activeSessionId: '',
+    history: [],
+    isHistoryOpen: false,
     isAgentTyping: false,
-
     isDiagnosticsOpen: false,
+    currentBranch: undefined,
+
+    hydrateHistory: (history, currentBranch) => set({ history, currentBranch }),
+    toggleHistoryWindow: (forceState) => set((state) => ({ 
+        isHistoryOpen: forceState !== undefined ? forceState : !state.isHistoryOpen,
+        isSettingsOpen: false, 
+        isDiagnosticsOpen: false 
+    })),
 
     toggleDiagnosticsWindow: (forceState) => set((state) => ({ 
         isDiagnosticsOpen: forceState !== undefined ? forceState : !state.isDiagnosticsOpen 
@@ -76,7 +88,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         },
         workflow: { 
             chatHistoryMode: 'workspace', 
-            autoSaveAfterAccept: true, 
+            autoSaveMode: 'on_accept', 
             formatBehavior: 'onSaveOnly', 
             cleanupEmptyDirectories: true, 
             backupRetentionDays: 7,
@@ -158,6 +170,9 @@ export const useAgentStore = create<AgentState>((set) => ({
             const currentOp = state.operationsMap[opId];
             if (!currentOp) return state;
 
+            // ФІКС: Автоматичне очищення конфліктів при вирішенні
+            const isResolved = status === 'saved' || status === 'reverted';
+
             return {
                 operationsMap: {
                     ...state.operationsMap,
@@ -167,12 +182,12 @@ export const useAgentStore = create<AgentState>((set) => ({
                         resolvedResiliently: resolvedResiliently ?? currentOp.resolvedResiliently,
                         originalPath: originalPath ?? currentOp.originalPath,
                         path: path ?? currentOp.path,
-                        conflict: conflict ?? currentOp.conflict,
+                        conflict: isResolved ? undefined : (conflict ?? currentOp.conflict),
                         isDirectory: isDirectory ?? currentOp.isDirectory,
                         matchStrategy: matchStrategy ?? currentOp.matchStrategy,
                         alreadyApplied: alreadyApplied ?? currentOp.alreadyApplied,
                         isPartiallyResolved: isPartiallyResolved ?? currentOp.isPartiallyResolved,
-                        blastRadiusWarning: blastRadiusWarning ?? currentOp.blastRadiusWarning
+                        blastRadiusWarning: isResolved ? undefined : (blastRadiusWarning ?? currentOp.blastRadiusWarning)
                     }
                 }
             };
@@ -186,18 +201,20 @@ export const useAgentStore = create<AgentState>((set) => ({
             const currentOp = newOpsMap[update.operationId];
             if (currentOp) {
                 hasChanges = true;
+                const isResolved = update.status === 'saved' || update.status === 'reverted';
+
                 newOpsMap[update.operationId] = {
                     ...currentOp,
                     status: update.status,
                     resolvedResiliently: update.resolvedResiliently ?? currentOp.resolvedResiliently,
                     originalPath: update.originalPath ?? currentOp.originalPath,
                     path: update.path ?? currentOp.path,
-                    conflict: update.conflict ?? currentOp.conflict,
+                    conflict: isResolved ? undefined : (update.conflict ?? currentOp.conflict),
                     isDirectory: update.isDirectory ?? currentOp.isDirectory,
                     matchStrategy: update.matchStrategy ?? currentOp.matchStrategy,
                     confidenceScore: update.confidenceScore ?? currentOp.confidenceScore,
                     isPartiallyResolved: update.isPartiallyResolved ?? currentOp.isPartiallyResolved,
-                    blastRadiusWarning: update.blastRadiusWarning ?? currentOp.blastRadiusWarning
+                    blastRadiusWarning: isResolved ? undefined : (update.blastRadiusWarning ?? currentOp.blastRadiusWarning)
                 };
             }
         }

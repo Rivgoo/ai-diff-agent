@@ -10,11 +10,12 @@ import { FeatureComposer } from '@/webview/features/composer/FeatureComposer';
 import { SessionTabs } from '@/webview/features/sessions/SessionTabs';
 import { SettingsView } from '@/webview/features/settings/SettingsView';
 import { DiagnosticsView } from '@/webview/features/diagnostics/DiagnosticsView';
+import { HistoryView } from '@/webview/features/history/HistoryView'; // НОВЕ
 import styles from './App.module.css';
 
 export const App = () => {
     const { sendEvent } = useIPC();
-    const context = useContext(AgentContext); // ФІКС
+    const context = useContext(AgentContext); 
     
     if (!context) throw new Error('App must be wrapped in AgentProvider');
     const { state } = context;
@@ -38,6 +39,8 @@ export const App = () => {
                 <SettingsView />
             ) : state.isDiagnosticsOpen ? (
                 <DiagnosticsView />
+            ) : state.isHistoryOpen ? ( // НОВЕ
+                <HistoryView />
             ) : (
                 <>
                     <SessionTabs />
@@ -47,17 +50,9 @@ export const App = () => {
                         ) : (
                             messages.map((msg) => (
                                 msg.role === 'user' ? (
-                                    <UserMessageCard 
-                                        key={msg.id} 
-                                        message={msg} 
-                                        onOpenFile={handleOpenFile} 
-                                    />
+                                    <UserMessageCard key={msg.id} message={msg} onOpenFile={handleOpenFile} />
                                 ) : (
-                                    <AgentMessageCard 
-                                        key={msg.id} 
-                                        message={msg} 
-                                        onOpenFile={handleOpenFile} 
-                                    />
+                                    <AgentMessageCard key={msg.id} message={msg} onOpenFile={handleOpenFile} />
                                 )
                             ))
                         )}

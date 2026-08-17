@@ -40,9 +40,11 @@ export interface UiSettings {
   diagnosticsLevel: 'all' | 'critical' | 'none';
 }
 
+export type AutoSaveMode = 'off' | 'on_accept' | 'on_batch_success' | 'aggressive';
+
 export interface WorkflowSettings {
   chatHistoryMode: 'workspace' | 'global' | 'disabled';
-  autoSaveAfterAccept: boolean;
+  autoSaveMode: AutoSaveMode; // ФІКС: Нова матриця автозбереження
   formatBehavior: 'always' | 'onSaveOnly' | 'never';
   cleanupEmptyDirectories: boolean;
   backupRetentionDays: number;
@@ -59,8 +61,6 @@ export interface EngineSettings {
   maxGlobalSearchCandidates: number;
   useUnsavedBuffers: boolean; 
   polyglotParsing: boolean; 
-  
-  // Legacy properties awaiting removal in final phases
   strictParsing: boolean;
   allowCdataUnwrap: boolean;
   allowFuzzyMatching: boolean;
@@ -83,7 +83,7 @@ export interface AstSettings {
 }
 
 export interface AiSettings {
-  feedbackLoopEnabled: boolean; // Заділ для Фази 6
+  feedbackLoopEnabled: boolean; 
 }
 
 export interface AgentSettings {
@@ -117,8 +117,8 @@ export interface DiffOperation {
   matchStrategy?: string;
   alreadyApplied?: boolean;
   confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning';
-    isPartiallyResolved?: boolean;
-    blastRadiusWarning?: string;
+  isPartiallyResolved?: boolean;
+  blastRadiusWarning?: string;
 }
 
 export interface ChatMessage {

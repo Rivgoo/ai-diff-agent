@@ -193,10 +193,14 @@ export const SettingsView = () => {
                         </div>
 
                         <div className={styles.settingItem}>
-                            <VSCodeCheckbox checked={settings.workflow.autoSaveAfterAccept} onChange={(e: any) => updateSetting('workflow', 'autoSaveAfterAccept', e.target.checked)}>
-                                Auto-Save on Accept Block
-                            </VSCodeCheckbox>
-                            <p className={styles.description}>Writes changes to physical disk immediately when you click Accept.</p>
+                            <label className={styles.label}>Auto-Save Matrix</label>
+                            <VSCodeDropdown value={settings.workflow.autoSaveMode} onChange={(e: any) => updateSetting('workflow', 'autoSaveMode', e.target.value)}>
+                                <VSCodeOption value="off">Off (Manual Save Only)</VSCodeOption>
+                                <VSCodeOption value="on_accept">On Accept Block</VSCodeOption>
+                                <VSCodeOption value="on_batch_success">On Batch Success (100% Valid)</VSCodeOption>
+                                <VSCodeOption value="aggressive">Aggressive (Instant Save)</VSCodeOption>
+                            </VSCodeDropdown>
+                            <p className={styles.description}>Determines when the engine physically writes modifications to your disk.</p>
                         </div>
 
                         <div className={styles.settingItem}>

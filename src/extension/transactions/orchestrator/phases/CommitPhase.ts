@@ -45,7 +45,11 @@ export class CommitPhase {
             }
 
             if (antiActions.length > 0) {
-                this.store.addTransaction({ operationId: cmd.operationId, antiActions });
+                this.store.addTransaction({ 
+                    operationId: cmd.operationId, 
+                    antiActions,
+                    summary: `Modified ${cmd.metadata.path || cmd.operation.path}` 
+                });
                 
                 const finalStatus = cmd.metadata.requiresAutoMerge ? 'merged_dirty' : 'applied_dirty';
 

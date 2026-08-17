@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef } from 'react';
 import { useIPC } from '@/webview/hooks/useIPC';
 import { AgentContext } from '@/webview/store/AgentProvider';
-import { IconPlus, IconX, IconBrandGithub, IconFolder } from '@tabler/icons-react';
+import { IconPlus, IconX, IconBrandGithub, IconFolder, IconHistory } from '@tabler/icons-react';
 import styles from './SessionTabs.module.css';
 
 export const SessionTabs = () => {
@@ -18,7 +18,6 @@ export const SessionTabs = () => {
     useEffect(() => {
         if (!containerRef.current || !activeSessionId) return;
         
-        // Використовуємо setTimeout, щоб дати React час відрендерити нову вкладку
         setTimeout(() => {
             if (!containerRef.current) return;
             const activeTabElement = containerRef.current.querySelector(`.${styles.tabActive}`);
@@ -46,6 +45,13 @@ export const SessionTabs = () => {
                     title="AI Diff Agent GitHub"
                 >
                     <IconBrandGithub size={14} />
+                </button>
+                <button 
+                    className={styles.iconBtn} style={{ background: 'none', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer' }}
+                    onClick={() => context.actions.toggleHistoryWindow(true)} 
+                    title="Transaction History"
+                >
+                    <IconHistory size={14} />
                 </button>
                 <div style={{ width: '1px', height: '16px', backgroundColor: 'var(--vscode-editorGroupHeader-tabsBorder)', margin: '0 4px' }} />
             </div>
