@@ -127,9 +127,9 @@ export class TransactionPipeline {
             let lspFailures: any[] = [];
 
             if (astSettings.lspValidation || astSettings.autoStitchImports) {
-                this.logger.info(`Polling Language Servers (LSP) for diagnostics (up to 2000ms)...`);
+                this.logger.info(`Polling Language Servers (LSP) for diagnostics (up to ${astSettings.lspTimeoutMs}ms)...`);
                 
-                const maxWaitMs = 2000;
+                const maxWaitMs = astSettings.lspTimeoutMs;
                 const pollInterval = 250;
                 let elapsed = 0;
 
@@ -309,7 +309,9 @@ export class TransactionPipeline {
                     const doc = await vscode.workspace.openTextDocument(targetUri);
                     if (doc.isDirty) await doc.save();
                 }
-            } catch { /* safe ignore */ }
+            } catch (error) {
+                this.logger.warn(`[TransactionPipeline] Failed to auto-save file '${targetPath}' to disk: ${error instanceof Error ? error.message : String(error)}. The changes remain in editor memory.`);
+            }
         }
     }
 
@@ -329,7 +331,9 @@ export class TransactionPipeline {
                         const doc = await vscode.workspace.openTextDocument(targetUri);
                         if (doc.isDirty) await doc.save();
                     }
-                } catch { /* safe ignore */ }
+                } catch (error) {
+                    this.logger.warn(`[TransactionPipeline] Failed to auto-save file '${targetPath}' upon accept: ${error instanceof Error ? error.message : String(error)}`);
+                }
             }
         }
 
@@ -337,7 +341,6 @@ export class TransactionPipeline {
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
         
-        // ФІКС: ЗБЕРІГАЄМО ІСТОРІЮ. Змінюємо статус на saved замість видалення
         this.store.updateSagaStatus(opId, 'saved');
 
         if (isWalkthrough) {
@@ -437,20 +440,25 @@ export class TransactionPipeline {
                 try {
                     const contents = await vscode.workspace.fs.readDirectory(dirUri);
                     if (contents.length === 0) await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
-                } catch { /* ignore */ }
+                } catch (error) {
+                    this.logger.warn(`[TransactionPipeline] Failed to cleanup directory '${dirUri.fsPath}' during revert: ${error instanceof Error ? error.message : String(error)}`);
+                }
             }
         }
 
         directoriesToRestore.sort((a, b) => a.fsPath.length - b.fsPath.length);
         for (const dirUri of directoriesToRestore) {
-            try { await vscode.workspace.fs.createDirectory(dirUri); } catch { /* ignore */ }
+            try { 
+                await vscode.workspace.fs.createDirectory(dirUri); 
+            } catch (error) {
+                this.logger.warn(`[TransactionPipeline] Failed to restore directory '${dirUri.fsPath}' during revert: ${error instanceof Error ? error.message : String(error)}`);
+            }
         }
 
         this.onStatusUpdate({ operationId: opId, status: 'reverted' });
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
         
-        // ФІКС: ЗБЕРІГАЄМО ІСТОРІЮ. Змінюємо статус на reverted замість видалення
         this.store.updateSagaStatus(opId, 'reverted');
 
         if (isWalkthrough) {

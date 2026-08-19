@@ -46,7 +46,7 @@ export class AstMatchStrategy implements IMatchStrategy {
             return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
         }
         
-        const parser = await AstParserRegistry.getParser(langKey, context.logger);
+        const parser = await AstParserRegistry.getParser(langKey, context.logger, context.astSettings.parserTimeoutMs);
         if (!parser) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
         context.logger?.info(`[AST] Initiating semantic analysis for ${context.document.path}`);

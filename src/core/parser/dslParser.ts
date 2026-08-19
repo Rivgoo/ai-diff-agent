@@ -2,10 +2,12 @@ import { Result } from '../../shared/contracts';
 import type { AnyOperation, ChangeBlock } from '../models/operations';
 import { StreamScanner, type Token } from '../lexer/scanner';
 import { PathSanitizer } from '../workspace/pathSanitizer';
+import type { IWorkspaceSearchPort } from '../resolver/ports';
 
 export interface ParserOptions {
     recoveryMode: 'strict' | 'standard' | 'aggressive';
-    polyglotParsing?: boolean; // ФІКС: Додано прапорець для поліглота
+    polyglotParsing?: boolean; 
+    searchPort?: IWorkspaceSearchPort; 
 }
 
 export class DSLParser {
@@ -38,10 +40,8 @@ export class DSLParser {
 
             const looseResult = this.parseOperationsList(tokens, 0, tokens.length);
             
-            // ФІКС: Якщо стандартний парсер XML не знайшов ЖОДНОЇ операції, 
-            // і ввімкнено polyglotParsing, запускаємо резервний Markdown парсер!
             if (looseResult.operations.length === 0 && this.options.polyglotParsing) {
-                const fallbackOps = this.parseMarkdownFallback(rawInput);
+                const fallbackOps = await this.parseMarkdownFallback(rawInput);
                 if (fallbackOps.length > 0) {
                     return Result.ok(fallbackOps);
                 }
@@ -54,7 +54,7 @@ export class DSLParser {
         }
     }
 
-    private parseMarkdownFallback(rawInput: string): AnyOperation[] {
+    private async parseMarkdownFallback(rawInput: string): Promise<AnyOperation[]> {
         const operations: AnyOperation[] = [];
         let currentIndex = 0;
 
@@ -77,18 +77,41 @@ export class DSLParser {
             if (content.endsWith('\n')) content = content.slice(0, -1);
             if (content.endsWith('\r')) content = content.slice(0, -1);
 
-            const textBefore = rawInput.substring(currentIndex, blockStart);
-            const linesBefore = textBefore.split(/\r?\n/);
             let rawPath = '';
+            
+            const firstContentLine = content.split('\n')[0].trim();
+            const commentPathMatch = firstContentLine.match(/^(?:\/\/|\/\*|#|<!--)\s*([a-zA-Z0-9_\-\.\/]+\/[a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9]+)/);
+            if (commentPathMatch) {
+                rawPath = commentPathMatch[1];
+            }
 
-            for (let i = linesBefore.length - 1; i >= 0; i--) {
-                const line = linesBefore[i].trim();
-                if (line.length > 0) {
-                    const match = line.match(/([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/);
-                    if (match) {
-                        rawPath = match[1];
+            if (!rawPath) {
+                const textBefore = rawInput.substring(currentIndex, blockStart);
+                const linesBefore = textBefore.split(/\r?\n/);
+
+                for (let i = linesBefore.length - 1; i >= 0; i--) {
+                    const line = linesBefore[i].trim();
+                    if (line.length > 0) {
+                        const match = line.match(/(?:^|\s|>|:)[`\*_]*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z]{2,6})[`\*_]*(?:\s|$|<|:)/);
+                        if (match && !line.includes('(')) {
+                            rawPath = match[1];
+                        }
+                        break;
                     }
-                    break;
+                }
+            }
+
+            if (rawPath && this.options.searchPort) {
+                const searchResults = await this.options.searchPort.findFiles(`**/${rawPath.split('/').pop()}`, '**/node_modules/**');
+                const matchedFile = searchResults.find(p => p.endsWith(rawPath));
+                if (!matchedFile && searchResults.length > 0) {
+                    // Якщо точного співпадіння немає, але такий файл існує десь інде, довіряємо евристиці
+                    rawPath = searchResults[0];
+                } else if (searchResults.length === 0) {
+                    // Якщо файл не знайдено ВЗАГАЛІ, перевіряємо чи шлях виглядає як "fs.readFile"
+                    if (rawPath.includes('(') || rawPath.includes(')') || rawPath.split('/').length === 1 && !rawPath.includes('.')) {
+                        rawPath = ''; // Це галюцинація, скидаємо шлях
+                    }
                 }
             }
 

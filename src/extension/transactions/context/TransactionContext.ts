@@ -41,7 +41,22 @@ export class TransactionContext implements ITransactionContext {
         if (this.documentCache.has(relativePath)) {
             return this.documentCache.get(relativePath)!;
         }
+        
         const uri = this.getAbsoluteUri(relativePath);
+        
+        try {
+            const stat = await vscode.workspace.fs.stat(uri);
+            const maxBytes = this.settingsManager.getSettings().engine.maxFileSizeMb * 1024 * 1024;
+            
+            if (stat.size !== undefined && stat.size > maxBytes) {
+                throw new Error(`File ${relativePath} (${(stat.size / 1024 / 1024).toFixed(2)} MB) exceeds the maximum allowed size of ${this.settingsManager.getSettings().engine.maxFileSizeMb} MB.`);
+            }
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('exceeds the maximum allowed size')) {
+                throw error;
+            }
+        }
+
         const vsDoc = await vscode.workspace.openTextDocument(uri);
         const domainDoc = new VsCodeDocument(vsDoc);
         this.documentCache.set(relativePath, domainDoc);
@@ -95,9 +110,6 @@ export class TransactionContext implements ITransactionContext {
         await this.snapshotService.createSnapshot(operationId, relativePath, absoluteUri);
     }
 
-    /**
-     * Prevents memory leaks by aggressively clearing the cached document references.
-     */
     public dispose(): void {
         this.documentCache.clear();
         this.resolvedPaths.clear();

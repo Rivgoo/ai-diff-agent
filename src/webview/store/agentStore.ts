@@ -91,6 +91,7 @@ export const useAgentStore = create<AgentState>((set) => ({
             autoSaveMode: 'on_accept', 
             formatBehavior: 'onSaveOnly', 
             cleanupEmptyDirectories: true, 
+            ignoredCleanupDirs: ['.ds_store', 'thumbs.db', 'desktop.ini'],
             backupRetentionDays: 7,
             executionMode: 'tolerant',
             clipboardWatcher: false,
@@ -121,7 +122,9 @@ export const useAgentStore = create<AgentState>((set) => ({
             autoFixSyntax: true,
             lspValidation: false,
             autoStitchImports: false,
-            blastRadiusAnalysis: true
+            blastRadiusAnalysis: true,
+            parserTimeoutMs: 100,
+            lspTimeoutMs: 2000 
         },
         ai: {
             feedbackLoopEnabled: false

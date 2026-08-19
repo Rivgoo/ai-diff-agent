@@ -75,6 +75,7 @@ export class GlobalFilenameStrategy implements IPathResolutionStrategy {
                     validCandidates.push(candidate);
                 }
             } catch (e) {
+                options?.logger?.warn(`[GlobalFilenameStrategy] Failed to read candidate file '${candidate}' for fingerprinting: ${e instanceof Error ? e.message : String(e)}`);
                 continue;
             }
         }

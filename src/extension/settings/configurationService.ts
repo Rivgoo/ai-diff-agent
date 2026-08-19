@@ -23,9 +23,10 @@ export class ConfigurationService {
 
     return {
       chatHistoryMode: workflow.chatHistoryMode ?? 'workspace',
-      autoSaveMode: workflow.autoSaveMode ?? 'on_accept', // ФІКС
+      autoSaveMode: workflow.autoSaveMode ?? 'on_accept',
       formatBehavior: workflow.formatBehavior ?? 'onSaveOnly',
       cleanupEmptyDirectories: workflow.cleanupEmptyDirectories ?? true,
+      ignoredCleanupDirs: workflow.ignoredCleanupDirs ?? ['.ds_store', 'thumbs.db', 'desktop.ini'],
       backupRetentionDays: workflow.backupRetentionDays ?? 7,
       executionMode: workflow.executionMode ?? 'tolerant',
       clipboardWatcher: workflow.clipboardWatcher ?? false,
@@ -69,6 +70,8 @@ export class ConfigurationService {
       lspValidation: ast.lspValidation ?? false,
       autoStitchImports: ast.autoStitchImports ?? false,
       blastRadiusAnalysis: ast.blastRadiusAnalysis ?? true,
+      parserTimeoutMs: ast.parserTimeoutMs ?? 100,
+      lspTimeoutMs: ast.lspTimeoutMs ?? 2000,
     };
   }
 

@@ -159,6 +159,11 @@
             "historyKeepCount": { 
               "type": "number", 
               "default": 50 
+            },
+            "ignoredCleanupDirs": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": [".ds_store", "thumbs.db", "desktop.ini"]
             }
           },
           "default": {
@@ -170,7 +175,8 @@
             "executionMode": "tolerant",
             "clipboardWatcher": false,
             "historyBranchAwareness": true,
-            "historyKeepCount": 50
+            "historyKeepCount": 50,
+            "ignoredCleanupDirs": [".ds_store", "thumbs.db", "desktop.ini"]
           }
         },
         "aiDiffAgent.engine": {
@@ -275,6 +281,14 @@
             "blastRadiusAnalysis": {
               "type": "boolean",
               "default": true
+            },
+            "parserTimeoutMs": {
+              "type": "number",
+              "default": 100
+            },
+            "lspTimeoutMs": {
+              "type": "number",
+              "default": 2000
             }
           },
           "default": {
@@ -297,7 +311,9 @@
             "autoFixSyntax": true,
             "lspValidation": false,
             "autoStitchImports": false,
-            "blastRadiusAnalysis": true
+            "blastRadiusAnalysis": true,
+            "parserTimeoutMs": 100,
+            "lspTimeoutMs": 2000
           }
         },
         "aiDiffAgent.ai": {

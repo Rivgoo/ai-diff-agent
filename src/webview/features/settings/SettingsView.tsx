@@ -38,7 +38,11 @@ export const SettingsView = () => {
     const [candidatesInput, setCandidatesInput] = useState(settings.engine.maxGlobalSearchCandidates.toString());
     const [historyInput, setHistoryInput] = useState(settings.workflow.historyKeepCount.toString());
     
-    // ФІКС: Реф для перехоплення коліщатка миші
+    // ФІКС 1: Додані стейти для нових налаштувань з Фази 1
+    const [ignoredDirsInput, setIgnoredDirsInput] = useState(settings.workflow.ignoredCleanupDirs.join(', '));
+    const [parserTimeoutInput, setParserTimeoutInput] = useState(settings.ast.parserTimeoutMs.toString());
+    const [lspTimeoutInput, setLspTimeoutInput] = useState(settings.ast.lspTimeoutMs.toString());
+    
     const tabBarRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -46,9 +50,20 @@ export const SettingsView = () => {
         setFileSizeInput(settings.engine.maxFileSizeMb.toString());
         setCandidatesInput(settings.engine.maxGlobalSearchCandidates.toString());
         setHistoryInput(settings.workflow.historyKeepCount.toString());
-    }, [settings.workflow.backupRetentionDays, settings.engine.maxFileSizeMb, settings.engine.maxGlobalSearchCandidates, settings.workflow.historyKeepCount]);
+        setIgnoredDirsInput(settings.workflow.ignoredCleanupDirs.join(', '));
+        setParserTimeoutInput(settings.ast.parserTimeoutMs.toString());
+        setLspTimeoutInput(settings.ast.lspTimeoutMs.toString());
+    }, [
+        settings.workflow.backupRetentionDays, 
+        settings.engine.maxFileSizeMb, 
+        settings.engine.maxGlobalSearchCandidates, 
+        settings.workflow.historyKeepCount,
+        settings.workflow.ignoredCleanupDirs,
+        settings.ast.parserTimeoutMs,
+        settings.ast.lspTimeoutMs
+    ]);
 
-    const handleNumberChange = (category: 'workflow' | 'engine', key: string, val: string, setter: (val: string) => void) => {
+    const handleNumberChange = (category: 'workflow' | 'engine' | 'ast', key: string, val: string, setter: (val: string) => void) => {
         setter(val);
         if (val.trim() === '') return; 
         
@@ -56,6 +71,12 @@ export const SettingsView = () => {
         if (!isNaN(parsed) && parsed > 0) {
             updateSetting(category, key, parsed);
         }
+    };
+
+    const handleArrayChange = (category: 'workflow', key: string, val: string, setter: (val: string) => void) => {
+        setter(val);
+        const arr = val.split(',').map(s => s.trim()).filter(Boolean);
+        updateSetting(category, key, arr);
     };
 
     const toggleLanguage = (langId: string, checked: boolean) => {
@@ -73,7 +94,6 @@ export const SettingsView = () => {
 
     const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
         if (tabBarRef.current) {
-            // Запобігаємо скролу сторінки, якщо ми крутимо над табами
             if (e.deltaY !== 0) {
                 e.preventDefault();
                 tabBarRef.current.scrollLeft += e.deltaY;
@@ -90,7 +110,6 @@ export const SettingsView = () => {
                 <h2 className={styles.title}>Agent Configuration</h2>
             </div>
 
-            {/* Custom Horizontal Scrollable Tabs with Wheel Support */}
             <div 
                 ref={tabBarRef}
                 className={styles.tabBar} 
@@ -211,6 +230,12 @@ export const SettingsView = () => {
                         </div>
 
                         <div className={styles.settingItem}>
+                            <label className={styles.label}>Ignored Cleanup Directories</label>
+                            <VSCodeTextField value={ignoredDirsInput} onInput={(e: any) => handleArrayChange('workflow', 'ignoredCleanupDirs', e.target.value, setIgnoredDirsInput)} />
+                            <p className={styles.description}>Comma-separated list of metadata files to ignore when checking if a directory is empty (e.g., .ds_store, desktop.ini).</p>
+                        </div>
+
+                        <div className={styles.settingItem}>
                             <VSCodeCheckbox checked={settings.workflow.clipboardWatcher} onChange={(e: any) => updateSetting('workflow', 'clipboardWatcher', e.target.checked)}>
                                 Enable Clipboard Watcher
                             </VSCodeCheckbox>
@@ -296,6 +321,18 @@ export const SettingsView = () => {
                     <section className={styles.section}>
                         <h3 className={styles.sectionTitle}>Tree-Sitter & Semantics</h3>
                         
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>Parser Timeout (ms)</label>
+                            <VSCodeTextField value={parserTimeoutInput} onInput={(e: any) => handleNumberChange('ast', 'parserTimeoutMs', e.target.value, setParserTimeoutInput)} />
+                            <p className={styles.description}>Maximum time allowed for AST generation per file. Increase this if parsing large generated bundles fails.</p>
+                        </div>
+
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>LSP Timeout (ms)</label>
+                            <VSCodeTextField value={lspTimeoutInput} onInput={(e: any) => handleNumberChange('ast', 'lspTimeoutMs', e.target.value, setLspTimeoutInput)} />
+                            <p className={styles.description}>Maximum time to wait for Language Server diagnostics to settle before committing changes.</p>
+                        </div>
+
                         <div className={styles.settingItem}>
                             <VSCodeCheckbox checked={settings.ast.enableAstMatching} onChange={(e: any) => updateSetting('ast', 'enableAstMatching', e.target.checked)}>
                                 Enable Semantic AST Matching

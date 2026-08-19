@@ -41,19 +41,34 @@ export class MatchPipeline {
                 continue; 
             }
 
-            const result = await strategy.findMatch(context);
+            let result: MatchResult;
+            
+            try {
+                result = await strategy.findMatch(context);
+            } catch (error) {
+                context.logger?.warn(`[MatchPipeline] Strategy '${strategy.name}' threw an unexpected execution error: ${error instanceof Error ? error.message : String(error)}. Skipping to next fallback strategy.`);
+                continue;
+            }
+
             if (!result) continue;
             
             if (result.status === 'MATCHED') {
                 if (context.replaceBlock !== undefined) {
-                    const sanity = await SyntaxSanityChecker.verify(
-                        context.document.getText(),
-                        result.range,
-                        context.replaceBlock,
-                        context.fileExtension,
-                        context.astSettings,
-                        context.logger
-                    );
+                    let sanity;
+                    
+                    try {
+                        sanity = await SyntaxSanityChecker.verify(
+                            context.document.getText(),
+                            result.range,
+                            context.replaceBlock,
+                            context.fileExtension,
+                            context.astSettings,
+                            context.logger
+                        );
+                    } catch (sanityError) {
+                        context.logger?.error(`[MatchPipeline] SyntaxSanityChecker crashed: ${sanityError instanceof Error ? sanityError.message : String(sanityError)}`);
+                        sanity = { isSane: false, errorMessage: 'Internal Sanity Checker crash.' };
+                    }
                     
                     if (!sanity.isSane) {
                         return { 

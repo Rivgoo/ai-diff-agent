@@ -31,7 +31,8 @@ export class CommitPhase {
         }
 
         const allCandidateDirs = this.extractAllDirectoryCandidates(pendingOps, rootName);
-        const cleanedDirs = await this.directoryCleanupService.cleanupEmptyDirectories(allCandidateDirs, rootUri);
+        const ignoredDirs = context.settingsManager.getSettings().workflow.ignoredCleanupDirs;
+        const cleanedDirs = await this.directoryCleanupService.cleanupEmptyDirectories(allCandidateDirs, rootUri, ignoredDirs);
 
         for (const cmd of commands) {
             const antiActions = cmd.getCompensation();

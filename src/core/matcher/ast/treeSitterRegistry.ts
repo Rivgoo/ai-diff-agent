@@ -100,14 +100,21 @@ export class AstParserRegistry {
         this.isInitialized = true;
     }
 
-    public static async getParser(language: string, logger?: any): Promise<ITreeSitterParser | null> {
+    public static async getParser(language: string, logger?: any, timeoutMs: number = 100): Promise<ITreeSitterParser | null> {
         if (!this.isInitialized) {
             logger?.error('[AST] ParserRegistry accessed before initialization. Call initialize() first.');
             return null;
         }
 
         if (this.parsers.has(language)) {
-            return this.parsers.get(language)!;
+            const parser = this.parsers.get(language)!;
+            const micros = timeoutMs * 1000;
+            if (typeof parser.setTimeoutMicros === 'function') {
+                parser.setTimeoutMicros(micros);
+            } else if (typeof parser.setTimeout === 'function') {
+                parser.setTimeout(micros);
+            }
+            return parser;
         }
 
         const wasmFileName = `tree-sitter-${language}.wasm`;
@@ -124,10 +131,11 @@ export class AstParserRegistry {
             
             parser.setLanguage(lang);
 
+            const micros = timeoutMs * 1000;
             if (typeof parser.setTimeoutMicros === 'function') {
-                parser.setTimeoutMicros(100000); 
+                parser.setTimeoutMicros(micros); 
             } else if (typeof parser.setTimeout === 'function') {
-                parser.setTimeout(100000);
+                parser.setTimeout(micros);
             }
             
             this.parsers.set(language, parser);

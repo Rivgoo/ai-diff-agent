@@ -45,7 +45,7 @@ export class SyntaxSanityChecker {
         const langKey = LANGUAGE_DISPATCH_MAP[fileExtension.toLowerCase()];
         if (!langKey || !astSettings.enabledLanguages.includes(langKey)) return { isSane: true };
 
-        const parser = await AstParserRegistry.getParser(langKey);
+        const parser = await AstParserRegistry.getParser(langKey, logger, astSettings.parserTimeoutMs);
         if (!parser) return { isSane: true };
 
         const newText = this.applyChange(originalText, matchRange, replaceBlock);
@@ -59,7 +59,8 @@ export class SyntaxSanityChecker {
                     return { isSane: false, errorMessage: 'Invalid JSON structure.' };
                 }
                 return { isSane: true };
-            } catch {
+            } catch (e) {
+                logger?.warn(`[SyntaxSanityChecker] Fatal JSON parsing error for file extension '${fileExtension}': ${e instanceof Error ? e.message : String(e)}`);
                 return { isSane: false, errorMessage: 'Fatal JSON parsing error.' };
             }
         }
@@ -92,7 +93,8 @@ export class SyntaxSanityChecker {
             }
 
             return { isSane: true };
-        } catch {
+        } catch (e) {
+            logger?.warn(`[SyntaxSanityChecker] Fatal AST parsing collision for file extension '${fileExtension}': ${e instanceof Error ? e.message : String(e)}`);
             return { isSane: false, errorMessage: 'Fatal AST parsing collision.' };
         }
     }

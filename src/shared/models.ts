@@ -44,9 +44,10 @@ export type AutoSaveMode = 'off' | 'on_accept' | 'on_batch_success' | 'aggressiv
 
 export interface WorkflowSettings {
   chatHistoryMode: 'workspace' | 'global' | 'disabled';
-  autoSaveMode: AutoSaveMode; // ФІКС: Нова матриця автозбереження
+  autoSaveMode: AutoSaveMode;
   formatBehavior: 'always' | 'onSaveOnly' | 'never';
   cleanupEmptyDirectories: boolean;
+  ignoredCleanupDirs: string[];
   backupRetentionDays: number;
   executionMode: 'atomic' | 'tolerant'; 
   clipboardWatcher: boolean; 
@@ -80,6 +81,8 @@ export interface AstSettings {
   lspValidation: boolean; 
   autoStitchImports: boolean; 
   blastRadiusAnalysis: boolean; 
+  parserTimeoutMs: number;
+  lspTimeoutMs: number;
 }
 
 export interface AiSettings {

@@ -2,20 +2,17 @@ import * as vscode from 'vscode';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
 
 export class DirectoryCleanupService {
-    private static readonly IGNORED_METADATA_FILES = new Set([
-        '.ds_store',
-        'thumbs.db',
-        'desktop.ini'
-    ]);
-
     public async cleanupEmptyDirectories(
         candidatePaths: string[],
-        rootUri: vscode.Uri
+        rootUri: vscode.Uri,
+        ignoredDirs: string[] = ['.ds_store', 'thumbs.db', 'desktop.ini']
     ): Promise<vscode.Uri[]> {
         const deletedUris: vscode.Uri[] = [];
         if (candidatePaths.length === 0) {
             return deletedUris;
         }
+
+        const ignoredSet = new Set(ignoredDirs.map(d => d.toLowerCase()));
 
         const sortedCandidates = Array.from(new Set(candidatePaths))
             .map(p => p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, ''))
@@ -37,7 +34,7 @@ export class DirectoryCleanupService {
 
                 const contents = await vscode.workspace.fs.readDirectory(dirUri);
                 const usefulContents = contents.filter(([name, _type]) => {
-                    return !DirectoryCleanupService.IGNORED_METADATA_FILES.has(name.toLowerCase());
+                    return !ignoredSet.has(name.toLowerCase());
                 });
 
                 if (usefulContents.length === 0) {
@@ -50,8 +47,8 @@ export class DirectoryCleanupService {
                     deletedUris.push(dirUri);
                     OutputLogger.log(`Cleaned up empty transaction-scoped directory: ${relativeDir}`);
                 }
-            } catch {
-                // Ignore safe FS exceptions
+            } catch (error) {
+                OutputLogger.log(`[DirectoryCleanupService] Failed to clean up directory '${relativeDir}'. It might be locked by another process or OS. Error: ${error instanceof Error ? error.message : String(error)}`, 'WARN');
             }
         }
 

@@ -25,9 +25,11 @@ export class ChatSessionManager {
 
         if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
             try {
-                // ФІКС: Очищення старого формату історії
                 const legacyFile = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-history.json');
-                Promise.resolve(vscode.workspace.fs.delete(legacyFile, { useTrash: false })).catch(() => {});
+                Promise.resolve(vscode.workspace.fs.delete(legacyFile, { useTrash: false }))
+                    .catch((e) => {
+                        if (e.code !== 'FileNotFound') OutputLogger.log(`[SessionManager] Failed to delete legacy history file: ${e.message}`, 'WARN');
+                    });
 
                 const dirUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chats');
                 await vscode.workspace.fs.createDirectory(dirUri);
@@ -107,7 +109,10 @@ export class ChatSessionManager {
             
             if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
                 const dirUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chats', `session_${id}.json`);
-                Promise.resolve(vscode.workspace.fs.delete(dirUri, { useTrash: false })).catch(() => {});
+                Promise.resolve(vscode.workspace.fs.delete(dirUri, { useTrash: false }))
+                    .catch((e) => {
+                        if (e.code !== 'FileNotFound') OutputLogger.log(`[SessionManager] Failed to delete session file for ${id}: ${e.message}`, 'WARN');
+                    });
             }
 
             const remainingKeys = Object.keys(this.sessions);

@@ -64,7 +64,7 @@ export class MessageRouter {
         const searchEngine = new SearchEngine();
 
         const pathResolver = new ResilientPathResolver(
-            new VsCodeFileSystemAdapter(() => this.settingsManager.getSettings().engine.useUnsavedBuffers), 
+            new VsCodeFileSystemAdapter(() => this.settingsManager.getSettings().engine), 
             new VsCodeWorkspaceSearchAdapter()
         );
         
@@ -106,6 +106,11 @@ export class MessageRouter {
             this.postMessageCallback,
             () => this.syncState()
         );
+
+        this.decorationService.onDidManualModifyBlock(({ uri, opId, blockId }) => {
+            OutputLogger.log(`[Manual Override] User manually edited or reverted block ${blockId} in ${uri.fsPath}. Handing over control.`);
+            this.checkPartialState(opId, uri);
+        });
     }
 
     public getPendingOperation(opId: string): AnyOperation | undefined {
@@ -128,7 +133,6 @@ export class MessageRouter {
             case 'REQUEST_SETTINGS_SYNC': this.syncSettings(); break;
             case 'REQUEST_HISTORY_SYNC': this.syncHistory(); break; 
             case 'ROLLBACK_SAGA': 
-                // ФІКС: Відновлено логіку відкату масиву транзакцій
                 (async () => {
                     for (const id of event.transactionIds) {
                         await this.transactionPipeline.revertOperation(id);

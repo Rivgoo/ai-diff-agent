@@ -12,6 +12,9 @@ export class DecorationService {
     private activeDecorations = new Map<string, OpDecoration[]>();
 
     private _onDidChangeDecorations = new vscode.EventEmitter<void>();
+    private _onDidManualModifyBlock = new vscode.EventEmitter<{uri: vscode.Uri, opId: string, blockId: string}>();
+
+    public readonly onDidManualModifyBlock = this._onDidManualModifyBlock.event;
     public readonly onDidChangeDecorations = this._onDidChangeDecorations.event;
 
     constructor() {
@@ -134,13 +137,20 @@ export class DecorationService {
         if (!decs || decs.length === 0) return;
 
         let requiresUpdate = false;
+        const manuallyModifiedBlocks: { opId: string, id: string }[] = [];
 
         for (const change of changes) {
             const linesDelta = (change.text.match(/\n/g) || []).length - (change.range.end.line - change.range.start.line);
-            if (linesDelta === 0) continue; 
 
-            decs = decs.map(d => {
-                if (change.range.end.line < d.range.start.line) {
+            decs = decs.filter(d => {
+                if (d.range.intersection(change.range)) {
+                    manuallyModifiedBlocks.push({ opId: d.opId, id: d.id });
+                    requiresUpdate = true;
+                    return false;
+                }
+                return true;
+            }).map(d => {
+                if (change.range.end.line < d.range.start.line && linesDelta !== 0) {
                     requiresUpdate = true;
                     return {
                         ...d,
@@ -157,6 +167,10 @@ export class DecorationService {
         if (requiresUpdate) {
             this.activeDecorations.set(key, decs);
             this.triggerUpdateDecorations();
+            
+            for (const block of manuallyModifiedBlocks) {
+                this._onDidManualModifyBlock.fire({ uri, opId: block.opId, blockId: block.id });
+            }
         }
     }
 }
