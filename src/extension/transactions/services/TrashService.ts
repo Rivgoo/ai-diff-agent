@@ -24,8 +24,8 @@ export class TrashService {
         try {
             await vscode.workspace.fs.delete(trashDir, { recursive: true, useTrash: false });
             OutputLogger.log(`Trash emptied.`);
-        } catch {
-            // Safe ignore
+        } catch (error) {
+            OutputLogger.log(`[TrashService] Failed to empty trash directory. Error: ${error instanceof Error ? error.message : String(error)}`, 'WARN');
         }
     }
 }

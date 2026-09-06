@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { SYSTEM_CONSTANTS } from "@/shared/constants";
-import type { UiSettings, WorkflowSettings, EngineSettings, AstSettings, AiSettings } from "@/shared/models";
+import type { UiSettings, WorkflowSettings, EngineSettings, AstSettings, AiSettings, BridgeSettings } from "@/shared/models";
 
 export class ConfigurationService {
   public getUiSettings(): UiSettings {
@@ -12,8 +12,8 @@ export class ConfigurationService {
       compactMode: ui.compactMode ?? false,
       showConfidenceBadges: ui.showConfidenceBadges ?? true,
       enableCodeLens: ui.enableCodeLens ?? true,
-      phantomInlineDiffs: ui.phantomInlineDiffs ?? true,
       enableWalkthroughMode: ui.enableWalkthroughMode ?? false,
+      diagnosticsLevel: ui.diagnosticsLevel ?? 'all',
     };
   }
 
@@ -23,13 +23,15 @@ export class ConfigurationService {
 
     return {
       chatHistoryMode: workflow.chatHistoryMode ?? 'workspace',
-      autoSaveAfterAccept: workflow.autoSaveAfterAccept ?? true,
+      autoSaveMode: workflow.autoSaveMode ?? 'on_accept',
       formatBehavior: workflow.formatBehavior ?? 'onSaveOnly',
       cleanupEmptyDirectories: workflow.cleanupEmptyDirectories ?? true,
+      ignoredCleanupDirs: workflow.ignoredCleanupDirs ?? ['.ds_store', 'thumbs.db', 'desktop.ini'],
       backupRetentionDays: workflow.backupRetentionDays ?? 7,
       executionMode: workflow.executionMode ?? 'tolerant',
       clipboardWatcher: workflow.clipboardWatcher ?? false,
       historyBranchAwareness: workflow.historyBranchAwareness ?? true,
+      historyKeepCount: workflow.historyKeepCount ?? 50,
     };
   }
 
@@ -41,9 +43,9 @@ export class ConfigurationService {
       payloadRecoveryMode: engine.payloadRecoveryMode ?? 'aggressive',
       fallbackMatchLevel: engine.fallbackMatchLevel ?? 'safe',
       maxFileSizeMb: engine.maxFileSizeMb ?? 5,
+      maxGlobalSearchCandidates: engine.maxGlobalSearchCandidates ?? 5,
       useUnsavedBuffers: engine.useUnsavedBuffers ?? true,
       polyglotParsing: engine.polyglotParsing ?? true,
-      
       strictParsing: engine.strictParsing ?? false,
       allowCdataUnwrap: engine.allowCdataUnwrap ?? true,
       allowFuzzyMatching: engine.allowFuzzyMatching ?? true,
@@ -59,7 +61,7 @@ export class ConfigurationService {
 
     return {
       enableAstMatching: ast.enableAstMatching ?? true,
-      enabledLanguages: ast.enabledLanguages ?? ['javascript', 'typescript', 'python', 'c_sharp', 'json', 'html', 'css', 'bash', 'c'],
+      enabledLanguages: ast.enabledLanguages ?? ['javascript', 'typescript', 'tsx', 'python', 'java', 'c_sharp', 'cpp', 'json', 'html', 'css', 'bash', 'c'],
       sanityStrictness: ast.sanityStrictness ?? 'warn',
       validateEmbeddedScripts: ast.validateEmbeddedScripts ?? true,
       queryTolerance: ast.queryTolerance ?? 'allow_signature_drift',
@@ -68,6 +70,8 @@ export class ConfigurationService {
       lspValidation: ast.lspValidation ?? false,
       autoStitchImports: ast.autoStitchImports ?? false,
       blastRadiusAnalysis: ast.blastRadiusAnalysis ?? true,
+      parserTimeoutMs: ast.parserTimeoutMs ?? 100,
+      lspTimeoutMs: ast.lspTimeoutMs ?? 2000,
     };
   }
 
@@ -76,11 +80,27 @@ export class ConfigurationService {
     const ai = config.get<Partial<AiSettings>>("ai") || {};
 
     return {
-      feedbackLoopEnabled: ai.feedbackLoopEnabled ?? false,
+      customPrompts: ai.customPrompts ?? [],
     };
   }
 
-  public async updateSetting(category: "ui" | "workflow" | "engine" | "ast" | "ai", key: string, value: any): Promise<void> {
+  public getBridgeSettings(): BridgeSettings {
+    const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
+    const bridge = config.get<Partial<BridgeSettings>>("bridge") || {};
+
+    return {
+      enableBridge: bridge.enableBridge ?? true,
+      useCustomUrl: bridge.useCustomUrl ?? false,
+      customUrl: bridge.customUrl ?? 'https://make1txt.vercel.app',
+      maxFileSizeKb: bridge.maxFileSizeKb ?? 10240,
+      maxProjectSizeMb: bridge.maxProjectSizeMb ?? 50,
+      respectGitIgnore: bridge.respectGitIgnore ?? true,
+      ignoredExtensions: bridge.ignoredExtensions ?? ['.exe', '.dll', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp', '.tiff', '.raw', '.heic', '.psd', '.ai', '.xd', '.sketch', '.fig', '.fbx', '.blend', '.stl', '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.pdf', '.zip', '.rar', '.7z', '.tar', '.gz', '.iso', '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'],
+      ignoredDirectories: bridge.ignoredDirectories ?? ['.git', '.svn', '.hg', '.bzr', 'node_modules', 'bower_components', 'jspm_packages', '.npm', '.yarn', '.pnpm-store', 'venv', '.venv', 'env', '.env', '__pycache__', '.pytest_cache', '.tox', '.nox', '.mypy_cache', 'build', 'dist', 'out', 'target', 'bin', 'obj', '.next', '.nuxt', '.vue', '.svelte-kit', '.svelte', '.angular', 'coverage', '.nyc_output', 'vendor', 'var', '.cache', '.parcel-cache', '.vite', '.webpack', '.rollup.cache']
+    };
+  }
+
+  public async updateSetting(category: "ui" | "workflow" | "engine" | "ast" | "ai" | "bridge", key: string, value: any): Promise<void> {
     const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
     
     const currentSection = { ...(config.get<Record<string, any>>(category) || {}) };

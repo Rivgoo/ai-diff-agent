@@ -2,9 +2,6 @@ import * as vscode from 'vscode';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
 
 export class EditorService {
-    /**
-     * Silently formats a list of URIs in the background without stealing editor focus.
-     */
     public async formatFilesSilently(uris: vscode.Uri[]): Promise<void> {
         if (uris.length === 0) return;
 
@@ -30,15 +27,7 @@ export class EditorService {
 
         if (formattedCount > 0) {
             try {
-
                 await vscode.workspace.applyEdit(formatEdit);
-                
-                for (const uri of uris) {
-                    const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString());
-                    if (doc && doc.isDirty) {
-                        await doc.save();
-                    }
-                }
             } catch (error) {
                 OutputLogger.log(`Failed to apply background formatting: ${error}`, 'ERROR');
             }

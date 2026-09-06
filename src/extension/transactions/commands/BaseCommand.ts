@@ -1,5 +1,5 @@
 import { Result } from '@/shared/contracts';
-import type { ConflictDetails, ConflictReason } from '@/shared/models';
+import type { ConflictDetails, ConflictReason, CoreDiagnostic } from '@/shared/contracts';
 import type { ITransactionCommand, CommandMetadata } from '@/extension/transactions/core/ITransactionCommand';
 import type { ITransactionContext } from '@/extension/transactions/core/ITransactionContext';
 import type { AntiAction } from '@/extension/transactions/store/CompensationStore';
@@ -31,7 +31,7 @@ export abstract class BaseCommand<T extends AnyOperation> implements ITransactio
         blockIndex = 0, 
         totalBlocks = 0, 
         searchExcerpt = 'N/A',
-        semanticDiagnostic?: string
+        diagnostic?: CoreDiagnostic
     ): ConflictDetails {
         return {
             reason,
@@ -40,7 +40,7 @@ export abstract class BaseCommand<T extends AnyOperation> implements ITransactio
             searchExcerpt,
             originalSearchBlock: '',
             candidatePaths,
-            semanticDiagnostic 
+            diagnostic
         };
     }
 }

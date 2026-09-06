@@ -1,5 +1,5 @@
 import type { AnyOperation, ChangeBlock } from '../models/operations';
-import { Result } from '../../shared/contracts';
+import { Result, type CoreDiagnostic } from '../../shared/contracts';
 import type { EngineSettings, AstSettings } from '../../shared/models';
 
 export type FileNodeState = 'UNTOUCHED' | 'CREATED' | 'MODIFIED' | 'DELETED' | 'MOVED';
@@ -17,6 +17,7 @@ export interface CompilerWarning {
     readonly operationId: string;
     readonly reason: string;
     readonly path: string;
+    readonly diagnostic: CoreDiagnostic; 
 }
 
 export interface CompilationResult {

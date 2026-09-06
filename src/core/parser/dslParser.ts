@@ -2,14 +2,17 @@ import { Result } from '../../shared/contracts';
 import type { AnyOperation, ChangeBlock } from '../models/operations';
 import { StreamScanner, type Token } from '../lexer/scanner';
 import { PathSanitizer } from '../workspace/pathSanitizer';
+import type { IWorkspaceSearchPort } from '../resolver/ports';
 
 export interface ParserOptions {
     recoveryMode: 'strict' | 'standard' | 'aggressive';
+    polyglotParsing?: boolean; 
+    searchPort?: IWorkspaceSearchPort; 
 }
 
 export class DSLParser {
     private readonly scanner = new StreamScanner();
-    private options: ParserOptions = { recoveryMode: 'aggressive' };
+    private options: ParserOptions = { recoveryMode: 'aggressive', polyglotParsing: true };
 
     public async parse(rawInput: string, options?: Partial<ParserOptions>): Promise<Result<AnyOperation[]>> {
         if (options) {
@@ -36,11 +39,97 @@ export class DSLParser {
             }
 
             const looseResult = this.parseOperationsList(tokens, 0, tokens.length);
+            
+            if (looseResult.operations.length === 0 && this.options.polyglotParsing) {
+                const fallbackOps = await this.parseMarkdownFallback(rawInput);
+                if (fallbackOps.length > 0) {
+                    return Result.ok(fallbackOps);
+                }
+            }
+
             return Result.ok(looseResult.operations);
 
         } catch (error) {
             return Result.fail(error instanceof Error ? error : new Error('Unknown structural parse error'));
         }
+    }
+
+    private async parseMarkdownFallback(rawInput: string): Promise<AnyOperation[]> {
+        const operations: AnyOperation[] = [];
+        let currentIndex = 0;
+
+        while (true) {
+            const blockStart = rawInput.indexOf('```', currentIndex);
+            if (blockStart === -1) break;
+
+            const blockEnd = rawInput.indexOf('```', blockStart + 3);
+            if (blockEnd === -1) break; 
+
+            const firstNewline = rawInput.indexOf('\n', blockStart);
+            if (firstNewline === -1 || firstNewline > blockEnd) {
+                currentIndex = blockEnd + 3;
+                continue;
+            }
+
+            const contentStart = firstNewline + 1;
+            let content = rawInput.substring(contentStart, blockEnd);
+
+            if (content.endsWith('\n')) content = content.slice(0, -1);
+            if (content.endsWith('\r')) content = content.slice(0, -1);
+
+            let rawPath = '';
+            
+            const firstContentLine = content.split('\n')[0].trim();
+            const commentPathMatch = firstContentLine.match(/^(?:\/\/|\/\*|#|<!--)\s*([a-zA-Z0-9_\-\.\/]+\/[a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9]+)/);
+            if (commentPathMatch) {
+                rawPath = commentPathMatch[1];
+            }
+
+            if (!rawPath) {
+                const textBefore = rawInput.substring(currentIndex, blockStart);
+                const linesBefore = textBefore.split(/\r?\n/);
+
+                for (let i = linesBefore.length - 1; i >= 0; i--) {
+                    const line = linesBefore[i].trim();
+                    if (line.length > 0) {
+                        const match = line.match(/(?:^|\s|>|:)[`\*_]*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z]{2,6})[`\*_]*(?:\s|$|<|:)/);
+                        if (match && !line.includes('(')) {
+                            rawPath = match[1];
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (rawPath && this.options.searchPort) {
+                const searchResults = await this.options.searchPort.findFiles(`**/${rawPath.split('/').pop()}`, '**/node_modules/**');
+                const matchedFile = searchResults.find(p => p.endsWith(rawPath));
+                if (!matchedFile && searchResults.length > 0) {
+                    // Якщо точного співпадіння немає, але такий файл існує десь інде, довіряємо евристиці
+                    rawPath = searchResults[0];
+                } else if (searchResults.length === 0) {
+                    // Якщо файл не знайдено ВЗАГАЛІ, перевіряємо чи шлях виглядає як "fs.readFile"
+                    if (rawPath.includes('(') || rawPath.includes(')') || rawPath.split('/').length === 1 && !rawPath.includes('.')) {
+                        rawPath = ''; // Це галюцинація, скидаємо шлях
+                    }
+                }
+            }
+
+            const path = rawPath ? PathSanitizer.sanitize(rawPath) : undefined;
+            if (path && content) {
+                operations.push({
+                    id: this.generateId(),
+                    type: 'create_file',
+                    path,
+                    content,
+                    status: 'pending'
+                });
+            }
+
+            currentIndex = blockEnd + 3;
+        }
+
+        return operations;
     }
 
     private parseWorkspaceEdit(tokens: Token[], startIdx: number): Result<{ operations: AnyOperation[]; nextIndex: number }> {
@@ -243,7 +332,6 @@ export class DSLParser {
     private preprocessPayload(content: string): string {
         let cleaned = content;
         
-        // Видалення Markdown обгорток, якщо вони є (без повного .trim() щоб зберегти відступи)
         cleaned = cleaned.replace(/^\s*```[a-zA-Z0-9_-]*\r?\n/g, '');
         cleaned = cleaned.replace(/\r?\n\s*```\s*$/g, '');
 
@@ -259,8 +347,6 @@ export class DSLParser {
     private postprocessBlock(content: string): string {
         let cleaned = content;
 
-        // ФІКС: Відкушуємо ТІЛЬКИ одне перенесення рядка на початку і в кінці, 
-        // залишаючи всі внутрішні пробіли (критично для Python)
         if (cleaned.startsWith('\n')) cleaned = cleaned.substring(1);
         else if (cleaned.startsWith('\r\n')) cleaned = cleaned.substring(2);
         

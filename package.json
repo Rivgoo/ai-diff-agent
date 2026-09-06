@@ -70,60 +70,159 @@
           "type": "object",
           "description": "UI and Display settings",
           "properties": {
-            "autoScroll": { "type": "boolean", "default": true },
-            "compactMode": { "type": "boolean", "default": false },
-            "showConfidenceBadges": { "type": "boolean", "default": true },
-            "enableCodeLens": { "type": "boolean", "default": true },
-            "phantomInlineDiffs": { "type": "boolean", "default": true },
-            "enableWalkthroughMode": { "type": "boolean", "default": false }
+            "autoScroll": {
+              "type": "boolean",
+              "default": true
+            },
+            "compactMode": {
+              "type": "boolean",
+              "default": false
+            },
+            "showConfidenceBadges": {
+              "type": "boolean",
+              "default": true
+            },
+            "enableCodeLens": {
+              "type": "boolean",
+              "default": true
+            },
+            "enableWalkthroughMode": {
+              "type": "boolean",
+              "default": false
+            },
+            "diagnosticsLevel": { 
+              "type": "string", 
+              "enum": ["all", "critical", "none"], 
+              "default": "all" 
+            }
           },
           "default": {
             "autoScroll": true,
             "compactMode": false,
             "showConfidenceBadges": true,
             "enableCodeLens": true,
-            "phantomInlineDiffs": true,
-            "enableWalkthroughMode": false
+            "enableWalkthroughMode": false,
+            "diagnosticsLevel": "all"
           }
         },
         "aiDiffAgent.workflow": {
           "type": "object",
           "description": "Lifecycle and automation settings",
           "properties": {
-            "chatHistoryMode": { "type": "string", "enum": ["workspace", "global", "disabled"], "default": "workspace" },
-            "autoSaveAfterAccept": { "type": "boolean", "default": true },
-            "formatBehavior": { "type": "string", "enum": ["always", "onSaveOnly", "never"], "default": "onSaveOnly" },
-            "cleanupEmptyDirectories": { "type": "boolean", "default": true },
-            "backupRetentionDays": { "type": "number", "default": 7 },
-            "executionMode": { "type": "string", "enum": ["atomic", "tolerant"], "default": "tolerant" },
-            "clipboardWatcher": { "type": "boolean", "default": false },
-            "historyBranchAwareness": { "type": "boolean", "default": true }
+            "chatHistoryMode": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "global",
+                "disabled"
+              ],
+              "default": "workspace"
+            },
+            "autoSaveMode": {
+              "type": "string",
+              "enum": ["off", "on_accept", "on_batch_success", "aggressive"],
+              "default": "on_accept"
+            },
+            "formatBehavior": {
+              "type": "string",
+              "enum": [
+                "always",
+                "onSaveOnly",
+                "never"
+              ],
+              "default": "onSaveOnly"
+            },
+            "cleanupEmptyDirectories": {
+              "type": "boolean",
+              "default": true
+            },
+            "backupRetentionDays": {
+              "type": "number",
+              "default": 7
+            },
+            "executionMode": {
+              "type": "string",
+              "enum": [
+                "atomic",
+                "tolerant"
+              ],
+              "default": "tolerant"
+            },
+            "clipboardWatcher": {
+              "type": "boolean",
+              "default": false
+            },
+            "historyBranchAwareness": {
+              "type": "boolean",
+              "default": true
+            },
+            "historyKeepCount": { 
+              "type": "number", 
+              "default": 50 
+            },
+            "ignoredCleanupDirs": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": [".ds_store", "thumbs.db", "desktop.ini"]
+            }
           },
           "default": {
             "chatHistoryMode": "workspace",
-            "autoSaveAfterAccept": true,
+            "autoSaveMode": "on_accept",
             "formatBehavior": "onSaveOnly",
             "cleanupEmptyDirectories": true,
             "backupRetentionDays": 7,
             "executionMode": "tolerant",
             "clipboardWatcher": false,
-            "historyBranchAwareness": true
+            "historyBranchAwareness": true,
+            "historyKeepCount": 50,
+            "ignoredCleanupDirs": [".ds_store", "thumbs.db", "desktop.ini"]
           }
         },
         "aiDiffAgent.engine": {
           "type": "object",
           "description": "Text Parsing & Limits",
           "properties": {
-            "payloadRecoveryMode": { "type": "string", "enum": ["strict", "standard", "aggressive"], "default": "aggressive" },
-            "fallbackMatchLevel": { "type": "string", "enum": ["none", "safe", "aggressive"], "default": "safe" },
-            "maxFileSizeMb": { "type": "number", "default": 5 },
-            "useUnsavedBuffers": { "type": "boolean", "default": true },
-            "polyglotParsing": { "type": "boolean", "default": true }
+            "payloadRecoveryMode": {
+              "type": "string",
+              "enum": [
+                "strict",
+                "standard",
+                "aggressive"
+              ],
+              "default": "aggressive"
+            },
+            "fallbackMatchLevel": {
+              "type": "string",
+              "enum": [
+                "none",
+                "safe",
+                "aggressive"
+              ],
+              "default": "safe"
+            },
+            "maxFileSizeMb": {
+              "type": "number",
+              "default": 5
+            },
+            "maxGlobalSearchCandidates": {
+              "type": "number",
+              "default": 5
+            },
+            "useUnsavedBuffers": {
+              "type": "boolean",
+              "default": true
+            },
+            "polyglotParsing": {
+              "type": "boolean",
+              "default": true
+            }
           },
           "default": {
             "payloadRecoveryMode": "aggressive",
             "fallbackMatchLevel": "safe",
             "maxFileSizeMb": 5,
+            "maxGlobalSearchCandidates": 5,
             "useUnsavedBuffers": true,
             "polyglotParsing": true
           }
@@ -132,38 +231,169 @@
           "type": "object",
           "description": "Tree-Sitter, Semantics and LSP",
           "properties": {
-            "enableAstMatching": { "type": "boolean", "default": true },
+            "enableAstMatching": {
+              "type": "boolean",
+              "default": true
+            },
             "enabledLanguages": {
               "type": "array",
-              "items": { "type": "string" },
-              "default": ["javascript", "typescript", "python", "c_sharp", "json", "html", "css", "bash", "c"]
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "javascript",
+                "typescript",
+                "tsx",
+                "python",
+                "java",
+                "c_sharp",
+                "cpp",
+                "json",
+                "html",
+                "css",
+                "bash",
+                "c"
+              ]
             },
-            "queryTolerance": { "type": "string", "enum": ["exact", "allow_signature_drift"], "default": "allow_signature_drift" },
-            "strictSyntaxValidation": { "type": "boolean", "default": false },
-            "autoFixSyntax": { "type": "boolean", "default": true },
-            "lspValidation": { "type": "boolean", "default": false },
-            "autoStitchImports": { "type": "boolean", "default": false },
-            "blastRadiusAnalysis": { "type": "boolean", "default": true }
+            "queryTolerance": {
+              "type": "string",
+              "enum": [
+                "exact",
+                "allow_signature_drift"
+              ],
+              "default": "allow_signature_drift"
+            },
+            "strictSyntaxValidation": {
+              "type": "boolean",
+              "default": false
+            },
+            "autoFixSyntax": {
+              "type": "boolean",
+              "default": true
+            },
+            "lspValidation": {
+              "type": "boolean",
+              "default": false
+            },
+            "autoStitchImports": {
+              "type": "boolean",
+              "default": false
+            },
+            "blastRadiusAnalysis": {
+              "type": "boolean",
+              "default": true
+            },
+            "parserTimeoutMs": {
+              "type": "number",
+              "default": 100
+            },
+            "lspTimeoutMs": {
+              "type": "number",
+              "default": 2000
+            }
           },
           "default": {
             "enableAstMatching": true,
-            "enabledLanguages": ["javascript", "typescript", "python", "c_sharp", "json", "html", "css", "bash", "c"],
+            "enabledLanguages": [
+              "javascript",
+              "typescript",
+              "tsx",
+              "python",
+              "c_sharp",
+              "cpp",
+              "json",
+              "html",
+              "css",
+              "bash",
+              "c"
+            ],
             "queryTolerance": "allow_signature_drift",
             "strictSyntaxValidation": false,
             "autoFixSyntax": true,
             "lspValidation": false,
             "autoStitchImports": false,
-            "blastRadiusAnalysis": true
+            "blastRadiusAnalysis": true,
+            "parserTimeoutMs": 100,
+            "lspTimeoutMs": 2000
           }
         },
         "aiDiffAgent.ai": {
           "type": "object",
-          "description": "AI Feedback Loop",
+          "description": "AI Prompts Configuration",
           "properties": {
-            "feedbackLoopEnabled": { "type": "boolean", "default": false }
+            "customPrompts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "path": { "type": "string" },
+                  "baseFormat": { "type": "string", "enum": ["stable", "experimental"] }
+                }
+              },
+              "default": [],
+              "description": "Constructor for custom prompt rules."
+            }
           },
           "default": {
-            "feedbackLoopEnabled": false
+            "customPrompts": []
+          }
+        },
+        "aiDiffAgent.bridge": {
+          "type": "object",
+          "description": "Make1TXT Local Bridge Configuration",
+          "properties": {
+            "enableBridge": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable the Localhost Bridge to send project context directly to Make1TXT."
+            },
+            "useCustomUrl": {
+              "type": "boolean",
+              "default": false,
+              "description": "Use a custom URL instead of the default Make1TXT instance."
+            },
+            "customUrl": {
+              "type": "string",
+              "default": "https://make1txt.vercel.app",
+              "description": "Custom instance URL (must start with http:// or https://)."
+            },
+            "maxFileSizeKb": {
+              "type": "number",
+              "default": 10240,
+              "description": "Maximum size in KB for a single file to be included in the export (default: 10MB)."
+            },
+            "maxProjectSizeMb": {
+              "type": "number",
+              "default": 50,
+              "description": "Maximum total project size in MB before the bridge aborts to prevent OOM errors."
+            },
+            "respectGitIgnore": {
+              "type": "boolean",
+              "default": true,
+              "description": "Respect globally configured .gitignore exclusions during scanning."
+            },
+            "ignoredExtensions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": [".exe", ".dll", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".bmp", ".tiff", ".raw", ".heic", ".psd", ".ai", ".xd", ".sketch", ".fig", ".fbx", ".blend", ".stl", ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".pdf", ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".woff", ".woff2", ".ttf", ".eot", ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a"]
+            },
+            "ignoredDirectories": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": [".git", ".svn", ".hg", ".bzr", "node_modules", "bower_components", "jspm_packages", ".npm", ".yarn", ".pnpm-store", "venv", ".venv", "env", ".env", "__pycache__", ".pytest_cache", ".tox", ".nox", ".mypy_cache", "build", "dist", "out", "target", "bin", "obj", ".next", ".nuxt", ".vue", ".svelte-kit", ".svelte", ".angular", "coverage", ".nyc_output", "vendor", "var", ".cache", ".parcel-cache", ".vite", ".webpack", ".rollup.cache"]
+            }
+          },
+          "default": {
+            "enableBridge": true,
+            "useCustomUrl": false,
+            "customUrl": "https://make1txt.vercel.app",
+            "maxFileSizeKb": 10240,
+            "maxProjectSizeMb": 50,
+            "respectGitIgnore": true,
+            "ignoredExtensions": [".exe", ".dll", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".bmp", ".tiff", ".raw", ".heic", ".psd", ".ai", ".xd", ".sketch", ".fig", ".fbx", ".blend", ".stl", ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".pdf", ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".woff", ".woff2", ".ttf", ".eot", ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a"],
+            "ignoredDirectories": [".git", ".svn", ".hg", ".bzr", "node_modules", "bower_components", "jspm_packages", ".npm", ".yarn", ".pnpm-store", "venv", ".venv", "env", ".env", "__pycache__", ".pytest_cache", ".tox", ".nox", ".mypy_cache", "build", "dist", "out", "target", "bin", "obj", ".next", ".nuxt", ".vue", ".svelte-kit", ".svelte", ".angular", "coverage", ".nyc_output", "vendor", "var", ".cache", ".parcel-cache", ".vite", ".webpack", ".rollup.cache"]
           }
         }
       }
@@ -181,6 +411,7 @@
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
+    "@tanstack/react-virtual": "^3.14.9",
     "@vscode/webview-ui-toolkit": "^1.4.0",
     "react": "^19.x",
     "react-dom": "^19.x",

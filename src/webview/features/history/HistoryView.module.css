@@ -1,0 +1,321 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: var(--vscode-sideBar-background);
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+    animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    flex-shrink: 0;
+}
+
+.titleGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.backBtn {
+    background: transparent;
+    border: none;
+    color: var(--vscode-icon-foreground);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.backBtn:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.branchBadge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-family: var(--vscode-editor-font-family);
+    color: var(--vscode-gitDecoration-addedResourceForeground);
+    border: 1px solid color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground) 30%, transparent);
+    background-color: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground) 10%, transparent);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.searchContainer {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    flex-shrink: 0;
+}
+
+.searchInputWrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 6px;
+    color: var(--vscode-input-placeholderForeground);
+    pointer-events: none;
+}
+
+.searchInput {
+    width: 100%;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    padding: 4px 6px 4px 26px;
+    border-radius: 2px;
+    font-family: var(--vscode-font-family);
+    font-size: 11px;
+    outline: none;
+}
+
+.searchInput:focus {
+    border-color: var(--vscode-focusBorder);
+}
+
+.content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px; 
+}
+
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+    gap: 8px;
+    opacity: 0.7;
+    text-align: center;
+}
+
+.historyCard {
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    transition: border-color 0.15s ease;
+    /* ФІКС: Забрав overflow: hidden, щоб не обрізало тіні і не ламало макет при розгортанні */
+    margin-bottom: 4px; 
+}
+
+.historyCard:hover {
+    border-color: var(--vscode-focusBorder);
+}
+
+.cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: var(--vscode-sideBar-background);
+    border-bottom: 1px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 4px; /* Коли згорнуто, краї круглі */
+}
+
+.cardHeaderOpen {
+    border-bottom-color: var(--vscode-panel-border);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.cardHeader:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.headerLeft {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chevron {
+    color: var(--vscode-icon-foreground);
+    transition: transform 0.2s ease;
+}
+
+.chevronOpen {
+    transform: rotate(90deg);
+}
+
+.timeText {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ФІКС: Кольоровий індикатор статусу (Крапка) */
+.statusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.dotSaved { background-color: var(--vscode-testing-iconPassed); }
+.dotReverted { background-color: var(--vscode-editorError-foreground); }
+.dotPartial { background-color: var(--vscode-editorWarning-foreground); }
+.dotPending { background-color: var(--vscode-descriptionForeground); }
+
+.summaryBadge {
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.fileList {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 0;
+    background-color: var(--vscode-editor-background);
+}
+
+.fileRow {
+    padding: 4px 12px;
+    font-size: 11px;
+    color: var(--vscode-foreground);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--vscode-editor-font-family);
+    min-height: 26px; /* Трохи збільшив для кнопок */
+}
+
+.fileRowLeft {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.fileName {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fileRowActions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.fileRow:hover .fileRowActions {
+    opacity: 1;
+}
+
+.fileActionBtn {
+    background: transparent;
+    border: 1px solid var(--vscode-panel-border);
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 10px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.fileActionBtn:hover {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.btnRevertHover:hover {
+    color: var(--vscode-editorError-foreground) !important;
+    border-color: color-mix(in srgb, var(--vscode-editorError-foreground) 30%, transparent) !important;
+    background-color: color-mix(in srgb, var(--vscode-editorError-foreground) 10%, transparent) !important;
+}
+
+.actionRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: var(--vscode-sideBar-background);
+    border-top: 1px solid var(--vscode-panel-border);
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+.branchMismatch {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--vscode-editorWarning-foreground);
+    font-size: 10px;
+}
+
+.statusLabel {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.revertBtn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-panel-border);
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.revertBtn:hover:not(:disabled) {
+    background-color: var(--vscode-button-hoverBackground);
+    color: var(--vscode-button-foreground);
+}
+
+.revertBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

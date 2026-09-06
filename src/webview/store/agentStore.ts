@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import type { ChatSession, AgentSettings, OperationStatus } from '../../shared/models';
+import type { ChatSession, AgentSettings, OperationStatus, DiffOperation } from '../../shared/models';
 import type { PipelineStage } from '../../shared/ipc';
 import type { ConflictDetails } from '../../shared/contracts';
+import type { TransactionSaga } from '../../core/models/saga';
 
 interface PipelineProgress {
     stage: PipelineStage;
@@ -11,6 +12,7 @@ interface PipelineProgress {
 
 interface AgentState {
     sessions: Record<string, ChatSession>;
+    operationsMap: Record<string, DiffOperation>; 
     activeSessionId: string;
     isAgentTyping: boolean;
     settings: AgentSettings;
@@ -18,8 +20,17 @@ interface AgentState {
     isPromptCopied: boolean;
     pipelineProgress: PipelineProgress;
     composerDraft: string;
-    updateOperationBatch: (updates: any[]) => void;
+    isWalkthroughActive: boolean;
+    isDiagnosticsOpen: boolean;
+    history: TransactionSaga[];
+    currentBranch?: string;
+    isHistoryOpen: boolean;
 
+    toggleHistoryWindow: (forceState?: boolean) => void;
+    hydrateHistory: (history: TransactionSaga[], currentBranch?: string) => void;
+    startWalkthrough: () => void;
+    stopWalkthrough: () => void;
+    updateOperationBatch: (updates: any[]) => void;
     hydrateSession: (sessions: Record<string, ChatSession>, activeId: string) => void;
     hydrateSettings: (settings: AgentSettings) => void;
     setAgentTyping: (isTyping: boolean) => void;
@@ -27,6 +38,7 @@ interface AgentState {
     toggleSettings: () => void;
     setPipelineProgress: (progress: PipelineProgress) => void;
     setComposerDraft: (draft: string) => void;
+    toggleDiagnosticsWindow: (forceState?: boolean) => void;
     
     updateOperationStatus: (
         operationId: string, 
@@ -39,37 +51,58 @@ interface AgentState {
         matchStrategy?: string,
         alreadyApplied?: boolean,
         isPartiallyResolved?: boolean,
+        blastRadiusWarning?: string
     ) => void;
-    updateLocalSetting: (category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai', key: string, value: any) => void;
+    updateLocalSetting: (category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai' | 'bridge', key: string, value: any) => void;
 }
 
 export const useAgentStore = create<AgentState>((set) => ({
     sessions: {},
+    operationsMap: {}, 
     activeSessionId: '',
+    history: [],
+    isHistoryOpen: false,
     isAgentTyping: false,
+    isDiagnosticsOpen: false,
+    currentBranch: undefined,
+
+    hydrateHistory: (history, currentBranch) => set({ history, currentBranch }),
+    toggleHistoryWindow: (forceState) => set((state) => ({ 
+        isHistoryOpen: forceState !== undefined ? forceState : !state.isHistoryOpen,
+        isSettingsOpen: false, 
+        isDiagnosticsOpen: false 
+    })),
+
+    toggleDiagnosticsWindow: (forceState) => set((state) => ({ 
+        isDiagnosticsOpen: forceState !== undefined ? forceState : !state.isDiagnosticsOpen 
+    })),
+
     settings: { 
         ui: { 
             autoScroll: true, 
             compactMode: false, 
             showConfidenceBadges: true, 
             enableCodeLens: true,
-            phantomInlineDiffs: true,
-            enableWalkthroughMode: false
+            enableWalkthroughMode: false,
+            diagnosticsLevel: 'all'
         },
         workflow: { 
             chatHistoryMode: 'workspace', 
-            autoSaveAfterAccept: true, 
+            autoSaveMode: 'on_accept', 
             formatBehavior: 'onSaveOnly', 
             cleanupEmptyDirectories: true, 
+            ignoredCleanupDirs: ['.ds_store', 'thumbs.db', 'desktop.ini'],
             backupRetentionDays: 7,
             executionMode: 'tolerant',
             clipboardWatcher: false,
-            historyBranchAwareness: true
+            historyBranchAwareness: true,
+            historyKeepCount: 50 
         },
         engine: { 
             payloadRecoveryMode: 'aggressive',
             fallbackMatchLevel: 'safe',
             maxFileSizeMb: 5,
+            maxGlobalSearchCandidates: 5,
             useUnsavedBuffers: true,
             polyglotParsing: true,
             strictParsing: false, 
@@ -81,7 +114,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         },
         ast: {
             enableAstMatching: true,
-            enabledLanguages: ['javascript', 'typescript', 'python', 'c_sharp', 'json', 'html', 'css', 'bash', 'c'],
+            enabledLanguages: ['javascript', 'typescript', 'tsx', 'python', 'java', 'c_sharp', 'cpp', 'json', 'html', 'css', 'bash', 'c'],
             sanityStrictness: 'warn',
             validateEmbeddedScripts: true,
             queryTolerance: 'allow_signature_drift',
@@ -89,22 +122,48 @@ export const useAgentStore = create<AgentState>((set) => ({
             autoFixSyntax: true,
             lspValidation: false,
             autoStitchImports: false,
-            blastRadiusAnalysis: true
+            blastRadiusAnalysis: true,
+            parserTimeoutMs: 100,
+            lspTimeoutMs: 2000 
         },
         ai: {
-            feedbackLoopEnabled: false
+            customPrompts: []
+        },
+        bridge: {
+            enableBridge: true,
+            useCustomUrl: false,
+            customUrl: 'https://make1txt.vercel.app',
+            maxFileSizeKb: 10240,
+            maxProjectSizeMb: 50,
+            respectGitIgnore: true,
+            ignoredExtensions: ['.exe', '.dll', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp', '.tiff', '.raw', '.heic', '.psd', '.ai', '.xd', '.sketch', '.fig', '.fbx', '.blend', '.stl', '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.pdf', '.zip', '.rar', '.7z', '.tar', '.gz', '.iso', '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'],
+            ignoredDirectories: ['.git', '.svn', '.hg', '.bzr', 'node_modules', 'bower_components', 'jspm_packages', '.npm', '.yarn', '.pnpm-store', 'venv', '.venv', 'env', '.env', '__pycache__', '.pytest_cache', '.tox', '.nox', '.mypy_cache', 'build', 'dist', 'out', 'target', 'bin', 'obj', '.next', '.nuxt', '.vue', '.svelte-kit', '.svelte', '.angular', 'coverage', '.nyc_output', 'vendor', 'var', '.cache', '.parcel-cache', '.vite', '.webpack', '.rollup.cache']
         }
     },
     isSettingsOpen: false,
     isPromptCopied: false,
     pipelineProgress: { stage: 'idle', current: 0, total: 0 },
     composerDraft: '',
+    isWalkthroughActive: false,
 
-    hydrateSession: (sessions, activeId) => set({ sessions, activeSessionId: activeId }),
+    startWalkthrough: () => set({ isWalkthroughActive: true }),
+    stopWalkthrough: () => set({ isWalkthroughActive: false }),
+
+    hydrateSession: (sessions, activeId) => set((state) => {
+        const newOpsMap = { ...state.operationsMap };
+        Object.values(sessions).forEach(session => {
+            session.messages.forEach(msg => {
+                msg.operations?.forEach(op => {
+                    newOpsMap[op.id] = op;
+                });
+            });
+        });
+        return { sessions, activeSessionId: activeId, operationsMap: newOpsMap };
+    }),
+
     hydrateSettings: (settings) => set({ settings }),
     setAgentTyping: (isTyping) => set({ isAgentTyping: isTyping }),
     setPromptCopied: (copied) => set({ isPromptCopied: copied }),
-    
     toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
     setPipelineProgress: (progress) => set({ pipelineProgress: progress }),
     setComposerDraft: (draft) => set({ composerDraft: draft }),
@@ -119,89 +178,59 @@ export const useAgentStore = create<AgentState>((set) => ({
         }
     })),
 
-    updateOperationStatus: (operationId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied, isPartiallyResolved) =>
+    updateOperationStatus: (opId, status, resolvedResiliently, originalPath, path, conflict, isDirectory, matchStrategy, alreadyApplied, isPartiallyResolved, blastRadiusWarning) =>
         set((state) => {
-            const activeSession = state.sessions[state.activeSessionId];
-            if (!activeSession) return state;
+            const currentOp = state.operationsMap[opId];
+            if (!currentOp) return state;
 
-            const updatedMessages = activeSession.messages.map((msg) => {
-                if (!msg.operations) return msg;
-                const opIndex = msg.operations.findIndex((o) => o.id === operationId);
-                if (opIndex === -1) return msg;
-                
-                const updatedOps = [...msg.operations];
-                updatedOps[opIndex] = { 
-                    ...updatedOps[opIndex], 
-                    status,
-                    resolvedResiliently: resolvedResiliently ?? updatedOps[opIndex].resolvedResiliently,
-                    originalPath: originalPath ?? updatedOps[opIndex].originalPath,
-                    path: path ?? updatedOps[opIndex].path,
-                    conflict: conflict ?? updatedOps[opIndex].conflict,
-                    isDirectory: isDirectory ?? updatedOps[opIndex].isDirectory,
-                    matchStrategy: matchStrategy ?? updatedOps[opIndex].matchStrategy,
-                    alreadyApplied: alreadyApplied ?? updatedOps[opIndex].alreadyApplied,
-                    confidenceScore: updatedOps[opIndex].confidenceScore,
-                    isPartiallyResolved: isPartiallyResolved ?? updatedOps[opIndex].isPartiallyResolved
-                };
-                return { ...msg, operations: updatedOps };
-            });
+            const isResolved = status === 'saved' || status === 'reverted';
 
             return {
-                sessions: {
-                    ...state.sessions,
-                    [state.activeSessionId]: {
-                        ...activeSession,
-                        messages: updatedMessages
+                operationsMap: {
+                    ...state.operationsMap,
+                    [opId]: {
+                        ...currentOp,
+                        status,
+                        resolvedResiliently: resolvedResiliently ?? currentOp.resolvedResiliently,
+                        originalPath: originalPath ?? currentOp.originalPath,
+                        path: path ?? currentOp.path,
+                        conflict: isResolved ? undefined : (conflict ?? currentOp.conflict),
+                        isDirectory: isDirectory ?? currentOp.isDirectory,
+                        matchStrategy: matchStrategy ?? currentOp.matchStrategy,
+                        alreadyApplied: alreadyApplied ?? currentOp.alreadyApplied,
+                        isPartiallyResolved: isPartiallyResolved ?? currentOp.isPartiallyResolved,
+                        blastRadiusWarning: isResolved ? undefined : (blastRadiusWarning ?? currentOp.blastRadiusWarning)
                     }
                 }
             };
         }),
 
     updateOperationBatch: (updates) => set((state) => {
-        const activeSession = state.sessions[state.activeSessionId];
-        if (!activeSession) return state;
+        const newOpsMap = { ...state.operationsMap };
+        let hasChanges = false;
 
-        const updatesMap = new Map(updates.map(u => [u.operationId, u]));
-        let sessionChanged = false;
+        for (const update of updates) {
+            const currentOp = newOpsMap[update.operationId];
+            if (currentOp) {
+                hasChanges = true;
+                const isResolved = update.status === 'saved' || update.status === 'reverted';
 
-        const updatedMessages = activeSession.messages.map((msg) => {
-            if (!msg.operations) return msg;
-
-            let messageChanged = false;
-            const updatedOps = msg.operations.map(op => {
-                const update = updatesMap.get(op.id);
-                if (update) {
-                    messageChanged = true;
-                    sessionChanged = true;
-                    return {
-                        ...op,
-                        status: update.status,
-                        resolvedResiliently: update.resolvedResiliently ?? op.resolvedResiliently,
-                        originalPath: update.originalPath ?? op.originalPath,
-                        path: update.path ?? op.path,
-                        conflict: update.conflict ?? op.conflict,
-                        isDirectory: update.isDirectory ?? op.isDirectory,
-                        matchStrategy: update.matchStrategy ?? op.matchStrategy,
-                        confidenceScore: update.confidenceScore ?? op.confidenceScore,
-                        isPartiallyResolved: update.isPartiallyResolved ?? op.isPartiallyResolved
-                    };
-                }
-                return op;
-            });
-
-            return messageChanged ? { ...msg, operations: updatedOps } : msg;
-        });
-
-        if (!sessionChanged) return state;
-
-        return {
-            sessions: {
-                ...state.sessions,
-                [state.activeSessionId]: {
-                    ...activeSession,
-                    messages: updatedMessages
-                }
+                newOpsMap[update.operationId] = {
+                    ...currentOp,
+                    status: update.status,
+                    resolvedResiliently: update.resolvedResiliently ?? currentOp.resolvedResiliently,
+                    originalPath: update.originalPath ?? currentOp.originalPath,
+                    path: update.path ?? currentOp.path,
+                    conflict: isResolved ? undefined : (update.conflict ?? currentOp.conflict),
+                    isDirectory: update.isDirectory ?? currentOp.isDirectory,
+                    matchStrategy: update.matchStrategy ?? currentOp.matchStrategy,
+                    confidenceScore: update.confidenceScore ?? currentOp.confidenceScore,
+                    isPartiallyResolved: update.isPartiallyResolved ?? currentOp.isPartiallyResolved,
+                    blastRadiusWarning: isResolved ? undefined : (update.blastRadiusWarning ?? currentOp.blastRadiusWarning)
+                };
             }
-        };
+        }
+
+        return hasChanges ? { operationsMap: newOpsMap } : state;
     })
 }));

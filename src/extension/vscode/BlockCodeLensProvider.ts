@@ -5,20 +5,31 @@ import type { SettingsManager } from '../settings/settingsManager';
 export class BlockCodeLensProvider implements vscode.CodeLensProvider {
     private _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
     public readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
+    private debounceTimer: NodeJS.Timeout | null = null;
 
     constructor(
         private readonly decorationService: DecorationService,
         private readonly settingsManager: SettingsManager
     ) {
         this.decorationService.onDidChangeDecorations(() => {
-            this._onDidChangeCodeLenses.fire();
+            this.triggerUpdate();
         });
         
         vscode.workspace.onDidChangeConfiguration((e) => {
             if (e.affectsConfiguration('aiDiffAgent.ui.enableCodeLens')) {
-                this._onDidChangeCodeLenses.fire();
+                this.triggerUpdate();
             }
         });
+    }
+
+    // ФІКС: Debounce усуває затримку (Input Lag) при швидкому друці
+    private triggerUpdate(): void {
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+        }
+        this.debounceTimer = setTimeout(() => {
+            this._onDidChangeCodeLenses.fire();
+        }, 150); // 150мс достатньо, щоб не спамити VS Code
     }
 
     public provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] | null {

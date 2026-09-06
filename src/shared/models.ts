@@ -36,29 +36,32 @@ export interface UiSettings {
   compactMode: boolean;
   showConfidenceBadges: boolean;
   enableCodeLens: boolean;
-  phantomInlineDiffs: boolean; // Заділ для Фази 4
-  enableWalkthroughMode: boolean; // Заділ для Фази 4
+  enableWalkthroughMode: boolean; 
+  diagnosticsLevel: 'all' | 'critical' | 'none';
 }
+
+export type AutoSaveMode = 'off' | 'on_accept' | 'on_batch_success' | 'aggressive';
 
 export interface WorkflowSettings {
   chatHistoryMode: 'workspace' | 'global' | 'disabled';
-  autoSaveAfterAccept: boolean;
+  autoSaveMode: AutoSaveMode;
   formatBehavior: 'always' | 'onSaveOnly' | 'never';
   cleanupEmptyDirectories: boolean;
+  ignoredCleanupDirs: string[];
   backupRetentionDays: number;
-  executionMode: 'atomic' | 'tolerant'; // Заділ для Фази 3
-  clipboardWatcher: boolean; // Заділ для Фази 6
-  historyBranchAwareness: boolean; // Заділ для Фази 6
+  executionMode: 'atomic' | 'tolerant'; 
+  clipboardWatcher: boolean; 
+  historyBranchAwareness: boolean; 
+  historyKeepCount: number;
 }
 
 export interface EngineSettings {
   payloadRecoveryMode: 'strict' | 'standard' | 'aggressive';
   fallbackMatchLevel: 'none' | 'safe' | 'aggressive';
   maxFileSizeMb: number;
+  maxGlobalSearchCandidates: number;
   useUnsavedBuffers: boolean; 
-  polyglotParsing: boolean; // Заділ для Фази 5
-  
-  // Legacy properties awaiting removal in final phases
+  polyglotParsing: boolean; 
   strictParsing: boolean;
   allowCdataUnwrap: boolean;
   allowFuzzyMatching: boolean;
@@ -75,13 +78,33 @@ export interface AstSettings {
   queryTolerance: 'exact' | 'allow_signature_drift';
   strictSyntaxValidation: boolean;
   autoFixSyntax: boolean;
-  lspValidation: boolean; // Заділ для Фази 5
-  autoStitchImports: boolean; // Заділ для Фази 5
-  blastRadiusAnalysis: boolean; // Заділ для Фази 5
+  lspValidation: boolean; 
+  autoStitchImports: boolean; 
+  blastRadiusAnalysis: boolean; 
+  parserTimeoutMs: number;
+  lspTimeoutMs: number;
+}
+
+export interface CustomPrompt {
+  id: string;
+  name: string;
+  path: string;
+  baseFormat: 'stable' | 'experimental';
 }
 
 export interface AiSettings {
-  feedbackLoopEnabled: boolean; // Заділ для Фази 6
+  customPrompts: CustomPrompt[];
+}
+
+export interface BridgeSettings {
+  enableBridge: boolean;
+  useCustomUrl: boolean;
+  customUrl: string;
+  maxFileSizeKb: number;
+  maxProjectSizeMb: number;
+  respectGitIgnore: boolean;
+  ignoredExtensions: string[];
+  ignoredDirectories: string[];
 }
 
 export interface AgentSettings {
@@ -90,6 +113,7 @@ export interface AgentSettings {
   engine: EngineSettings;
   ast: AstSettings;
   ai: AiSettings;
+  bridge: BridgeSettings;
 }
 
 export interface ChangeBlock {
@@ -116,6 +140,7 @@ export interface DiffOperation {
   alreadyApplied?: boolean;
   confidenceScore?: 'High' | 'Medium' | 'Low' | 'Warning';
   isPartiallyResolved?: boolean;
+  blastRadiusWarning?: string;
 }
 
 export interface ChatMessage {

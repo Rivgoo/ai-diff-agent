@@ -13,18 +13,22 @@ import type { SnapshotService } from '@/extension/transactions/services/Snapshot
 import type { EditorService } from '@/extension/transactions/services/EditorService';
 import type { DirectoryCleanupService } from '@/extension/transactions/services/DirectoryCleanupService';
 import type { ILogger } from '@/extension/transactions/core/ILogger';
-import type { ConflictDetails } from '@/shared/models';
+import type { ConflictDetails, CoreDiagnostic } from '@/shared/contracts';
 import type { SettingsManager } from '@/extension/settings/settingsManager'; 
+import type { ITransactionCommand } from '../core/ITransactionCommand';
+import type { ITransactionContext } from '../core/ITransactionContext';
 
 import { ValidationPhase } from './phases/ValidationPhase';
 import { ExecutionPhase } from './phases/ExecutionPhase';
 import { CommitPhase } from './phases/CommitPhase';
+import { LspValidationPhase } from './phases/LspValidationPhase';
 
 export class TransactionPipeline {
     private readonly transactionLock = new TransactionLock();
     
     private readonly validationPhase = new ValidationPhase();
     private readonly executionPhase = new ExecutionPhase();
+    private readonly lspPhase = new LspValidationPhase();
     private readonly commitPhase: CommitPhase;
 
     constructor(
@@ -37,7 +41,8 @@ export class TransactionPipeline {
         directoryCleanupService: DirectoryCleanupService,
         private readonly logger: ILogger,
         private readonly settingsManager: SettingsManager,
-        private readonly onStatusUpdate: (event: OperationStatusUpdate) => void
+        private readonly onStatusUpdate: (event: OperationStatusUpdate) => void,
+        private readonly onWalkthroughComplete: () => void 
     ) {
         this.commitPhase = new CommitPhase(store, decorationService, directoryCleanupService, editorService, onStatusUpdate);
     }
@@ -47,7 +52,7 @@ export class TransactionPipeline {
         this.logger.warn("Emergency unlock triggered. All transaction locks cleared.");
     }
 
-    public async applyBatch(operations: AnyOperation[]): Promise<void> {
+    public async applyBatch(operations: AnyOperation[], abortSignal?: AbortSignal): Promise<void> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
             this.logger.error("No open workspace found.");
@@ -83,6 +88,8 @@ export class TransactionPipeline {
         try {
             this.logger.info(`Starting transaction pipeline for ${commands.length} commands.`);
             
+            if (abortSignal?.aborted) throw new Error('ABORTED_BY_USER');
+
             const validationResult = await this.validationPhase.execute(commands, context);
             const executionMode = this.settingsManager.getSettings().workflow.executionMode;
             
@@ -105,28 +112,129 @@ export class TransactionPipeline {
                 this.logger.warn(`No valid operations left to execute. Stopping pipeline.`);
                 return;
             }
+
+            if (abortSignal?.aborted) throw new Error('ABORTED_BY_USER');
+
             await this.executionPhase.execute(validCommands, context);
             
             const validPendingOps = pendingOps.filter(op => validCommands.some(cmd => cmd.operationId === op.id));
+            
+            if (abortSignal?.aborted) throw new Error('ABORTED_BY_USER');
+
             await this.commitPhase.execute(validCommands, validPendingOps, context, rootName, rootUri);
+
+            const astSettings = this.settingsManager.getSettings().ast;
+            let lspFailures: any[] = [];
+
+            if (astSettings.lspValidation || astSettings.autoStitchImports) {
+                this.logger.info(`Polling Language Servers (LSP) for diagnostics (up to ${astSettings.lspTimeoutMs}ms)...`);
+                
+                const maxWaitMs = astSettings.lspTimeoutMs;
+                const pollInterval = 250;
+                let elapsed = 0;
+
+                while (elapsed < maxWaitMs) {
+                    await new Promise(res => setTimeout(res, pollInterval));
+                    elapsed += pollInterval;
+                    
+                    lspFailures = await this.lspPhase.execute(validCommands, context);
+                    if (lspFailures.length > 0) {
+                        break; 
+                    }
+                }
+                
+                if (lspFailures.length > 0) {
+                    if (executionMode === 'atomic') {
+                        this.logger.warn(`Atomic Mode: LSP Validation failed. Rolling back the entire batch.`);
+                        await this.revertBatch(); 
+                        
+                        for (const cmd of validCommands) {
+                            const failure = lspFailures.find(f => f.cmd.operationId === cmd.operationId);
+                            
+                            let diagnosticObj: CoreDiagnostic | undefined = undefined;
+                            if (failure) {
+                                diagnosticObj = {
+                                    operationId: cmd.operationId,
+                                    path: cmd.metadata.path || cmd.operation.path,
+                                    severity: 'critical',
+                                    title: 'LSP Compilation Failed',
+                                    detailedMessage: failure.diagnostic,
+                                    code: 'LSP_ERROR'
+                                };
+                            }
+
+                            this.onStatusUpdate({
+                                operationId: cmd.operationId,
+                                status: 'conflict',
+                                conflict: failure ? {
+                                    reason: 'LSP_ERROR', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'LSP Compilation Failed', originalSearchBlock: '',
+                                    diagnostic: diagnosticObj
+                                } : {
+                                    reason: 'ABORTED', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'Batch aborted due to LSP errors in other files.', originalSearchBlock: '', wasValidated: true
+                                }
+                            });
+                        }
+                    } else {
+                        this.logger.warn(`Tolerant Mode: Isolating ${lspFailures.length} files with LSP errors.`);
+                        for (const failure of lspFailures) {
+                            await this.revertOperation(failure.cmd.operationId);
+
+                            const diagnosticObj: CoreDiagnostic = {
+                                operationId: failure.cmd.operationId,
+                                path: failure.cmd.metadata.path || failure.cmd.operation.path,
+                                severity: 'critical',
+                                title: 'LSP Compilation Failed',
+                                detailedMessage: failure.diagnostic,
+                                code: 'LSP_ERROR'
+                            };
+
+                            this.onStatusUpdate({
+                                operationId: failure.cmd.operationId,
+                                status: 'conflict',
+                                conflict: {
+                                    reason: 'LSP_ERROR', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'LSP Compilation Failed', originalSearchBlock: '',
+                                    diagnostic: diagnosticObj
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            const autoSaveMode = this.settingsManager.getSettings().workflow.autoSaveMode;
+            const batchHasAnyConflicts = validationResult.conflicts.size > 0 || lspFailures.length > 0;
+
+            if (autoSaveMode === 'aggressive' || (autoSaveMode === 'on_batch_success' && !batchHasAnyConflicts)) {
+                const failedOpIds = new Set(lspFailures.map(f => f.cmd.operationId));
+                const successCommands = validCommands.filter(c => !failedOpIds.has(c.operationId));
+                
+                await this.saveModifiedDocuments(successCommands, context);
+            }
 
             this.logger.info(`Transaction pipeline executed successfully for ${validCommands.length} commands.`);
 
         } catch (err) {
-            this.logger.error(`Pipeline execution crashed: ${err}`);
+            const isAborted = err instanceof Error && err.message === 'ABORTED_BY_USER';
+            
+            if (isAborted) {
+                this.logger.warn(`Transaction cancelled by user. Rolling back applied operations.`);
+            } else {
+                this.logger.error(`Pipeline execution crashed: ${err}`);
+            }
             
             for (const cmd of commands) {
                 try {
                     await this.revertOperation(cmd.operationId);
-                    await this.snapshotService.purgeSnapshotForOp(cmd.operationId);
                 } catch (revertErr) {
                     this.logger.error(`Failed to revert operation ${cmd.operationId} during crash recovery: ${revertErr}`);
                 } finally {
                     this.transactionLock.release(cmd.operationId);
                     this.onStatusUpdate({
                         operationId: cmd.operationId,
-                        status: 'error',
-                        conflict: { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: String(err), originalSearchBlock: '' }
+                        status: isAborted ? 'reverted' : 'error',
+                        conflict: isAborted 
+                            ? { reason: 'ABORTED', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'Operation cancelled by user.', originalSearchBlock: '' }
+                            : { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: String(err), originalSearchBlock: '' }
                     });
                 }
             }
@@ -165,7 +273,10 @@ export class TransactionPipeline {
     public async saveBatch(): Promise<void> {
         const txIds = this.store.getAllIds();
         for (const id of txIds) {
-            await this.saveOperation(id);
+            const tx = this.store.getSaga(id);
+            if (tx && tx.status === 'pending') {
+                await this.saveOperation(id);
+            }
         }
         this.logger.info('Batch saved successfully.');
     }
@@ -173,7 +284,10 @@ export class TransactionPipeline {
     public async revertBatch(): Promise<void> {
         const txIds = this.store.getAllIds().reverse(); 
         for (const id of txIds) {
-            await this.revertOperation(id);
+            const tx = this.store.getSaga(id);
+            if (tx && tx.status === 'pending') {
+                await this.revertOperation(id);
+            }
         }
         this.logger.info('Batch reverted successfully.');
     }
@@ -185,13 +299,29 @@ export class TransactionPipeline {
         return vscode.Uri.joinPath(workspaceFolders[0].uri, cleanPath);
     }
 
-    public async saveOperation(opId: string): Promise<void> {
+    private async saveModifiedDocuments(commands: ITransactionCommand[], context?: ITransactionContext): Promise<void> {
+        for (const cmd of commands) {
+            const targetPath = cmd.metadata.path || cmd.operation.path;
+            if (!targetPath) continue;
+            try {
+                const targetUri = context ? context.getAbsoluteUri(targetPath) : this.getAbsoluteUri(targetPath);
+                if (targetUri) {
+                    const doc = await vscode.workspace.openTextDocument(targetUri);
+                    if (doc.isDirty) await doc.save();
+                }
+            } catch (error) {
+                this.logger.warn(`[TransactionPipeline] Failed to auto-save file '${targetPath}' to disk: ${error instanceof Error ? error.message : String(error)}. The changes remain in editor memory.`);
+            }
+        }
+    }
+
+    public async saveOperation(opId: string, isWalkthrough: boolean = false): Promise<void> {
         const tx = this.store.getTransaction(opId);
         if (!tx) return;
 
-        const autoSave = this.settingsManager.getSettings().workflow?.autoSaveAfterAccept ?? true;
+        const autoSaveMode = this.settingsManager.getSettings().workflow?.autoSaveMode ?? 'on_accept';
 
-        if (autoSave) {
+        if (autoSaveMode !== 'off') {
             for (const act of tx.antiActions) {
                 const targetPath = (act as any).path || (act as any).destinationPath;
                 if (!targetPath) continue;
@@ -201,7 +331,9 @@ export class TransactionPipeline {
                         const doc = await vscode.workspace.openTextDocument(targetUri);
                         if (doc.isDirty) await doc.save();
                     }
-                } catch { /* safe ignore */ }
+                } catch (error) {
+                    this.logger.warn(`[TransactionPipeline] Failed to auto-save file '${targetPath}' upon accept: ${error instanceof Error ? error.message : String(error)}`);
+                }
             }
         }
 
@@ -209,11 +341,14 @@ export class TransactionPipeline {
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
         
-        this.store.clearTransaction(opId);
-        await this.snapshotService.purgeSnapshotForOp(opId);
+        this.store.updateSagaStatus(opId, 'saved');
+
+        if (isWalkthrough) {
+            await this.jumpToNextDirtyBlock();
+        }
     }
 
-    public async revertOperation(opId: string): Promise<void> {
+    public async revertOperation(opId: string, isWalkthrough: boolean = false): Promise<void> {
         const tx = this.store.getTransaction(opId);
         if (!tx) return;
 
@@ -280,10 +415,12 @@ export class TransactionPipeline {
 
         await vscode.workspace.applyEdit(edit);
 
+        const autoSaveMode = this.settingsManager.getSettings().workflow?.autoSaveMode ?? 'on_accept';
+        
         for (const uri of filesRestoredText) {
             try {
                 const doc = await vscode.workspace.openTextDocument(uri);
-                if (doc.isDirty) {
+                if (doc.isDirty && autoSaveMode !== 'off') {
                     await doc.save();
                 }
             } catch (e) {
@@ -303,19 +440,53 @@ export class TransactionPipeline {
                 try {
                     const contents = await vscode.workspace.fs.readDirectory(dirUri);
                     if (contents.length === 0) await vscode.workspace.fs.delete(dirUri, { recursive: false, useTrash: false });
-                } catch { /* ignore */ }
+                } catch (error) {
+                    this.logger.warn(`[TransactionPipeline] Failed to cleanup directory '${dirUri.fsPath}' during revert: ${error instanceof Error ? error.message : String(error)}`);
+                }
             }
         }
 
         directoriesToRestore.sort((a, b) => a.fsPath.length - b.fsPath.length);
         for (const dirUri of directoriesToRestore) {
-            try { await vscode.workspace.fs.createDirectory(dirUri); } catch { /* ignore */ }
+            try { 
+                await vscode.workspace.fs.createDirectory(dirUri); 
+            } catch (error) {
+                this.logger.warn(`[TransactionPipeline] Failed to restore directory '${dirUri.fsPath}' during revert: ${error instanceof Error ? error.message : String(error)}`);
+            }
         }
 
         this.onStatusUpdate({ operationId: opId, status: 'reverted' });
-        this.store.clearTransaction(opId);
         this.transactionLock.release(opId);
         this.decorationService.clearDecorationsForOp(opId);
-        await this.snapshotService.purgeSnapshotForOp(opId);
+        
+        this.store.updateSagaStatus(opId, 'reverted');
+
+        if (isWalkthrough) {
+            await this.jumpToNextDirtyBlock();
+        }
+    }
+
+    public async jumpToNextDirtyBlock(): Promise<void> {
+        const allDecorations = this.decorationService.getAllActiveDecorations();
+        
+        if (allDecorations.length === 0) {
+            this.logger.info("Walkthrough complete: No more dirty blocks left.");
+            this.onWalkthroughComplete(); 
+            return;
+        }
+
+        const nextTarget = allDecorations[0];
+
+        const uri = vscode.Uri.parse(nextTarget.uriString);
+
+        try {
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+            editor.revealRange(nextTarget.decoration.range, vscode.TextEditorRevealType.InCenter);
+            editor.selection = new vscode.Selection(nextTarget.decoration.range.start, nextTarget.decoration.range.start);
+        } catch (e) {
+            this.logger.warn(`Walkthrough jump failed: ${e}`);
+        }
     }
 }

@@ -8,13 +8,22 @@ import styles from './EmptyState.module.css';
 
 export const EmptyState = () => {
     const { sendEvent } = useIPC();
-    const context = useContext(AgentContext); // ФІКС
+    const context = useContext(AgentContext);
     
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [promptMode, setPromptMode] = useState<'stable' | 'experimental'>('stable');
+    const [activePromptLabel, setActivePromptLabel] = useState('System (Stable)');
+    
+    // Зберігаємо поточний вибір, щоб копіювати по кліку на головну кнопку
+    const [currentSelection, setCurrentSelection] = useState<{ mode: 'system'|'custom', formatId: 'stable'|'experimental', customPath?: string }>({
+        mode: 'system',
+        formatId: 'stable'
+    });
+
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     if (!context) throw new Error('EmptyState must be inside AgentProvider');
+
+    const customPrompts = context.state.settings.ai.customPrompts || [];
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -25,6 +34,12 @@ export const EmptyState = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const handleSelect = (label: string, payload: typeof currentSelection) => {
+        setActivePromptLabel(label);
+        setCurrentSelection(payload);
+        setIsDropdownOpen(false);
+    };
 
     return (
         <div className={styles.container}>
@@ -38,11 +53,13 @@ export const EmptyState = () => {
                 <div style={{ display: 'flex', width: '100%', position: 'relative' }} ref={dropdownRef}>
                     <Button 
                         variant="secondary" 
-                        onClick={() => { sendEvent({ type: 'COPY_PROMPT', mode: promptMode }); setIsDropdownOpen(false); }} 
+                        onClick={() => { sendEvent({ type: 'COPY_PROMPT', ...currentSelection }); setIsDropdownOpen(false); }} 
                         style={{ flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: '1px solid var(--vscode-panel-border)' }}
                     >
                         <IconCopy size={14} />
-                        <span>{context.state.isPromptCopied ? 'Copied' : `Rules (${promptMode})`}</span>
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100px' }}>
+                            {context.state.isPromptCopied ? 'Copied' : activePromptLabel}
+                        </span>
                     </Button>
                     <Button 
                         variant="secondary" 
@@ -53,13 +70,29 @@ export const EmptyState = () => {
                     </Button>
                     
                     {isDropdownOpen && (
-                        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '4px', backgroundColor: 'var(--vscode-dropdown-background)', border: '1px solid var(--vscode-dropdown-border)', borderRadius: '4px', zIndex: 1000, display: 'flex', flexDirection: 'column', minWidth: '140px' }}>
-                            <button style={{ background: 'none', border: 'none', padding: '8px 12px', color: 'var(--vscode-dropdown-foreground)', textAlign: 'left', fontSize: '11px', cursor: 'pointer' }} onClick={() => { setPromptMode('stable'); setIsDropdownOpen(false); }}>
-                                Stable (Full Files)
+                        <div className={styles.dropdownMenu}>
+                            <button className={styles.dropdownItem} onClick={() => handleSelect('System (Stable)', { mode: 'system', formatId: 'stable' })}>
+                                System: Stable (Full Files)
                             </button>
-                            <button style={{ background: 'none', border: 'none', padding: '8px 12px', color: 'var(--vscode-dropdown-foreground)', textAlign: 'left', fontSize: '11px', cursor: 'pointer' }} onClick={() => { setPromptMode('experimental'); setIsDropdownOpen(false); }}>
-                                Experimental (Diffs)
+                            <button className={styles.dropdownItem} onClick={() => handleSelect('System (Diff)', { mode: 'system', formatId: 'experimental' })}>
+                                System: Experimental (Diffs)
                             </button>
+                            
+                            {customPrompts.length > 0 && (
+                                <>
+                                    <hr style={{ margin: '4px 0', border: 'none', borderTop: '1px solid var(--vscode-dropdown-border)' }} />
+                                    {customPrompts.map(cp => (
+                                        <button 
+                                            key={cp.id} 
+                                            className={styles.dropdownItem} 
+                                            onClick={() => handleSelect(cp.name, { mode: 'custom', formatId: cp.baseFormat, customPath: cp.path })}
+                                            title={`Base: ${cp.baseFormat}\nPath: ${cp.path}`}
+                                        >
+                                            {cp.name}
+                                        </button>
+                                    ))}
+                                </>
+                            )}
                         </div>
                     )}
                 </div>

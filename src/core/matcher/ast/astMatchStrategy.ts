@@ -6,15 +6,21 @@ import { AstQueryEngine, type SemanticSignature } from './astQueryEngine';
 const LANGUAGE_DISPATCH_MAP: Record<string, string> = {
     '.json': 'json',
     '.ts': 'typescript',
-    '.tsx': 'typescript',
+    '.tsx': 'tsx', 
     '.js': 'javascript',
     '.jsx': 'javascript',
     '.cs': 'c_sharp',
+    '.java': 'java',
     '.py': 'python',
     '.html': 'html',
     '.css': 'css',
     '.sh': 'bash',
-    '.bash': 'bash'
+    '.bash': 'bash',
+    '.cpp': 'cpp',
+    '.hpp': 'cpp',
+    '.cc': 'cpp',
+    '.c': 'c',
+    '.h': 'c'
 };
 
 const BANNED_SIGNATURE_TYPES = new Set([
@@ -41,7 +47,7 @@ export class AstMatchStrategy implements IMatchStrategy {
             return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
         }
         
-        const parser = await AstParserRegistry.getParser(langKey, context.logger);
+        const parser = await AstParserRegistry.getParser(langKey, context.logger, context.astSettings.parserTimeoutMs);
         if (!parser) return { status: 'FAILED', reason: 'NOT_FOUND', matchesFound: 0 };
 
         context.logger?.info(`[AST] Initiating semantic analysis for ${context.document.path}`);
@@ -79,7 +85,13 @@ export class AstMatchStrategy implements IMatchStrategy {
                     status: 'FAILED',
                     reason: 'NOT_FOUND',
                     matchesFound: 0,
-                    semanticDiagnostic: `Entity '${signature.type}' named '${signature.name}' does not exist in this file.`
+                    diagnostic: {
+                        path: context.document.path,
+                        severity: 'warning',
+                        title: 'Semantic Target Missing',
+                        detailedMessage: `Entity '${signature.type}' named '${signature.name}' does not exist in this file. Context might have changed.`,
+                        code: 'AST_ENTITY_MISSING'
+                    }
                 };
             }
 

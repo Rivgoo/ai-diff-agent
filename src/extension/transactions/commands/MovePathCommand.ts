@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { Result } from '@/shared/contracts';
 import type { ConflictDetails } from '@/shared/models';
 import type { ITransactionContext } from '../core/ITransactionContext';
@@ -14,11 +15,24 @@ export class MovePathCommand extends BaseCommand<MovePathOperation> {
         this.normalizedDestPath = PathNormalizer.normalize(this.operation.destinationPath);
         
         const resolution = await context.pathResolver.resolvePath(
-                this.normalizedPath, 
-                undefined, 
-                { respectGitIgnore: context.settingsManager.getSettings().engine.respectGitIgnore }
-            );
-        if (resolution.status === 'AMBIGUOUS_MATCH') return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths));
+            this.normalizedPath, 
+            undefined, 
+            { 
+                respectGitIgnore: context.settingsManager.getSettings().engine.respectGitIgnore,
+                maxGlobalSearchCandidates: context.settingsManager.getSettings().engine.maxGlobalSearchCandidates
+            }
+        );
+            
+        if (resolution.status === 'AMBIGUOUS_MATCH') {
+            return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', resolution.candidatePaths, 0, 0, 'N/A', {
+                operationId: this.operationId,
+                path: this.operation.path,
+                severity: 'warning',
+                title: 'Ambiguous File Target',
+                detailedMessage: `Found multiple files matching this name. Cannot safely rename/move.`,
+                code: 'AMBIGUOUS_FILE'
+            }));
+        }
         
         if (resolution.status === 'RESOLVED_RESILIENTLY') {
             this.metadata = { resolvedResiliently: true, originalPath: this.operation.path, path: resolution.resolvedPath };
@@ -32,13 +46,32 @@ export class MovePathCommand extends BaseCommand<MovePathOperation> {
         if (!sourceExists) {
             const destExists = await context.fileExists(this.destPath);
             if (destExists) {
-                // ІДЕМПОТЕНТНІСТЬ: Файл вже на новому місці.
                 context.logger.info(`[Idempotency] File already moved to ${this.destPath}. Marked as applied.`);
                 this.metadata.alreadyApplied = true;
                 context.setResolvedPath(this.normalizedPath, this.destPath);
                 return Result.ok(undefined);
             }
-            return Result.fail(this.buildConflict('FILE_NOT_FOUND'));
+            return Result.fail(this.buildConflict('FILE_NOT_FOUND', undefined, 0, 0, 'N/A', {
+                operationId: this.operationId,
+                path: this.targetPath,
+                severity: 'warning',
+                title: 'File Not Found',
+                detailedMessage: `Target file for renaming does not exist on disk.`,
+                code: 'FILE_NOT_FOUND'
+            }));
+        }
+
+        const uri = context.getAbsoluteUri(this.targetPath);
+        const isOpenAndDirty = vscode.workspace.textDocuments.some(doc => doc.uri.toString() === uri.toString() && doc.isDirty);
+        if (isOpenAndDirty) {
+            return Result.fail(this.buildConflict('UNSAVED_CHANGES', undefined, 0, 0, 'N/A', {
+                operationId: this.operationId,
+                path: this.targetPath,
+                severity: 'critical',
+                title: 'Unsaved Changes',
+                detailedMessage: `Cannot move/rename file with unsaved changes. Please save or close it first.`,
+                code: 'UNSAVED_CHANGES'
+            }));
         }
 
         context.setResolvedPath(this.normalizedPath, this.destPath);
@@ -46,7 +79,7 @@ export class MovePathCommand extends BaseCommand<MovePathOperation> {
     }
 
     public async apply(context: ITransactionContext): Promise<void> {
-        if (this.metadata.alreadyApplied) return; // Блокуємо мутацію
+        if (this.metadata.alreadyApplied) return; 
         context.uow.renameFile(this.targetPath, this.destPath, { overwrite: true });
         this.antiActions.push({ type: 'restore_move', sourcePath: this.targetPath, destinationPath: this.destPath, relativeSourcePath: this.normalizedPath });
     }

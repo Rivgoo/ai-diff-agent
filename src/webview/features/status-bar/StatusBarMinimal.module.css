@@ -104,12 +104,17 @@
     border-color: rgba(241, 70, 70, 0.2);
 }
 
+.btnActiveWalkthrough {
+    background-color: rgba(226, 192, 141, 0.1);
+    border-color: rgba(226, 192, 141, 0.3);
+    color: var(--vscode-gitDecoration-modifiedResourceForeground);
+}
+
 .errorText {
     color: var(--vscode-editorError-foreground);
     font-weight: 600;
 }
 
-/* Hide line metrics when vertical/horizontal spaces are highly constrained */
 @media (max-width: 250px) {
     .lineImpact {
         display: none;

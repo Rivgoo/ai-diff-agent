@@ -12,6 +12,7 @@ export class SidebarWebviewProvider implements vscode.WebviewViewProvider {
         private readonly context: vscode.ExtensionContext,
         decorationService: DecorationService
     ) {
+        // ФІКС: Рівно 3 аргументи, як і очікує MessageRouter
         this.router = new MessageRouter(context, decorationService, (event) => {
             this.postMessage(event);
         });

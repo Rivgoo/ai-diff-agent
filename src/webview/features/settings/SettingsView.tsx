@@ -8,22 +8,82 @@ import {
 } from '@vscode/webview-ui-toolkit/react';
 import { useAgentStore } from '@/webview/store/agentStore';
 import { useSettingsSync } from './hooks/useSettingsSync';
-import { IconArrowLeft } from '@tabler/icons-react';
+import { IconArrowLeft, IconPlus, IconX } from '@tabler/icons-react';
 import styles from './SettingsView.module.css';
 
-type TabId = 'ui' | 'workflow' | 'engine' | 'ast' | 'ai';
+type TabId = 'ui' | 'workflow' | 'engine' | 'ast' | 'ai' | 'bridge';
 
 const AVAILABLE_LANGUAGES = [
-    { id: 'javascript', label: 'JavaScript' },
+    { id: 'javascript', label: 'JavaScript / JSX' },
     { id: 'typescript', label: 'TypeScript' },
+    { id: 'tsx', label: 'TSX (React)' },
     { id: 'python', label: 'Python' },
+    { id: 'java', label: 'Java' },
     { id: 'c_sharp', label: 'C#' },
+    { id: 'cpp', label: 'C++' },
+    { id: 'c', label: 'C' },
     { id: 'json', label: 'JSON' },
     { id: 'html', label: 'HTML' },
     { id: 'css', label: 'CSS' },
-    { id: 'bash', label: 'Bash' },
-    { id: 'c', label: 'C / C++' }
+    { id: 'bash', label: 'Bash' }
 ];
+
+// НОВИЙ КОМПОНЕНТ ДЛЯ МАСИВІВ (Тєги)
+const TagInputList = ({ 
+    items, 
+    onAdd, 
+    onRemove, 
+    placeholder 
+}: { 
+    items: string[], 
+    onAdd: (val: string) => void, 
+    onRemove: (val: string) => void, 
+    placeholder: string 
+}) => {
+    const [inputValue, setInputValue] = useState('');
+
+    const handleAdd = () => {
+        const val = inputValue.trim();
+        if (val && !items.includes(val)) {
+            onAdd(val);
+            setInputValue('');
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleAdd();
+        }
+    };
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+                <VSCodeTextField
+                    style={{ flex: 1 }}
+                    value={inputValue}
+                    onInput={(e: any) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={placeholder}
+                />
+                <button type="button" className={styles.addTagBtn} onClick={handleAdd} title="Add item">
+                    <IconPlus size={14} />
+                </button>
+            </div>
+            <div className={styles.tagList}>
+                {items.map(item => (
+                    <span key={item} className={styles.tag} title={item}>
+                        {item}
+                        <button type="button" className={styles.tagRemoveBtn} onClick={() => onRemove(item)} title="Remove item">
+                            <IconX size={12} />
+                        </button>
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 export const SettingsView = () => {
     const settings = useAgentStore((state) => state.settings);
@@ -31,49 +91,80 @@ export const SettingsView = () => {
     const { updateSetting } = useSettingsSync();
 
     const [activeTab, setActiveTab] = useState<TabId>('ui');
+    
+    // Вхідні стейти (Local Inputs) для скалярних значень
     const [retentionInput, setRetentionInput] = useState(settings.workflow.backupRetentionDays.toString());
     const [fileSizeInput, setFileSizeInput] = useState(settings.engine.maxFileSizeMb.toString());
+    const [candidatesInput, setCandidatesInput] = useState(settings.engine.maxGlobalSearchCandidates.toString());
+    const [historyInput, setHistoryInput] = useState(settings.workflow.historyKeepCount.toString());
+    const [parserTimeoutInput, setParserTimeoutInput] = useState(settings.ast.parserTimeoutMs.toString());
+    const [lspTimeoutInput, setLspTimeoutInput] = useState(settings.ast.lspTimeoutMs.toString());
     
-    // ФІКС: Реф для перехоплення коліщатка миші
+    // Bridge стейти
+    const [bridgeUrlInput, setBridgeUrlInput] = useState(settings.bridge.customUrl);
+    const [bridgeFileSizeInput, setBridgeFileSizeInput] = useState(settings.bridge.maxFileSizeKb.toString());
+    const [bridgeProjectSizeInput, setBridgeProjectSizeInput] = useState(settings.bridge.maxProjectSizeMb.toString());
+
     const tabBarRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         setRetentionInput(settings.workflow.backupRetentionDays.toString());
         setFileSizeInput(settings.engine.maxFileSizeMb.toString());
-    }, [settings.workflow.backupRetentionDays, settings.engine.maxFileSizeMb]);
+        setCandidatesInput(settings.engine.maxGlobalSearchCandidates.toString());
+        setHistoryInput(settings.workflow.historyKeepCount.toString());
+        setParserTimeoutInput(settings.ast.parserTimeoutMs.toString());
+        setLspTimeoutInput(settings.ast.lspTimeoutMs.toString());
+        setBridgeUrlInput(settings.bridge.customUrl);
+        setBridgeFileSizeInput(settings.bridge.maxFileSizeKb.toString());
+        setBridgeProjectSizeInput(settings.bridge.maxProjectSizeMb.toString());
+    }, [
+        settings.workflow,
+        settings.engine,
+        settings.ast,
+        settings.bridge
+    ]);
 
-    const handleNumberChange = (category: 'workflow' | 'engine', key: string, val: string, setter: (val: string) => void) => {
+    const handleNumberChange = (category: 'workflow' | 'engine' | 'ast' | 'bridge', key: string, val: string, setter: (val: string) => void) => {
         setter(val);
         if (val.trim() === '') return; 
-        
         const parsed = parseInt(val, 10);
-        if (!isNaN(parsed) && parsed > 0) {
+        if (!isNaN(parsed) && parsed >= 0) {
             updateSetting(category, key, parsed);
         }
+    };
+
+    const handleTextChange = (category: 'bridge', key: string, val: string, setter: (val: string) => void) => {
+        setter(val);
+        updateSetting(category, key, val);
     };
 
     const toggleLanguage = (langId: string, checked: boolean) => {
         const currentLangs = settings.ast.enabledLanguages;
         let newLangs: string[];
-        
         if (checked) {
             newLangs = [...new Set([...currentLangs, langId])];
         } else {
             newLangs = currentLangs.filter(l => l !== langId);
         }
-        
         updateSetting('ast', 'enabledLanguages', newLangs);
     };
 
-    // ФІКС: Трансляція вертикального скролу коліщатком у горизонтальний
     const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
         if (tabBarRef.current) {
-            // Запобігаємо скролу сторінки, якщо ми крутимо над табами
             if (e.deltaY !== 0) {
                 e.preventDefault();
                 tabBarRef.current.scrollLeft += e.deltaY;
             }
         }
+    };
+
+    // Хелпери для роботи з масивами-тегами
+    const handleAddTag = (category: any, key: string, currentArray: string[], value: string) => {
+        updateSetting(category, key, [...currentArray, value]);
+    };
+
+    const handleRemoveTag = (category: any, key: string, currentArray: string[], value: string) => {
+        updateSetting(category, key, currentArray.filter(v => v !== value));
     };
 
     return (
@@ -85,7 +176,6 @@ export const SettingsView = () => {
                 <h2 className={styles.title}>Agent Configuration</h2>
             </div>
 
-            {/* Custom Horizontal Scrollable Tabs with Wheel Support */}
             <div 
                 ref={tabBarRef}
                 className={styles.tabBar} 
@@ -97,7 +187,8 @@ export const SettingsView = () => {
                 <button type="button" role="tab" aria-selected={activeTab === 'workflow'} className={`${styles.tabBtn} ${activeTab === 'workflow' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('workflow')}>Workflow</button>
                 <button type="button" role="tab" aria-selected={activeTab === 'engine'} className={`${styles.tabBtn} ${activeTab === 'engine' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('engine')}>Diff Engine</button>
                 <button type="button" role="tab" aria-selected={activeTab === 'ast'} className={`${styles.tabBtn} ${activeTab === 'ast' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('ast')}>AST & Semantics</button>
-                <button type="button" role="tab" aria-selected={activeTab === 'ai'} className={`${styles.tabBtn} ${activeTab === 'ai' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('ai')}>AI Feedback</button>
+                <button type="button" role="tab" aria-selected={activeTab === 'ai'} className={`${styles.tabBtn} ${activeTab === 'ai' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('ai')}>AI Prompts</button>
+                <button type="button" role="tab" aria-selected={activeTab === 'bridge'} className={`${styles.tabBtn} ${activeTab === 'bridge' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('bridge')}>Export Bridge</button>
             </div>
 
             <div className={styles.content}>
@@ -135,17 +226,20 @@ export const SettingsView = () => {
                         </div>
 
                         <div className={styles.settingItem}>
-                            <VSCodeCheckbox checked={settings.ui.phantomInlineDiffs} onChange={(e: any) => updateSetting('ui', 'phantomInlineDiffs', e.target.checked)}>
-                                Enable Phantom Inline Diffs
-                            </VSCodeCheckbox>
-                            <p className={styles.description}>Shows deleted text as red transparent overlays directly above the new code in the editor.</p>
-                        </div>
-
-                        <div className={styles.settingItem}>
                             <VSCodeCheckbox checked={settings.ui.enableWalkthroughMode} onChange={(e: any) => updateSetting('ui', 'enableWalkthroughMode', e.target.checked)}>
                                 Enable Walkthrough Mode
                             </VSCodeCheckbox>
                             <p className={styles.description}>Allows step-by-step camera jumps between edited blocks for large file batches.</p>
+                        </div>
+
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>Diagnostics Level (Problems Panel)</label>
+                            <VSCodeDropdown value={settings.ui.diagnosticsLevel} onChange={(e: any) => updateSetting('ui', 'diagnosticsLevel', e.target.value)}>
+                                <VSCodeOption value="all">All (Critical + Warnings)</VSCodeOption>
+                                <VSCodeOption value="critical">Critical Errors Only</VSCodeOption>
+                                <VSCodeOption value="none">Disabled</VSCodeOption>
+                            </VSCodeDropdown>
+                            <p className={styles.description}>Controls how much feedback the AI Diff Agent pushes to the VS Code Problems panel.</p>
                         </div>
                     </section>
                 )}
@@ -185,10 +279,14 @@ export const SettingsView = () => {
                         </div>
 
                         <div className={styles.settingItem}>
-                            <VSCodeCheckbox checked={settings.workflow.autoSaveAfterAccept} onChange={(e: any) => updateSetting('workflow', 'autoSaveAfterAccept', e.target.checked)}>
-                                Auto-Save on Accept Block
-                            </VSCodeCheckbox>
-                            <p className={styles.description}>Writes changes to physical disk immediately when you click Accept.</p>
+                            <label className={styles.label}>Auto-Save Matrix</label>
+                            <VSCodeDropdown value={settings.workflow.autoSaveMode} onChange={(e: any) => updateSetting('workflow', 'autoSaveMode', e.target.value)}>
+                                <VSCodeOption value="off">Off (Manual Save Only)</VSCodeOption>
+                                <VSCodeOption value="on_accept">On Accept Block</VSCodeOption>
+                                <VSCodeOption value="on_batch_success">On Batch Success (100% Valid)</VSCodeOption>
+                                <VSCodeOption value="aggressive">Aggressive (Instant Save)</VSCodeOption>
+                            </VSCodeDropdown>
+                            <p className={styles.description}>Determines when the engine physically writes modifications to your disk.</p>
                         </div>
 
                         <div className={styles.settingItem}>
@@ -196,6 +294,18 @@ export const SettingsView = () => {
                                 Cleanup Empty Directories on Revert
                             </VSCodeCheckbox>
                             <p className={styles.description}>Removes scaffolded folders automatically if you roll back a file creation.</p>
+                        </div>
+
+                        {/* НОВИЙ UI ДЛЯ ІГНОРОВАНИХ ПАПОК КЛІНАПУ */}
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>Ignored Cleanup Directories</label>
+                            <TagInputList 
+                                items={settings.workflow.ignoredCleanupDirs}
+                                placeholder="Add folder or file name (e.g. .ds_store)"
+                                onAdd={(val) => handleAddTag('workflow', 'ignoredCleanupDirs', settings.workflow.ignoredCleanupDirs, val)}
+                                onRemove={(val) => handleRemoveTag('workflow', 'ignoredCleanupDirs', settings.workflow.ignoredCleanupDirs, val)}
+                            />
+                            <p className={styles.description}>Files/folders to ignore when checking if a directory is empty.</p>
                         </div>
 
                         <div className={styles.settingItem}>
@@ -216,6 +326,12 @@ export const SettingsView = () => {
                             <label className={styles.label}>Backup Retention (Days)</label>
                             <VSCodeTextField value={retentionInput} onInput={(e: any) => handleNumberChange('workflow', 'backupRetentionDays', e.target.value, setRetentionInput)} />
                             <p className={styles.description}>Number of days to preserve rollback file snapshots.</p>
+                        </div>
+
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>History Keep Count (Messages)</label>
+                            <VSCodeTextField value={historyInput} onInput={(e: any) => handleNumberChange('workflow', 'historyKeepCount', e.target.value, setHistoryInput)} />
+                            <p className={styles.description}>Maximum number of chat messages to keep in history. Prevents memory leaks in long sessions.</p>
                         </div>
                     </section>
                 )}
@@ -264,6 +380,12 @@ export const SettingsView = () => {
                             <VSCodeTextField value={fileSizeInput} onInput={(e: any) => handleNumberChange('engine', 'maxFileSizeMb', e.target.value, setFileSizeInput)} />
                             <p className={styles.description}>Files larger than this limit will be bypassed to prevent Out-Of-Memory crashes.</p>
                         </div>
+
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>Max Global Search Candidates</label>
+                            <VSCodeTextField value={candidatesInput} onInput={(e: any) => handleNumberChange('engine', 'maxGlobalSearchCandidates', e.target.value, setCandidatesInput)} />
+                            <p className={styles.description}>If an exact path is not found, the agent searches the whole project. If it finds more files than this limit, it aborts to prevent memory issues.</p>
+                        </div>
                     </section>
                 )}
 
@@ -272,6 +394,18 @@ export const SettingsView = () => {
                     <section className={styles.section}>
                         <h3 className={styles.sectionTitle}>Tree-Sitter & Semantics</h3>
                         
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>Parser Timeout (ms)</label>
+                            <VSCodeTextField value={parserTimeoutInput} onInput={(e: any) => handleNumberChange('ast', 'parserTimeoutMs', e.target.value, setParserTimeoutInput)} />
+                            <p className={styles.description}>Maximum time allowed for AST generation per file. Increase this if parsing large generated bundles fails.</p>
+                        </div>
+
+                        <div className={styles.settingItem}>
+                            <label className={styles.label}>LSP Timeout (ms)</label>
+                            <VSCodeTextField value={lspTimeoutInput} onInput={(e: any) => handleNumberChange('ast', 'lspTimeoutMs', e.target.value, setLspTimeoutInput)} />
+                            <p className={styles.description}>Maximum time to wait for Language Server diagnostics to settle before committing changes.</p>
+                        </div>
+
                         <div className={styles.settingItem}>
                             <VSCodeCheckbox checked={settings.ast.enableAstMatching} onChange={(e: any) => updateSetting('ast', 'enableAstMatching', e.target.checked)}>
                                 Enable Semantic AST Matching
@@ -344,16 +478,201 @@ export const SettingsView = () => {
                     </section>
                 )}
 
-                {/* --- AI AUTOMATION SETTINGS --- */}
+                {/* --- AI PROMPTS SETTINGS --- */}
                 {activeTab === 'ai' && (
                     <section className={styles.section}>
-                        <h3 className={styles.sectionTitle}>Feedback Loop</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3 className={styles.sectionTitle}>Prompt Constructor</h3>
+                            <button 
+                                type="button" 
+                                onClick={() => {
+                                    const newPrompt = {
+                                        id: Date.now().toString(),
+                                        name: 'New Architecture Rule',
+                                        path: '.vscode/rules.md',
+                                        baseFormat: 'stable' as const
+                                    };
+                                    updateSetting('ai', 'customPrompts', [...settings.ai.customPrompts, newPrompt]);
+                                }}
+                                style={{ padding: '4px 8px', fontSize: '10px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--vscode-panel-border)', color: 'var(--vscode-foreground)', borderRadius: '3px' }}
+                            >
+                                + Add Rule
+                            </button>
+                        </div>
+                        <p className={styles.description}>
+                            Create custom instruction sets for your team. The agent will prepend your markdown file to the strict system XML formatting rules.
+                        </p>
 
-                        <div className={styles.settingItem}>
-                            <VSCodeCheckbox checked={settings.ai.feedbackLoopEnabled} onChange={(e: any) => updateSetting('ai', 'feedbackLoopEnabled', e.target.checked)}>
-                                Enable Auto-Correction Feedback
+                        {(!settings.ai.customPrompts || settings.ai.customPrompts.length === 0) ? (
+                            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--vscode-descriptionForeground)', border: '1px dashed var(--vscode-panel-border)', borderRadius: '4px' }}>
+                                No custom rules defined.
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {settings.ai.customPrompts.map((prompt, index) => (
+                                    <div key={prompt.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px', backgroundColor: 'var(--vscode-editor-background)', border: '1px solid var(--vscode-panel-border)', borderRadius: '4px' }}>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label className={styles.label} style={{ fontSize: '10px' }}>Display Name</label>
+                                                <VSCodeTextField 
+                                                    style={{ width: '100%' }} 
+                                                    value={prompt.name} 
+                                                    onInput={(e: any) => {
+                                                        const newPrompts = [...settings.ai.customPrompts];
+                                                        newPrompts[index].name = e.target.value;
+                                                        updateSetting('ai', 'customPrompts', newPrompts);
+                                                    }} 
+                                                />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label className={styles.label} style={{ fontSize: '10px' }}>Relative Path (.md)</label>
+                                                <VSCodeTextField 
+                                                    style={{ width: '100%' }} 
+                                                    value={prompt.path} 
+                                                    onInput={(e: any) => {
+                                                        const newPrompts = [...settings.ai.customPrompts];
+                                                        newPrompts[index].path = e.target.value;
+                                                        updateSetting('ai', 'customPrompts', newPrompts);
+                                                    }} 
+                                                />
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                                            <div style={{ flex: 1, marginRight: '8px' }}>
+                                                <label className={styles.label} style={{ fontSize: '10px' }}>Base XML Format</label>
+                                                <VSCodeDropdown 
+                                                    style={{ width: '100%' }} 
+                                                    value={prompt.baseFormat} 
+                                                    onChange={(e: any) => {
+                                                        const newPrompts = [...settings.ai.customPrompts];
+                                                        newPrompts[index].baseFormat = e.target.value as any;
+                                                        updateSetting('ai', 'customPrompts', newPrompts);
+                                                    }}
+                                                >
+                                                    <VSCodeOption value="stable">Stable (Full File Replace)</VSCodeOption>
+                                                    <VSCodeOption value="experimental">Experimental (Diff / Search-Replace)</VSCodeOption>
+                                                </VSCodeDropdown>
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                style={{ padding: '4px 8px', backgroundColor: 'var(--vscode-button-secondaryBackground)', color: 'var(--vscode-editorError-foreground)', border: '1px solid var(--vscode-panel-border)', borderRadius: '3px', cursor: 'pointer' }}
+                                                onClick={() => {
+                                                    const newPrompts = settings.ai.customPrompts.filter(p => p.id !== prompt.id);
+                                                    updateSetting('ai', 'customPrompts', newPrompts);
+                                                }}
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                )}
+
+                {/* --- BRIDGE SETTINGS --- */}
+                {activeTab === 'bridge' && (
+                    <section className={styles.section}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--vscode-panel-border)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <h3 className={styles.sectionTitle} style={{ margin: 0 }}>Localhost Bridge</h3>
+                                <p className={styles.description} style={{ marginTop: '4px' }}>Send your entire project context to Make1Txt.</p>
+                            </div>
+                            <VSCodeCheckbox 
+                                checked={settings.bridge.enableBridge} 
+                                onChange={(e: any) => updateSetting('bridge', 'enableBridge', e.target.checked)}
+                            >
+                                Enable
                             </VSCodeCheckbox>
-                            <p className={styles.description}>Tracks manual corrections you make to AI code. Injects learned rules directly into the prompt copied via "Rules" from the main menu.</p>
+                        </div>
+
+                        <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            gap: '16px', 
+                            opacity: settings.bridge.enableBridge ? 1 : 0.5, 
+                            pointerEvents: settings.bridge.enableBridge ? 'auto' : 'none',
+                            transition: 'opacity 0.2s ease'
+                        }}>
+                            
+                            {/* Target URL Group */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <VSCodeCheckbox 
+                                    checked={settings.bridge.useCustomUrl} 
+                                    onChange={(e: any) => updateSetting('bridge', 'useCustomUrl', e.target.checked)}
+                                >
+                                    Use Custom Target URL
+                                </VSCodeCheckbox>
+                                
+                                {settings.bridge.useCustomUrl && (
+                                    <div className={styles.settingItem} style={{ marginLeft: '24px' }}>
+                                        <VSCodeTextField 
+                                            value={bridgeUrlInput} 
+                                            placeholder="https://your-custom-instance.vercel.app"
+                                            onInput={(e: any) => handleTextChange('bridge', 'customUrl', e.target.value, setBridgeUrlInput)} 
+                                        />
+                                        <p className={styles.description}>The URL of your hosted Make1Txt instance. Must include http:// or https://.</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <VSCodeDivider />
+
+                            {/* Exclusions Group - НОВИЙ TAG-BASED UI */}
+                            <div className={styles.settingItem}>
+                                <VSCodeCheckbox 
+                                    checked={settings.bridge.respectGitIgnore} 
+                                    onChange={(e: any) => updateSetting('bridge', 'respectGitIgnore', e.target.checked)}
+                                >
+                                    Respect .gitignore (Global)
+                                </VSCodeCheckbox>
+                                <p className={styles.description}>Automatically drops files ignored by Git.</p>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <div className={styles.settingItem}>
+                                    <label className={styles.label}>Ignored Extensions</label>
+                                    <TagInputList 
+                                        items={settings.bridge.ignoredExtensions}
+                                        placeholder="Add extension (e.g. .exe)"
+                                        onAdd={(val) => handleAddTag('bridge', 'ignoredExtensions', settings.bridge.ignoredExtensions, val)}
+                                        onRemove={(val) => handleRemoveTag('bridge', 'ignoredExtensions', settings.bridge.ignoredExtensions, val)}
+                                    />
+                                </div>
+                                <div className={styles.settingItem}>
+                                    <label className={styles.label}>Ignored Directories</label>
+                                    <TagInputList 
+                                        items={settings.bridge.ignoredDirectories}
+                                        placeholder="Add directory (e.g. node_modules)"
+                                        onAdd={(val) => handleAddTag('bridge', 'ignoredDirectories', settings.bridge.ignoredDirectories, val)}
+                                        onRemove={(val) => handleRemoveTag('bridge', 'ignoredDirectories', settings.bridge.ignoredDirectories, val)}
+                                    />
+                                </div>
+                            </div>
+
+                            <VSCodeDivider />
+
+                            {/* Limits Group */}
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <div className={styles.settingItem} style={{ flex: 1 }}>
+                                    <label className={styles.label}>Max File Size (KB)</label>
+                                    <VSCodeTextField 
+                                        value={bridgeFileSizeInput} 
+                                        onInput={(e: any) => handleNumberChange('bridge', 'maxFileSizeKb', e.target.value, setBridgeFileSizeInput)} 
+                                    />
+                                    <p className={styles.description}>Files larger than this limit will be skipped. Set to 0 for unlimited.</p>
+                                </div>
+                                <div className={styles.settingItem} style={{ flex: 1 }}>
+                                    <label className={styles.label}>Total Project Limit (MB)</label>
+                                    <VSCodeTextField 
+                                        value={bridgeProjectSizeInput} 
+                                        onInput={(e: any) => handleNumberChange('bridge', 'maxProjectSizeMb', e.target.value, setBridgeProjectSizeInput)} 
+                                    />
+                                    <p className={styles.description}>Safety threshold. Export aborts if the total payload exceeds this memory limit.</p>
+                                </div>
+                            </div>
+
                         </div>
                     </section>
                 )}

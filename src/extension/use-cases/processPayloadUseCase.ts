@@ -10,6 +10,7 @@ import type { ExtensionEvent } from '../../shared/ipc';
 import { OutputLogger } from '../../infrastructure/logging/outputLogger';
 import { PayloadAutoFixer } from '../../core/parser/payloadAutoFixer';
 import { SettingsManager } from '../settings/settingsManager';
+import { VsCodeWorkspaceSearchAdapter } from '../../infrastructure/adapters/workspaceSearchAdapter';
 
 class HandledUIError extends Error {
     constructor(message: string) {
@@ -22,6 +23,7 @@ export class ProcessPayloadUseCase {
     private readonly parser = new DSLParser();
     private readonly validator = new DomainValidator();
     private readonly compiler = new TransactionCompiler();
+    private readonly workspaceSearchAdapter = new VsCodeWorkspaceSearchAdapter();
 
     constructor(
         private readonly sessionManager: ChatSessionManager,
@@ -32,7 +34,7 @@ export class ProcessPayloadUseCase {
         private readonly syncState: () => void
     ) {}
 
-    public async execute(payload: string): Promise<void> {
+    public async execute(payload: string, abortSignal?: AbortSignal): Promise<void> {
         this.postMessage({ type: 'AGENT_TYPING', isTyping: true });
         this.postMessage({ type: 'PIPELINE_STATE', stage: 'parsing', current: 0, total: 0 });
 
@@ -43,7 +45,9 @@ export class ProcessPayloadUseCase {
             const astSettings = this.settingsManager.getSettings().ast;
             
             const parseResult = await this.parser.parse(payload, {
-                recoveryMode: engineSettings.payloadRecoveryMode
+                recoveryMode: engineSettings.payloadRecoveryMode,
+                polyglotParsing: engineSettings.polyglotParsing,
+                searchPort: this.workspaceSearchAdapter 
             });
 
             if (!parseResult.success) {
@@ -63,7 +67,6 @@ export class ProcessPayloadUseCase {
 
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'resolving', current: 0, total: parsedOperations.length });
             
-            // ФІКС: Передаємо реальні налаштування AST та Engine
             const compilationResult = await this.compiler.compile(parsedOperations, { 
                 engineSettings,
                 astSettings
@@ -141,7 +144,9 @@ export class ProcessPayloadUseCase {
 
             this.postMessage({ type: 'PIPELINE_STATE', stage: 'applying', current: 0, total: operations.length });
 
-            await this.transactionPipeline.applyBatch(operations);
+            if (abortSignal?.aborted) throw new HandledUIError('ABORTED_BY_USER');
+
+            await this.transactionPipeline.applyBatch(operations, abortSignal);
 
             const currentSession = this.sessionManager.getActiveSession();
             const lastMessage = currentSession.messages[currentSession.messages.length - 1];

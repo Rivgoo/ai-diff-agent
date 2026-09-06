@@ -17,15 +17,10 @@ export class LiveDocumentRegistry implements ILiveDocumentRegistry {
         );
 
         if (openedDoc) {
-            let text = openedDoc.getText();
-            if (openedDoc.eol === vscode.EndOfLine.CRLF && !text.includes('\r\n')) {
-                text = text.replace(/\n/g, '\r\n');
-            }
-
             return {
                 isDirty: openedDoc.isDirty,
                 isOpen: true,
-                liveContent: text
+                liveContent: openedDoc.getText()
             };
         }
 

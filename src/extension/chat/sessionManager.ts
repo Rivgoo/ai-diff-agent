@@ -3,11 +3,12 @@ import type { ChatSession, ChatMessage, DiffOperation } from '../../shared/model
 import { SYSTEM_CONSTANTS } from '../../shared/constants';
 import { OutputLogger } from '@/infrastructure/logging/outputLogger';
 
+const MAX_MESSAGES_PER_SESSION = 50;
+
 export class ChatSessionManager {
     private sessions: Record<string, ChatSession> = {};
     private activeSessionId: string = '';
     private saveTimer: NodeJS.Timeout | null = null;
-
     private saveQueue: Promise<void> = Promise.resolve();
 
     constructor(
@@ -20,19 +21,44 @@ export class ChatSessionManager {
     }
 
     public async reload(): Promise<void> {
-        this.forceSave(); // Зберігаємо поточний стан перед перезавантаженням
+        this.forceSave(); 
 
         if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
             try {
-                const fileUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-history.json');
-                const data = await vscode.workspace.fs.readFile(fileUri);
-                const content = new TextDecoder('utf-8').decode(data);
-                const parsed = JSON.parse(content);
+                const legacyFile = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-history.json');
+                Promise.resolve(vscode.workspace.fs.delete(legacyFile, { useTrash: false }))
+                    .catch((e) => {
+                        if (e.code !== 'FileNotFound') OutputLogger.log(`[SessionManager] Failed to delete legacy history file: ${e.message}`, 'WARN');
+                    });
+
+                const dirUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chats');
+                await vscode.workspace.fs.createDirectory(dirUri);
                 
-                this.sessions = parsed.sessions || {};
-                this.activeSessionId = parsed.activeSessionId || '';
+                const entries = await vscode.workspace.fs.readDirectory(dirUri);
+                this.sessions = {};
+                
+                for (const [name, type] of entries) {
+                    if (type === vscode.FileType.File && name.endsWith('.json')) {
+                        const fileUri = vscode.Uri.joinPath(dirUri, name);
+                        const data = await vscode.workspace.fs.readFile(fileUri);
+                        const content = new TextDecoder('utf-8').decode(data);
+                        const session: ChatSession = JSON.parse(content);
+                        this.sessions[session.id] = session;
+                    }
+                }
+                
+                try {
+                    const activeMetaUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-meta.json');
+                    const metaData = await vscode.workspace.fs.readFile(activeMetaUri);
+                    const meta = JSON.parse(new TextDecoder('utf-8').decode(metaData));
+                    this.activeSessionId = meta.activeSessionId || '';
+                } catch {
+                    const keys = Object.keys(this.sessions);
+                    this.activeSessionId = keys.length > 0 ? keys[keys.length - 1] : '';
+                }
+
             } catch (e) {
-                this.createSessionSync();
+                OutputLogger.log(`Failed to load workspace sessions, starting fresh.`, 'WARN');
             }
         } else {
             const storedSessions = this.storage.get<Record<string, ChatSession>>(`${SYSTEM_CONSTANTS.STORAGE_KEY_CHAT_SESSION}_v2`);
@@ -41,8 +67,6 @@ export class ChatSessionManager {
             if (storedSessions && Object.keys(storedSessions).length > 0 && storedActiveId) {
                 this.sessions = storedSessions;
                 this.activeSessionId = storedActiveId;
-            } else {
-                this.createSessionSync();
             }
         }
 
@@ -82,6 +106,15 @@ export class ChatSessionManager {
     public deleteSession(id: string): void {
         if (this.sessions[id]) {
             delete this.sessions[id];
+            
+            if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
+                const dirUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chats', `session_${id}.json`);
+                Promise.resolve(vscode.workspace.fs.delete(dirUri, { useTrash: false }))
+                    .catch((e) => {
+                        if (e.code !== 'FileNotFound') OutputLogger.log(`[SessionManager] Failed to delete session file for ${id}: ${e.message}`, 'WARN');
+                    });
+            }
+
             const remainingKeys = Object.keys(this.sessions);
             
             if (remainingKeys.length === 0) {
@@ -97,6 +130,10 @@ export class ChatSessionManager {
         const session = this.getActiveSession();
         session.messages.push(message);
         
+        if (session.messages.length > MAX_MESSAGES_PER_SESSION) {
+            session.messages = session.messages.slice(-MAX_MESSAGES_PER_SESSION);
+        }
+        
         if (session.messages.length === 1 && message.role === 'user') {
             const preview = message.text.substring(0, 20).replace(/\n/g, ' ');
             session.title = preview.length > 0 ? `${preview}...` : session.title;
@@ -111,15 +148,7 @@ export class ChatSessionManager {
             if (msg.operations) {
                 const op = msg.operations.find(o => o.id === update.operationId);
                 if (op) {
-                    if (update.status !== undefined) op.status = update.status;
-                    if (update.conflict !== undefined) op.conflict = update.conflict;
-                    if (update.matchStrategy !== undefined) op.matchStrategy = update.matchStrategy;
-                    if (update.confidenceScore !== undefined) op.confidenceScore = update.confidenceScore;
-                    if (update.resolvedResiliently !== undefined) op.resolvedResiliently = update.resolvedResiliently;
-                    if (update.path !== undefined) op.path = update.path;
-                    if (update.alreadyApplied !== undefined) op.alreadyApplied = update.alreadyApplied;
-                    if (update.isPartiallyResolved !== undefined) op.isPartiallyResolved = update.isPartiallyResolved;
-                    
+                    Object.assign(op, update);
                     this.scheduleSave();
                     return;
                 }
@@ -157,12 +186,8 @@ export class ChatSessionManager {
     }
 
     private scheduleSave(): void {
-        if (this.saveTimer) {
-            clearTimeout(this.saveTimer);
-        }
-        this.saveTimer = setTimeout(() => {
-            this.executeSave();
-        }, 500); // Чекаємо 500мс тиші перед записом
+        if (this.saveTimer) clearTimeout(this.saveTimer);
+        this.saveTimer = setTimeout(() => this.executeSave(), 1000); 
     }
 
     private forceSave(): void {
@@ -175,16 +200,20 @@ export class ChatSessionManager {
 
     private executeSave(): void {
         this.saveQueue = this.saveQueue.then(async () => {
+            const activeSession = this.sessions[this.activeSessionId];
+            if (!activeSession) return;
+
             if (this.isWorkspaceStorageEnabled() && this.workspaceRoot) {
                 try {
-                    const fileUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-history.json');
-                    const content = JSON.stringify({
-                        sessions: this.sessions,
-                        activeSessionId: this.activeSessionId
-                    }, null, 2);
+                    const dirUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chats');
+                    await vscode.workspace.fs.createDirectory(dirUri);
                     
-                    const data = new TextEncoder().encode(content);
-                    await vscode.workspace.fs.writeFile(fileUri, data);
+                    const fileUri = vscode.Uri.joinPath(dirUri, `session_${activeSession.id}.json`);
+                    const content = JSON.stringify(activeSession, null, 2);
+                    await vscode.workspace.fs.writeFile(fileUri, new TextEncoder().encode(content));
+
+                    const metaUri = vscode.Uri.joinPath(this.workspaceRoot, '.vscode', 'ai-chat-meta.json');
+                    await vscode.workspace.fs.writeFile(metaUri, new TextEncoder().encode(JSON.stringify({ activeSessionId: this.activeSessionId })));
                 } catch (e) {
                     OutputLogger.log(`Failed to save chat history to workspace: ${e}`, 'ERROR');
                 }

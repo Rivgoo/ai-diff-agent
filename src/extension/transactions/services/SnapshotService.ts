@@ -47,7 +47,9 @@ export class SnapshotService {
         const backupDir = vscode.Uri.joinPath(this.globalStorageUri, 'backups', opId);
         try {
             await vscode.workspace.fs.delete(backupDir, { recursive: true, useTrash: false });
-        } catch { /* Safe ignore */ }
+        } catch (error) {
+            OutputLogger.log(`[SnapshotService] Failed to purge snapshot for operation '${opId}': ${error instanceof Error ? error.message : String(error)}`, 'WARN');
+        }
     }
 
     public async cleanStaleBackups(retentionDays: number, activeOpIds: Set<string>): Promise<void> {
@@ -72,6 +74,8 @@ export class SnapshotService {
                     }
                 }
             }
-        } catch (e) { /* Ignore */ }
+        } catch (error) {
+            OutputLogger.log(`[SnapshotService] Failed to clean up stale backups. Old snapshots may consume disk space. Error: ${error instanceof Error ? error.message : String(error)}`, 'WARN');
+        }
     }
 }

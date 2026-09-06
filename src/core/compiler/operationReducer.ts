@@ -9,8 +9,8 @@ export class OperationReducer {
     constructor(
         private readonly workspace: VirtualWorkspace,
         private readonly warnings: CompilerWarning[],
-        private readonly engineSettings?: EngineSettings, // ФІКС
-        private readonly astSettings?: AstSettings       // ФІКС
+        private readonly engineSettings?: EngineSettings,
+        private readonly astSettings?: AstSettings
     ) {}
 
     public applyCreate(op: CreateFileOperation): void {
@@ -54,14 +54,14 @@ export class OperationReducer {
             const searchEngine = new SearchEngine();
             let allApplied = true;
 
+            const actualAstSettings = this.astSettings || { enableAstMatching: true, enabledLanguages: [], sanityStrictness: 'ignore', validateEmbeddedScripts: false, queryTolerance: 'allow_signature_drift', strictSyntaxValidation: false, autoFixSyntax: false, lspValidation: false, autoStitchImports: false, blastRadiusAnalysis: false };
+            
+            // ФІКС: Додано maxGlobalSearchCandidates у фолбек
+            const actualEngineSettings = this.engineSettings || { payloadRecoveryMode: 'aggressive', fallbackMatchLevel: 'safe', maxFileSizeMb: 5, maxGlobalSearchCandidates: 5, useUnsavedBuffers: true, polyglotParsing: true, strictParsing: false, allowCdataUnwrap: true, allowFuzzyMatching: true, allowSlidingWindow: true, blockOnSyntaxErrors: false, respectGitIgnore: true };
+
             for (const change of op.changes) {
                 const doc = new VirtualDocument(node.currentPath, currentContent);
                 
-                // ФІКС: Використовуємо реальні налаштування, якщо вони передані
-                const actualAstSettings = this.astSettings || { enableAstMatching: true, enabledLanguages: [], sanityStrictness: 'ignore', validateEmbeddedScripts: false, queryTolerance: 'allow_signature_drift', strictSyntaxValidation: false, autoFixSyntax: false, lspValidation: false, autoStitchImports: false, blastRadiusAnalysis: false };
-                
-                const actualEngineSettings = this.engineSettings || { payloadRecoveryMode: 'aggressive', fallbackMatchLevel: 'safe', maxFileSizeMb: 5, useUnsavedBuffers: true, polyglotParsing: true, strictParsing: false, allowCdataUnwrap: true, allowFuzzyMatching: true, allowSlidingWindow: true, blockOnSyntaxErrors: false, respectGitIgnore: true };
-
                 const match = await searchEngine.findMatch(
                     doc, change.search, change.replace, 
                     actualEngineSettings, actualAstSettings, undefined
@@ -105,6 +105,18 @@ export class OperationReducer {
     }
 
     private warn(operationId: string, path: string, reason: string): void {
-        this.warnings.push({ operationId, path, reason });
+        this.warnings.push({ 
+            operationId, 
+            path, 
+            reason,
+            diagnostic: {
+                operationId,
+                path,
+                severity: 'info',
+                title: 'Compiler Optimization',
+                detailedMessage: reason,
+                code: 'COMPILER_WARN'
+            }
+        });
     }
 }

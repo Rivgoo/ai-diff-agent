@@ -14,7 +14,7 @@ interface OperationRowProps {
 
 export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationRowProps) => {
     const { sendEvent } = useIPC();
-    // ФІКС: Звертаємось до нової категорії ui замість застарілої behavior
+    const isWalkthroughActive = useAgentStore(state => state.isWalkthroughActive);
     const showConfidenceBadges = useAgentStore(s => s.settings.ui?.showConfidenceBadges ?? true); 
     
     const classNames = [styles.row];
@@ -55,7 +55,9 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
 
     const isDirty = vm.statusIcon === 'edit' || vm.statusIcon === 'merge';
     const isSaved = vm.statusIcon === 'check';
-    const canDiff = isDirty || isSaved; 
+    
+    // ФІКС: Тепер кнопку Diff можна натиснути навіть при реальному конфлікті (для Virtual Diff)
+    const canDiff = isDirty || isSaved || vm.isRealConflict; 
 
     return (
         <div className={rowClass} onMouseEnter={onMouseEnter} onClick={onClick} role="gridcell">
@@ -67,6 +69,15 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
                 <span className={styles.fileName}>{vm.fileName}</span>
                 
                 {confBadge}
+
+                {vm.blastRadiusWarning && (
+                    <span 
+                        style={{ color: 'var(--vscode-editorWarning-foreground)', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '4px', cursor: 'help' }} 
+                        title={vm.blastRadiusWarning}
+                    >
+                        <IconAlertTriangle size={11} /> {vm.blastRadiusWarning.replace(/[^0-9]/g, '')} refs
+                    </span>
+                )}
 
                 {vm.statusIcon === 'merge' && (
                     <Badge backgroundColor="#b180d7" color="#fff">AUTO-MERGE</Badge>
@@ -105,10 +116,10 @@ export const OperationRow = ({ vm, isActive, onMouseEnter, onClick }: OperationR
                 )}
                 {isDirty && (
                     <>
-                        <button type="button" className={`${styles.actionBtn} ${styles.btnAccept}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_ACCEPT_OPERATION', operationId: vm.id }); }}>
+                        <button type="button" className={`${styles.actionBtn} ${styles.btnAccept}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_ACCEPT_OPERATION', operationId: vm.id, isWalkthrough: isWalkthroughActive }); }}>
                             <IconCheck size={12} />
                         </button>
-                        <button type="button" className={`${styles.actionBtn} ${styles.btnReject}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_REVERT_OPERATION', operationId: vm.id }); }}>
+                        <button type="button" className={`${styles.actionBtn} ${styles.btnReject}`} onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'ACTION_REVERT_OPERATION', operationId: vm.id, isWalkthrough: isWalkthroughActive }); }}>
                             <IconX size={12} />
                         </button>
                     </>

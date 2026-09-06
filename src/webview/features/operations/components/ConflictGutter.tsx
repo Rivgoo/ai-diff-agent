@@ -1,7 +1,8 @@
 import type { ConflictDetails } from '@/shared/models';
 import { useIPC } from '@/webview/hooks/useIPC';
-import { IconCopy } from '@tabler/icons-react';
+import { IconAlertCircle, IconExternalLink, IconCopy } from '@tabler/icons-react';
 import styles from '../styles/gutter.module.css';
+import { useAgentStore } from '@/webview/store/agentStore';
 
 interface ConflictGutterProps {
     readonly details: ConflictDetails;
@@ -10,41 +11,49 @@ interface ConflictGutterProps {
 
 export const ConflictGutter = ({ details, operationId }: ConflictGutterProps) => {
     const { sendEvent } = useIPC();
+    const toggleDiagnosticsWindow = useAgentStore((state) => state.toggleDiagnosticsWindow);
 
-    return (
+    // Коротка причина для UI (щоб не засмічувати екран)
+    let shortReason = 'Resolution Conflict';
+    if (details.reason === 'NOT_FOUND') shortReason = 'Pattern Not Found';
+    if (details.reason === 'AMBIGUOUS_MATCH') shortReason = 'Ambiguous Match';
+    if (details.reason === 'SYNTAX_CORRUPTION_PREVENTED') shortReason = 'Syntax Error Prevented';
+    if (details.reason === 'LSP_ERROR') shortReason = 'LSP Compilation Failed';
+    if (details.reason === 'UNSAVED_CHANGES') shortReason = 'Unsaved File Exists';
+
+     return (
         <div className={styles.gutter} role="alert">
-            <div className={styles.reasonTitle}>
-                Error: {details.reason} (Block {details.blockIndex}/{details.totalBlocks})
-            </div>
-            
-            <div className={styles.resolutionText}>
-                {details.reason === 'NOT_FOUND' && 'Target pattern not found. Context may have changed.'}
-                {details.reason === 'AMBIGUOUS_MATCH' && `Pattern matched ${details.matchesFound || 2} times. Provide more context lines.`}
-                {details.reason === 'FILE_NOT_FOUND' && 'Target file does not exist on disk.'}
-                {details.reason === 'SYNTAX_CORRUPTION_PREVENTED' && 'AI payload contains syntax errors.'}
-            </div>
-
-            {details.semanticDiagnostic && (
-                <div className={styles.reasonTitle} style={{ marginTop: '4px', color: 'var(--vscode-testing-iconFailed)' }}>
-                    Diagnostics: {details.semanticDiagnostic}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                    <IconAlertCircle size={14} color="var(--vscode-editorError-foreground)" style={{ flexShrink: 0 }} />
+                    <span className={styles.reasonTitle} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {shortReason} <span style={{ opacity: 0.7, fontWeight: 'normal' }}>(Block {details.blockIndex}/{details.totalBlocks})</span>
+                    </span>
                 </div>
-            )}
 
-            {details.searchExcerpt && details.searchExcerpt !== 'N/A' && (
-                <pre className={styles.codeBlock}><code>{details.searchExcerpt}</code></pre>
-            )}
-
-            {details.reason !== 'ABORTED' && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-                    <button 
-                        style={{ backgroundColor: 'var(--vscode-button-secondaryBackground)', color: 'var(--vscode-button-secondaryForeground)', border: '1px solid var(--vscode-panel-border)', padding: '3px 8px', borderRadius: '3px', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                        onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'SMART_RETRY_CONTEXT', operationId }); }}
-                    >
-                        <IconCopy size={12} />
-                        Copy Error Context
-                    </button>
-                </div>
-            )}
+                {details.reason !== 'ABORTED' && (
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        <button 
+                            className={styles.retryBtn}
+                            onClick={(e) => { e.stopPropagation(); sendEvent({ type: 'SMART_RETRY_CONTEXT', operationId }); }}
+                            title="Copy error context for AI"
+                        >
+                            <IconCopy size={12} />
+                        </button>
+                        
+                        {details.diagnostic && (
+                            <button 
+                                className={styles.retryBtn}
+                                onClick={(e) => { e.stopPropagation(); toggleDiagnosticsWindow(true); }}
+                                title="View detailed diagnostic"
+                            >
+                                <IconExternalLink size={12} /> Diagnostics
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

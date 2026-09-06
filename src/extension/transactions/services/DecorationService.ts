@@ -9,11 +9,12 @@ export interface OpDecoration {
 
 export class DecorationService {
     private decorationType: vscode.TextEditorDecorationType;
-    private phantomDecorationType: vscode.TextEditorDecorationType; 
-    
     private activeDecorations = new Map<string, OpDecoration[]>();
 
     private _onDidChangeDecorations = new vscode.EventEmitter<void>();
+    private _onDidManualModifyBlock = new vscode.EventEmitter<{uri: vscode.Uri, opId: string, blockId: string}>();
+
+    public readonly onDidManualModifyBlock = this._onDidManualModifyBlock.event;
     public readonly onDidChangeDecorations = this._onDidChangeDecorations.event;
 
     constructor() {
@@ -23,8 +24,6 @@ export class DecorationService {
             overviewRulerColor: new vscode.ThemeColor('diffEditor.insertedTextBorder'),
             overviewRulerLane: vscode.OverviewRulerLane.Right
         });
-
-        this.phantomDecorationType = vscode.window.createTextEditorDecorationType({});
     }
 
     public addDecorations(uri: vscode.Uri, opId: string, blocks: { range: vscode.Range, originalSearch: string }[]): void {
@@ -98,6 +97,16 @@ export class DecorationService {
         return this.activeDecorations.get(uri.toString()) || [];
     }
 
+    public getAllActiveDecorations(): { uriString: string, decoration: OpDecoration }[] {
+        const results: { uriString: string, decoration: OpDecoration }[] = [];
+        for (const [uriStr, decs] of this.activeDecorations.entries()) {
+            for (const dec of decs) {
+                results.push({ uriString: uriStr, decoration: dec });
+            }
+        }
+        return results;
+    }
+
     public redrawDecorations(): void {
         this.triggerUpdateDecorations();
     }
@@ -108,14 +117,11 @@ export class DecorationService {
         
         if (!decs || decs.length === 0) {
             editor.setDecorations(this.decorationType, []);
-            editor.setDecorations(this.phantomDecorationType, []);
             return;
         }
 
         const ranges = decs.map(d => d.range);
         editor.setDecorations(this.decorationType, ranges);
-        
-        editor.setDecorations(this.phantomDecorationType, []);
     }
 
     private triggerUpdateDecorations(): void {
@@ -131,13 +137,20 @@ export class DecorationService {
         if (!decs || decs.length === 0) return;
 
         let requiresUpdate = false;
+        const manuallyModifiedBlocks: { opId: string, id: string }[] = [];
 
         for (const change of changes) {
             const linesDelta = (change.text.match(/\n/g) || []).length - (change.range.end.line - change.range.start.line);
-            if (linesDelta === 0) continue; 
 
-            decs = decs.map(d => {
-                if (change.range.end.line < d.range.start.line) {
+            decs = decs.filter(d => {
+                if (d.range.intersection(change.range)) {
+                    manuallyModifiedBlocks.push({ opId: d.opId, id: d.id });
+                    requiresUpdate = true;
+                    return false;
+                }
+                return true;
+            }).map(d => {
+                if (change.range.end.line < d.range.start.line && linesDelta !== 0) {
                     requiresUpdate = true;
                     return {
                         ...d,
@@ -154,6 +167,10 @@ export class DecorationService {
         if (requiresUpdate) {
             this.activeDecorations.set(key, decs);
             this.triggerUpdateDecorations();
+            
+            for (const block of manuallyModifiedBlocks) {
+                this._onDidManualModifyBlock.fire({ uri, opId: block.opId, blockId: block.id });
+            }
         }
     }
 }

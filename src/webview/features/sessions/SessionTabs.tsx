@@ -1,24 +1,23 @@
 import { useContext, useEffect, useRef } from 'react';
 import { useIPC } from '@/webview/hooks/useIPC';
 import { AgentContext } from '@/webview/store/AgentProvider';
-import { IconPlus, IconX, IconBrandGithub, IconFolder } from '@tabler/icons-react';
+import { IconPlus, IconX, IconBrandGithub, IconFolder, IconHistory } from '@tabler/icons-react';
 import styles from './SessionTabs.module.css';
 
 export const SessionTabs = () => {
     const { sendEvent } = useIPC();
-    const context = useContext(AgentContext); // ФІКС
+    const context = useContext(AgentContext);
     
     const containerRef = useRef<HTMLDivElement>(null);
     
     if (!context) throw new Error('SessionTabs must be inside AgentProvider');
-    const { sessions, activeSessionId } = context.state;
+    const { sessions, activeSessionId, settings } = context.state;
 
     const sessionList = Object.values(sessions).sort((a, b) => Number(a.id) - Number(b.id));
 
     useEffect(() => {
         if (!containerRef.current || !activeSessionId) return;
         
-        // Використовуємо setTimeout, щоб дати React час відрендерити нову вкладку
         setTimeout(() => {
             if (!containerRef.current) return;
             const activeTabElement = containerRef.current.querySelector(`.${styles.tabActive}`);
@@ -35,8 +34,15 @@ export const SessionTabs = () => {
             <div className={styles.topActions} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0 8px' }}>
                 <button 
                     className={styles.iconBtn} style={{ background: 'none', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer' }}
-                    onClick={() => sendEvent({ type: 'OPEN_EXTERNAL_LINK', url: 'https://make1txt.vercel.app/' })} 
-                    title="Convert Repo to TXT (Make1txt)"
+                    onClick={() => {
+                        // ФІКС: Логіка перенаправлення
+                        if (settings.bridge.enableBridge) {
+                            sendEvent({ type: 'BRIDGE_TO_MAKE1TXT' });
+                        } else {
+                            sendEvent({ type: 'OPEN_EXTERNAL_LINK', url: 'https://make1txt.vercel.app/' });
+                        }
+                    }} 
+                    title={settings.bridge.enableBridge ? "Export Project to Make1Txt" : "Open Make1Txt (Bridge Disabled)"}
                 >
                     <IconFolder size={14} />
                 </button>
@@ -46,6 +52,13 @@ export const SessionTabs = () => {
                     title="AI Diff Agent GitHub"
                 >
                     <IconBrandGithub size={14} />
+                </button>
+                <button 
+                    className={styles.iconBtn} style={{ background: 'none', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer' }}
+                    onClick={() => context.actions.toggleHistoryWindow(true)} 
+                    title="Transaction History"
+                >
+                    <IconHistory size={14} />
                 </button>
                 <div style={{ width: '1px', height: '16px', backgroundColor: 'var(--vscode-editorGroupHeader-tabsBorder)', margin: '0 4px' }} />
             </div>

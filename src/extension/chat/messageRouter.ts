@@ -10,7 +10,6 @@ import { PathSandbox } from '@/vscode/workspace/pathSandbox';
 import { PathNormalizer } from '@/core/workspace/pathNormalizer';
 
 import { VirtualDocument } from '@/core/compiler/virtualDocument';
-
 import { TransactionPipeline } from '@/extension/transactions/orchestrator/TransactionPipeline';
 import { SearchEngine } from '@/core/matcher/searchEngine';
 import { ResilientPathResolver } from '@/core/resolver/resilientPathResolver';
@@ -22,6 +21,9 @@ import { LoggerAdapter } from '@/extension/transactions/context/LoggerAdapter';
 import { CompensationStore } from '@/extension/transactions/store/CompensationStore';
 import type { DecorationService } from '@/extension/transactions/services/DecorationService';
 import type { OperationStatusUpdate } from '@/extension/transactions/core/TransactionEvents';
+import { VirtualConflictProvider } from '@/extension/vscode/VirtualConflictProvider';
+import { ClipboardObserverService } from '@/extension/services/ClipboardObserverService';
+import { Make1TxtBridgeService } from '@/extension/services/Make1TxtBridgeService'; // ФІКС: Імпорт моста
 
 export class MessageRouter {
     private readonly sessionManager: ChatSessionManager;
@@ -30,10 +32,14 @@ export class MessageRouter {
     private readonly pendingOperations = new Map<string, AnyOperation>();
     private readonly processPayloadUseCase: ProcessPayloadUseCase;
     private readonly snapshotService: SnapshotService;
+    private readonly bridgeService: Make1TxtBridgeService; // ФІКС: Сервіс моста
+    
     private isProcessingLens = false;
+    private isWalkthroughActive = false; 
+    private activeAbortController: AbortController | null = null;
 
     private statusUpdateQueue: any[] = [];
-    private updateTimer: ReturnType<typeof setTimeout> | null = null;
+    private updateTimer: NodeJS.Timeout | null = null;
 
     public readonly transactionPipeline: TransactionPipeline;
 
@@ -61,9 +67,8 @@ export class MessageRouter {
         const logger = new LoggerAdapter();
         const searchEngine = new SearchEngine();
 
-        // ФІКС: Динамічне отримання налаштування для File System Adapter
         const pathResolver = new ResilientPathResolver(
-            new VsCodeFileSystemAdapter(() => this.settingsManager.getSettings().engine.useUnsavedBuffers), 
+            new VsCodeFileSystemAdapter(() => this.settingsManager.getSettings().engine), 
             new VsCodeWorkspaceSearchAdapter()
         );
         
@@ -71,6 +76,7 @@ export class MessageRouter {
         const directoryCleanupService = new DirectoryCleanupService();
 
         this.snapshotService = new SnapshotService(context.globalStorageUri);
+        this.bridgeService = new Make1TxtBridgeService(this.settingsManager); // ФІКС: Ініціалізація
 
         this.transactionPipeline = new TransactionPipeline(
             this.store,
@@ -84,14 +90,16 @@ export class MessageRouter {
             this.settingsManager,
             (update: OperationStatusUpdate) => {
                 this.sessionManager.updateOperationFromEvent(update);
-                
                 this.statusUpdateQueue.push(update);
-
                 if (!this.updateTimer) {
                     this.updateTimer = setTimeout(() => {
                         this.flushStatusUpdates();
                     }, 50);
                 }
+            },
+            () => {
+                this.isWalkthroughActive = false;
+                this.postMessageCallback({ type: 'WALKTHROUGH_COMPLETED' });
             }
         );
 
@@ -103,35 +111,73 @@ export class MessageRouter {
             this.postMessageCallback,
             () => this.syncState()
         );
+
+        const clipboardObserver = new ClipboardObserverService(
+            this.settingsManager,
+            (payload) => this.handleClipboardPayload(payload)
+        );
+        this.context.subscriptions.push(clipboardObserver);
+
+        this.decorationService.onDidManualModifyBlock(({ uri, opId, blockId }) => {
+            OutputLogger.log(`[Manual Override] User manually edited or reverted block ${blockId} in ${uri.fsPath}. Handing over control.`);
+            this.checkPartialState(opId, uri);
+        });
+    }
+
+    private handleClipboardPayload(payload: string): void {
+        vscode.commands.executeCommand('ai-diff-agent.start');
+        
+        if (this.activeAbortController) {
+            this.activeAbortController.abort();
+        }
+        
+        this.activeAbortController = new AbortController();
+        this.processPayloadUseCase.execute(payload, this.activeAbortController.signal);
+    }
+
+    public getPendingOperation(opId: string): AnyOperation | undefined {
+        return this.pendingOperations.get(opId);
     }
 
     private flushStatusUpdates(): void {
         this.updateTimer = null;
         if (this.statusUpdateQueue.length === 0) return;
-
         const batch = [...this.statusUpdateQueue];
         this.statusUpdateQueue = [];
-
-        this.postMessageCallback({
-            type: 'OPERATION_BATCH_UPDATED',
-            updates: batch
-        });
+        this.postMessageCallback({ type: 'OPERATION_BATCH_UPDATED', updates: batch });
+        
+        this.syncHistory();
     }
 
     public handleMessage(event: WebviewEvent): void {
         switch (event.type) {
+            case 'BRIDGE_TO_MAKE1TXT': // ФІКС: Запуск моста
+                this.bridgeService.startSync();
+                break;
             case 'REQUEST_STATE_SYNC': this.syncState(); break;
             case 'REQUEST_SETTINGS_SYNC': this.syncSettings(); break;
+            case 'REQUEST_HISTORY_SYNC': this.syncHistory(); break; 
+            case 'ROLLBACK_SAGA': 
+                (async () => {
+                    for (const id of event.transactionIds) {
+                        await this.transactionPipeline.revertOperation(id);
+                    }
+                    this.syncHistory();
+                })();
+                break; 
             case 'UPDATE_SETTING': 
                 this.settingsManager.updateSetting(event.category, event.key, event.value);
-                if (event.key === 'chatHistoryMode') {
-                    this.sessionManager.reload();
-                }
+                if (event.key === 'chatHistoryMode') this.sessionManager.reload();
                 break;
             case 'SUBMIT_PAYLOAD': 
-                this.processPayloadUseCase.execute(event.payload); 
+                this.activeAbortController = new AbortController();
+                this.processPayloadUseCase.execute(event.payload, this.activeAbortController.signal); 
                 break;
             case 'CANCEL_PROCESSING': 
+                if (this.activeAbortController) {
+                    this.activeAbortController.abort();
+                    this.activeAbortController = null;
+                }
                 this.transactionPipeline.emergencyUnlock();
                 break;
             case 'NEW_SESSION':
@@ -147,6 +193,7 @@ export class MessageRouter {
                 this.sessionManager.deleteSession(event.sessionId);
                 this.transactionPipeline.emergencyUnlock(); 
                 this.syncState();
+                this.syncHistory();
                 break;
             case 'CLEAR_SESSION': 
                 this.revertActiveSessionOperations(this.sessionManager.getActiveSessionId());
@@ -154,6 +201,7 @@ export class MessageRouter {
                 this.pendingOperations.clear();
                 this.transactionPipeline.emergencyUnlock();
                 this.syncState();
+                this.syncHistory();
                 break;
             case 'ACTION_SAVE_ALL': 
                 if (event.hasConflicts) {
@@ -161,26 +209,75 @@ export class MessageRouter {
                         "You have unresolved conflicts in this batch. Do you want to save the successful files and ignore the conflicts?",
                         "Save Successful", "Cancel"
                     ).then(choice => {
-                        if (choice === "Save Successful") {
-                            this.transactionPipeline.saveBatch();
-                        }
+                        if (choice === "Save Successful") this.transactionPipeline.saveBatch();
                     });
                 } else {
                     this.transactionPipeline.saveBatch();
                 }
                 break;
             case 'ACTION_REVERT_ALL': this.transactionPipeline.revertBatch(); break;
-            case 'ACTION_ACCEPT_OPERATION': this.transactionPipeline.saveOperation(event.operationId); break;
-            case 'ACTION_REVERT_OPERATION': this.transactionPipeline.revertOperation(event.operationId); break;
+            case 'ACTION_ACCEPT_OPERATION': this.transactionPipeline.saveOperation(event.operationId, event.isWalkthrough); break;
+            case 'ACTION_REVERT_OPERATION': this.transactionPipeline.revertOperation(event.operationId, event.isWalkthrough); break;
             case 'OPEN_FILE': this.handleOpenFile(event.operationId); break;
             case 'OPEN_DIFF': this.handleOpenDiff(event.operationId); break;
-            case 'COPY_PROMPT': this.handleCopyPrompt(event.mode || 'stable'); break; 
+            case 'OPEN_HISTORY_DIFF': this.handleOpenHistoryDiff(event.operationId, event.filePath); break;
+            case 'OPEN_FILE_AT_RANGE': this.handleOpenFileAtRange(event.path, event.range); break;
+            case 'COPY_PROMPT': 
+                this.handleCopyPrompt(
+                    event.mode as any, 
+                    (event as any).formatId, 
+                    (event as any).customPath
+                ); 
+                break; 
             case 'DOWNLOAD_INSTRUCTIONS': this.handleDownloadInstructions(); break;
             case 'SHOW_OUTPUT_LOG': vscode.commands.executeCommand('ai-diff-agent.showLog'); break;
-            case 'OPEN_EXTERNAL_LINK': 
-                vscode.env.openExternal(vscode.Uri.parse(event.url));
-                break;
+            case 'OPEN_EXTERNAL_LINK': vscode.env.openExternal(vscode.Uri.parse(event.url)); break;
             case 'SMART_RETRY_CONTEXT': this.handleSmartRetry(event.operationId); break; 
+            case 'SET_WALKTHROUGH_STATE': this.isWalkthroughActive = event.isActive; break;
+            case 'ACTION_JUMP_TO_NEXT_BLOCK': this.transactionPipeline.jumpToNextDirtyBlock(); break;
+            case 'OPEN_PROBLEMS_PANEL': vscode.commands.executeCommand('workbench.actions.view.problems'); break;
+        }
+    }
+
+    private syncHistory(): void {
+        const history = this.store.getAllSagas();
+        const currentBranch = this.store.getCurrentBranch();
+        this.postMessageCallback({ type: 'HISTORY_HYDRATE', history, currentBranch });
+    }
+
+    private async handleOpenHistoryDiff(operationId: string, filePath: string): Promise<void> {
+        try {
+            const normalized = PathNormalizer.normalize(filePath);
+            const targetUri = PathSandbox.validate(normalized);
+            const backupUri = this.snapshotService.getBackupUri(operationId, normalized);
+
+            try {
+                await vscode.workspace.fs.stat(backupUri);
+                await vscode.commands.executeCommand('vscode.diff', backupUri, targetUri, `${normalized} (History ↔ Current)`);
+            } catch {
+                const doc = await vscode.workspace.openTextDocument(targetUri);
+                await vscode.window.showTextDocument(doc, { preview: false });
+                OutputLogger.log(`No backup found for ${normalized}. Opened file directly.`, 'INFO');
+            }
+        } catch (e) {
+            OutputLogger.log(`Failed to open history diff: ${e}`, 'ERROR');
+        }
+    }
+
+    private async handleOpenFileAtRange(filePath: string, range?: any): Promise<void> {
+        try {
+            const normalized = PathNormalizer.normalize(filePath);
+            const uri = PathSandbox.validate(normalized);
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const editor = await vscode.window.showTextDocument(doc, { preview: false });
+
+            if (range) {
+                const vsRange = new vscode.Range(range.start.line, Math.max(0, range.start.character), range.end.line, Math.max(0, range.end.character));
+                editor.revealRange(vsRange, vscode.TextEditorRevealType.InCenter);
+                editor.selection = new vscode.Selection(vsRange.start, vsRange.start);
+            }
+        } catch (e) {
+            OutputLogger.log(`Failed to open file at range: ${e}`, 'ERROR');
         }
     }
 
@@ -302,22 +399,23 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
 
         try {
             let targetPath = rawOp.path;
-            if (rawOp.type === 'move_path') {
-                const sessionOp = this.sessionManager.getActiveSession().messages
-                    .flatMap(m => m.operations || [])
-                    .find(o => o.id === operationId);
+            const sessionOp = this.sessionManager.getActiveSession().messages
+                .flatMap(m => m.operations || [])
+                .find(o => o.id === operationId);
 
-                if (sessionOp && (sessionOp.status === 'applied_dirty' || sessionOp.status === 'saved')) {
-                    targetPath = (rawOp as any).destinationPath;
-                }
+            if (rawOp.type === 'move_path' && sessionOp && (sessionOp.status === 'applied_dirty' || sessionOp.status === 'saved')) {
+                targetPath = (rawOp as any).destinationPath;
             }
 
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (!workspaceFolders) return;
-            
             const normalized = PathNormalizer.normalize(targetPath);
             const targetUri = PathSandbox.validate(normalized);
-            
+
+            if (sessionOp && (sessionOp.status === 'conflict' || sessionOp.status === 'error')) {
+                const virtualUri = vscode.Uri.parse(`${VirtualConflictProvider.scheme}://preview/${normalized}?opId=${operationId}`);
+                await vscode.commands.executeCommand('vscode.diff', targetUri, virtualUri, `${normalized} (Current ↔ AI Proposal)`);
+                return;
+            }
+
             const backupUri = this.snapshotService.getBackupUri(operationId, normalized);
 
             try {
@@ -336,21 +434,41 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         }
     }
 
-    private async handleCopyPrompt(mode: 'stable' | 'experimental'): Promise<void> {
+    private async handleCopyPrompt(mode: 'system' | 'custom', formatId: 'stable' | 'experimental', customPath?: string): Promise<void> {
         try {
-            const fileName = mode === 'stable' ? 'prompt-stable.md' : 'prompt-experimental.md';
+            const fileName = formatId === 'stable' ? 'prompt-stable.md' : 'prompt-experimental.md';
             const instructionsPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', fileName);
             
+            let systemPrompt = '';
             try {
                 const fileBytes = await vscode.workspace.fs.readFile(instructionsPath);
-                await vscode.env.clipboard.writeText(new TextDecoder().decode(fileBytes));
-                this.postMessageCallback({ type: 'PROMPT_COPIED' });
+                systemPrompt = new TextDecoder().decode(fileBytes);
             } catch {
                 const fallbackPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'prompt-instructions.md');
                 const fallbackBytes = await vscode.workspace.fs.readFile(fallbackPath);
-                await vscode.env.clipboard.writeText(new TextDecoder().decode(fallbackBytes));
-                this.postMessageCallback({ type: 'PROMPT_COPIED' });
+                systemPrompt = new TextDecoder().decode(fallbackBytes);
             }
+
+            let finalPrompt = systemPrompt;
+
+            if (mode === 'custom' && customPath) {
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (workspaceFolders && workspaceFolders.length > 0) {
+                    try {
+                        const customUri = vscode.Uri.joinPath(workspaceFolders[0].uri, customPath.trim());
+                        const customBytes = await vscode.workspace.fs.readFile(customUri);
+                        const customText = new TextDecoder().decode(customBytes);
+                        
+                        finalPrompt = `--- CUSTOM ARCHITECTURE & CODING RULES ---\n${customText}\n\n--- CRITICAL SYSTEM INSTRUCTIONS (DO NOT IGNORE) ---\n${systemPrompt}`;
+                    } catch {
+                        OutputLogger.log(`Could not read custom prompt path: ${customPath}`, 'WARN');
+                        vscode.window.showWarningMessage(`Could not find custom rules file: ${customPath}. Copied default system instructions instead.`);
+                    }
+                }
+            }
+
+            await vscode.env.clipboard.writeText(finalPrompt);
+            this.postMessageCallback({ type: 'PROMPT_COPIED' });
         } catch (e) {
             OutputLogger.log(`Copy prompt operation failed: ${e}`, 'ERROR');
         }
@@ -375,6 +493,10 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         try {
             this.decorationService.removeDecorationBlock(uri, blockId);
             this.checkPartialState(opId, uri);
+
+            if (this.isWalkthroughActive) {
+                await this.transactionPipeline.jumpToNextDirtyBlock();
+            }
         } finally {
             this.isProcessingLens = false;
         }
@@ -384,10 +506,9 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         if (this.isProcessingLens) return;
         this.isProcessingLens = true;
         try {
-            // ФІКС: Беремо найсвіжіші координати з DecorationService
             const decs = this.decorationService.getDecorationsForDocument(uri);
             const freshDec = decs.find(d => d.id === blockId);
-            if (!freshDec) return; // Блок вже опрацьований
+            if (!freshDec) return; 
 
             const sessionOp = this.sessionManager.getActiveSession().messages
                 .flatMap(m => m.operations || [])
@@ -440,6 +561,9 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
             this.decorationService.removeDecorationBlock(uri, blockId);
             this.checkPartialState(opId, uri);
 
+            if (this.isWalkthroughActive) {
+                await this.transactionPipeline.jumpToNextDirtyBlock();
+            }
         } catch (e) {
             OutputLogger.log(`Partial rollback failed: ${e}`, 'ERROR');
         } finally {

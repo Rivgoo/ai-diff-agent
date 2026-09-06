@@ -31,7 +31,8 @@ export class CommitPhase {
         }
 
         const allCandidateDirs = this.extractAllDirectoryCandidates(pendingOps, rootName);
-        const cleanedDirs = await this.directoryCleanupService.cleanupEmptyDirectories(allCandidateDirs, rootUri);
+        const ignoredDirs = context.settingsManager.getSettings().workflow.ignoredCleanupDirs;
+        const cleanedDirs = await this.directoryCleanupService.cleanupEmptyDirectories(allCandidateDirs, rootUri, ignoredDirs);
 
         for (const cmd of commands) {
             const antiActions = cmd.getCompensation();
@@ -45,7 +46,11 @@ export class CommitPhase {
             }
 
             if (antiActions.length > 0) {
-                this.store.addTransaction({ operationId: cmd.operationId, antiActions });
+                this.store.addTransaction({ 
+                    operationId: cmd.operationId, 
+                    antiActions,
+                    summary: `Modified ${cmd.metadata.path || cmd.operation.path}` 
+                });
                 
                 const finalStatus = cmd.metadata.requiresAutoMerge ? 'merged_dirty' : 'applied_dirty';
 

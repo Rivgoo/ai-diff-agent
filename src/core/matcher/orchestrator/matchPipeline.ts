@@ -24,7 +24,6 @@ export class MatchPipeline {
         let bestFailure: MatchResult | null = null;
         const isStrict = this.strictExtensions.has(context.fileExtension.toLowerCase());
 
-        // Встановлюємо вагу помилок. Найважливіші не повинні перезаписуватись слабшими.
         const errorPriority: Record<string, number> = {
             'SYNTAX_CORRUPTION_PREVENTED': 3,
             'AMBIGUOUS_MATCH': 2,
@@ -35,10 +34,6 @@ export class MatchPipeline {
         const fallbackLevel = context.engineSettings.fallbackMatchLevel;
 
         for (const strategy of this.strategies) {
-            // Tier 0: AST, Tier 1: Exact
-            // Tier 2: Normalized (Safe), Tier 3: SlidingWindow (Safe)
-            // Tier 4: Aggressive
-            
             if (strategy.tier >= 2 && fallbackLevel === 'none') continue;
             if (strategy.tier >= 4 && fallbackLevel === 'safe') continue;
             
@@ -46,21 +41,49 @@ export class MatchPipeline {
                 continue; 
             }
 
-            const result = await strategy.findMatch(context);
+            let result: MatchResult;
+            
+            try {
+                result = await strategy.findMatch(context);
+            } catch (error) {
+                context.logger?.warn(`[MatchPipeline] Strategy '${strategy.name}' threw an unexpected execution error: ${error instanceof Error ? error.message : String(error)}. Skipping to next fallback strategy.`);
+                continue;
+            }
+
             if (!result) continue;
             
             if (result.status === 'MATCHED') {
                 if (context.replaceBlock !== undefined) {
-                    // ФІКС: Передаємо ТІЛЬКИ astSettings (engineSettings було видалено з сигнатури)
-                    const isSane = await SyntaxSanityChecker.verify(
-                        context.document.getText(),
-                        result.range,
-                        context.replaceBlock,
-                        context.fileExtension,
-                        context.astSettings
-                    );
-                    if (!isSane) {
-                        return { status: 'FAILED', reason: 'SYNTAX_CORRUPTION_PREVENTED', matchesFound: 1 };
+                    let sanity;
+                    
+                    try {
+                        sanity = await SyntaxSanityChecker.verify(
+                            context.document.getText(),
+                            result.range,
+                            context.replaceBlock,
+                            context.fileExtension,
+                            context.astSettings,
+                            context.logger
+                        );
+                    } catch (sanityError) {
+                        context.logger?.error(`[MatchPipeline] SyntaxSanityChecker crashed: ${sanityError instanceof Error ? sanityError.message : String(sanityError)}`);
+                        sanity = { isSane: false, errorMessage: 'Internal Sanity Checker crash.' };
+                    }
+                    
+                    if (!sanity.isSane) {
+                        return { 
+                            status: 'FAILED', 
+                            reason: 'SYNTAX_CORRUPTION_PREVENTED', 
+                            matchesFound: 1,
+                            diagnostic: {
+                                path: context.document.path,
+                                severity: 'critical',
+                                title: 'AST Syntax Corruption',
+                                detailedMessage: `AI modification introduces a critical syntax error: ${sanity.errorMessage}`,
+                                range: sanity.errorRange,
+                                code: 'AST_CORRUPTION'
+                            }
+                        };
                     }
                 }
                 return result;
