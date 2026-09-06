@@ -245,6 +245,7 @@
                 "typescript",
                 "tsx",
                 "python",
+                "java",
                 "c_sharp",
                 "cpp",
                 "json",
@@ -318,15 +319,25 @@
         },
         "aiDiffAgent.ai": {
           "type": "object",
-          "description": "AI Feedback Loop",
+          "description": "AI Prompts Configuration",
           "properties": {
-            "feedbackLoopEnabled": {
-              "type": "boolean",
-              "default": false
+            "customPrompts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "path": { "type": "string" },
+                  "baseFormat": { "type": "string", "enum": ["stable", "experimental"] }
+                }
+              },
+              "default": [],
+              "description": "Constructor for custom prompt rules."
             }
           },
           "default": {
-            "feedbackLoopEnabled": false
+            "customPrompts": []
           }
         }
       }

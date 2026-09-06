@@ -18,6 +18,7 @@ const AVAILABLE_LANGUAGES = [
     { id: 'typescript', label: 'TypeScript' },
     { id: 'tsx', label: 'TSX (React)' },
     { id: 'python', label: 'Python' },
+    { id: 'java', label: 'Java' },
     { id: 'c_sharp', label: 'C#' },
     { id: 'cpp', label: 'C++' },
     { id: 'c', label: 'C' },
@@ -38,7 +39,6 @@ export const SettingsView = () => {
     const [candidatesInput, setCandidatesInput] = useState(settings.engine.maxGlobalSearchCandidates.toString());
     const [historyInput, setHistoryInput] = useState(settings.workflow.historyKeepCount.toString());
     
-    // ФІКС 1: Додані стейти для нових налаштувань з Фази 1
     const [ignoredDirsInput, setIgnoredDirsInput] = useState(settings.workflow.ignoredCleanupDirs.join(', '));
     const [parserTimeoutInput, setParserTimeoutInput] = useState(settings.ast.parserTimeoutMs.toString());
     const [lspTimeoutInput, setLspTimeoutInput] = useState(settings.ast.lspTimeoutMs.toString());
@@ -54,13 +54,9 @@ export const SettingsView = () => {
         setParserTimeoutInput(settings.ast.parserTimeoutMs.toString());
         setLspTimeoutInput(settings.ast.lspTimeoutMs.toString());
     }, [
-        settings.workflow.backupRetentionDays, 
-        settings.engine.maxFileSizeMb, 
-        settings.engine.maxGlobalSearchCandidates, 
-        settings.workflow.historyKeepCount,
-        settings.workflow.ignoredCleanupDirs,
-        settings.ast.parserTimeoutMs,
-        settings.ast.lspTimeoutMs
+        settings.workflow,
+        settings.engine,
+        settings.ast
     ]);
 
     const handleNumberChange = (category: 'workflow' | 'engine' | 'ast', key: string, val: string, setter: (val: string) => void) => {
@@ -121,7 +117,7 @@ export const SettingsView = () => {
                 <button type="button" role="tab" aria-selected={activeTab === 'workflow'} className={`${styles.tabBtn} ${activeTab === 'workflow' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('workflow')}>Workflow</button>
                 <button type="button" role="tab" aria-selected={activeTab === 'engine'} className={`${styles.tabBtn} ${activeTab === 'engine' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('engine')}>Diff Engine</button>
                 <button type="button" role="tab" aria-selected={activeTab === 'ast'} className={`${styles.tabBtn} ${activeTab === 'ast' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('ast')}>AST & Semantics</button>
-                <button type="button" role="tab" aria-selected={activeTab === 'ai'} className={`${styles.tabBtn} ${activeTab === 'ai' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('ai')}>AI Feedback</button>
+                <button type="button" role="tab" aria-selected={activeTab === 'ai'} className={`${styles.tabBtn} ${activeTab === 'ai' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('ai')}>AI Prompts</button>
             </div>
 
             <div className={styles.content}>
@@ -405,17 +401,96 @@ export const SettingsView = () => {
                     </section>
                 )}
 
-                {/* --- AI AUTOMATION SETTINGS --- */}
+                {/* --- AI PROMPTS SETTINGS --- */}
                 {activeTab === 'ai' && (
                     <section className={styles.section}>
-                        <h3 className={styles.sectionTitle}>Feedback Loop</h3>
-
-                        <div className={styles.settingItem}>
-                            <VSCodeCheckbox checked={settings.ai.feedbackLoopEnabled} onChange={(e: any) => updateSetting('ai', 'feedbackLoopEnabled', e.target.checked)}>
-                                Enable Auto-Correction Feedback
-                            </VSCodeCheckbox>
-                            <p className={styles.description}>Tracks manual corrections you make to AI code. Injects learned rules directly into the prompt copied via "Rules" from the main menu.</p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3 className={styles.sectionTitle}>Prompt Constructor</h3>
+                            <button 
+                                type="button" 
+                                onClick={() => {
+                                    const newPrompt = {
+                                        id: Date.now().toString(),
+                                        name: 'New Architecture Rule',
+                                        path: '.vscode/rules.md',
+                                        baseFormat: 'stable' as const
+                                    };
+                                    updateSetting('ai', 'customPrompts', [...settings.ai.customPrompts, newPrompt]);
+                                }}
+                                style={{ padding: '4px 8px', fontSize: '10px', cursor: 'pointer', background: 'transparent', border: '1px solid var(--vscode-panel-border)', color: 'var(--vscode-foreground)', borderRadius: '3px' }}
+                            >
+                                + Add Rule
+                            </button>
                         </div>
+                        <p className={styles.description}>
+                            Create custom instruction sets for your team. The agent will prepend your markdown file to the strict system XML formatting rules.
+                        </p>
+
+                        {(!settings.ai.customPrompts || settings.ai.customPrompts.length === 0) ? (
+                            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--vscode-descriptionForeground)', border: '1px dashed var(--vscode-panel-border)', borderRadius: '4px' }}>
+                                No custom rules defined.
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {settings.ai.customPrompts.map((prompt, index) => (
+                                    <div key={prompt.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px', backgroundColor: 'var(--vscode-editor-background)', border: '1px solid var(--vscode-panel-border)', borderRadius: '4px' }}>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label className={styles.label} style={{ fontSize: '10px' }}>Display Name</label>
+                                                <VSCodeTextField 
+                                                    style={{ width: '100%' }} 
+                                                    value={prompt.name} 
+                                                    onInput={(e: any) => {
+                                                        const newPrompts = [...settings.ai.customPrompts];
+                                                        newPrompts[index].name = e.target.value;
+                                                        updateSetting('ai', 'customPrompts', newPrompts);
+                                                    }} 
+                                                />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label className={styles.label} style={{ fontSize: '10px' }}>Relative Path (.md)</label>
+                                                <VSCodeTextField 
+                                                    style={{ width: '100%' }} 
+                                                    value={prompt.path} 
+                                                    onInput={(e: any) => {
+                                                        const newPrompts = [...settings.ai.customPrompts];
+                                                        newPrompts[index].path = e.target.value;
+                                                        updateSetting('ai', 'customPrompts', newPrompts);
+                                                    }} 
+                                                />
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                                            <div style={{ flex: 1, marginRight: '8px' }}>
+                                                <label className={styles.label} style={{ fontSize: '10px' }}>Base XML Format</label>
+                                                <VSCodeDropdown 
+                                                    style={{ width: '100%' }} 
+                                                    value={prompt.baseFormat} 
+                                                    onChange={(e: any) => {
+                                                        const newPrompts = [...settings.ai.customPrompts];
+                                                        newPrompts[index].baseFormat = e.target.value as any;
+                                                        updateSetting('ai', 'customPrompts', newPrompts);
+                                                    }}
+                                                >
+                                                    <VSCodeOption value="stable">Stable (Full File Replace)</VSCodeOption>
+                                                    <VSCodeOption value="experimental">Experimental (Diff / Search-Replace)</VSCodeOption>
+                                                </VSCodeDropdown>
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                style={{ padding: '4px 8px', backgroundColor: 'var(--vscode-button-secondaryBackground)', color: 'var(--vscode-editorError-foreground)', border: '1px solid var(--vscode-panel-border)', borderRadius: '3px', cursor: 'pointer' }}
+                                                onClick={() => {
+                                                    const newPrompts = settings.ai.customPrompts.filter(p => p.id !== prompt.id);
+                                                    updateSetting('ai', 'customPrompts', newPrompts);
+                                                }}
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </section>
                 )}
             </div>

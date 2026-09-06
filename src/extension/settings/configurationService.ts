@@ -61,7 +61,7 @@ export class ConfigurationService {
 
     return {
       enableAstMatching: ast.enableAstMatching ?? true,
-      enabledLanguages: ast.enabledLanguages ?? ['javascript', 'typescript', 'tsx', 'python', 'c_sharp', 'cpp', 'json', 'html', 'css', 'bash', 'c'],
+      enabledLanguages: ast.enabledLanguages ?? ['javascript', 'typescript', 'tsx', 'python', 'java', 'c_sharp', 'cpp', 'json', 'html', 'css', 'bash', 'c'],
       sanityStrictness: ast.sanityStrictness ?? 'warn',
       validateEmbeddedScripts: ast.validateEmbeddedScripts ?? true,
       queryTolerance: ast.queryTolerance ?? 'allow_signature_drift',
@@ -80,7 +80,7 @@ export class ConfigurationService {
     const ai = config.get<Partial<AiSettings>>("ai") || {};
 
     return {
-      feedbackLoopEnabled: ai.feedbackLoopEnabled ?? false,
+      customPrompts: ai.customPrompts ?? [],
     };
   }
 

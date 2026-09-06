@@ -20,27 +20,20 @@ export class LspValidationPhase {
             const uri = context.getAbsoluteUri(targetPath);
             if (!uri) continue;
             
-            if (astSettings.autoStitchImports) {
+            if (astSettings.autoStitchImports || astSettings.autoFixSyntax) {
                 try {
-                    const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
-                        'vscode.executeCodeActionProvider',
-                        uri,
-                        new vscode.Range(0, 0, 0, 0),
-                        vscode.CodeActionKind.Source.append('addMissingImports')
-                    );
-                    
-                    if (actions && actions.length > 0) {
-                        const action = actions[0];
-                        if (action.edit) {
-                            await vscode.workspace.applyEdit(action.edit);
-                            context.logger.info(`Auto-stitched missing imports for ${targetPath}`);
-                        } else if (action.command) {
-                            await vscode.commands.executeCommand(action.command.command, ...(action.command.arguments || []));
-                            context.logger.info(`Auto-stitched missing imports for ${targetPath}`);
-                        }
+                    const doc = await vscode.workspace.openTextDocument(uri);
+                    const fullRange = new vscode.Range(0, 0, doc.lineCount, 0);
+
+                    if (astSettings.autoStitchImports) {
+                        await this.applyCodeAction(uri, fullRange, vscode.CodeActionKind.Source.append('addMissingImports'), context);
+                    }
+
+                    if (astSettings.autoFixSyntax) {
+                        await this.applyCodeAction(uri, fullRange, vscode.CodeActionKind.SourceFixAll, context);
                     }
                 } catch (e) {
-                    context.logger.warn(`Auto-stitch failed for ${targetPath}: ${e}`);
+                    context.logger.warn(`Auto-fix execution failed for ${targetPath}: ${e}`);
                 }
             }
 
@@ -56,5 +49,28 @@ export class LspValidationPhase {
         }
         
         return failures;
+    }
+
+    private async applyCodeAction(uri: vscode.Uri, range: vscode.Range, kind: vscode.CodeActionKind, context: ITransactionContext): Promise<void> {
+        try {
+            const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+                'vscode.executeCodeActionProvider',
+                uri,
+                range,
+                kind
+            );
+            
+            if (actions && actions.length > 0) {
+                const action = actions[0];
+                if (action.edit) {
+                    await vscode.workspace.applyEdit(action.edit);
+                    context.logger.info(`Applied CodeAction '${kind.value}' for ${uri.fsPath}`);
+                } else if (action.command) {
+                    await vscode.commands.executeCommand(action.command.command, ...(action.command.arguments || []));
+                    context.logger.info(`Executed CodeAction command '${kind.value}' for ${uri.fsPath}`);
+                }
+            }
+        } catch (error) {
+        }
     }
 }

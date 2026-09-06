@@ -10,6 +10,7 @@ const LANGUAGE_DISPATCH_MAP: Record<string, string> = {
     '.js': 'javascript',
     '.jsx': 'javascript',
     '.cs': 'c_sharp',
+    '.java': 'java',
     '.py': 'python',
     '.html': 'html',
     '.css': 'css',

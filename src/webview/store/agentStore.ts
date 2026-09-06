@@ -114,7 +114,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         },
         ast: {
             enableAstMatching: true,
-            enabledLanguages: ['javascript', 'typescript', 'tsx', 'python', 'c_sharp', 'cpp', 'json', 'html', 'css', 'bash', 'c'],
+            enabledLanguages: ['javascript', 'typescript', 'tsx', 'python', 'java', 'c_sharp', 'cpp', 'json', 'html', 'css', 'bash', 'c'],
             sanityStrictness: 'warn',
             validateEmbeddedScripts: true,
             queryTolerance: 'allow_signature_drift',
@@ -127,7 +127,7 @@ export const useAgentStore = create<AgentState>((set) => ({
             lspTimeoutMs: 2000 
         },
         ai: {
-            feedbackLoopEnabled: false
+            customPrompts: []
         }
     },
     isSettingsOpen: false,

@@ -4,6 +4,8 @@ import type { TransactionSaga } from "../core/models/saga";
 
 export type PipelineStage = "idle" | "parsing" | "validating" | "resolving" | "applying" | "error";
 
+export type PromptMode = 'stable' | 'experimental' | 'custom-stable' | 'custom-experimental';
+
 export type WebviewEvent =
   | { type: "REQUEST_STATE_SYNC" }
   | { type: "REQUEST_SETTINGS_SYNC" }
@@ -24,7 +26,7 @@ export type WebviewEvent =
   | { type: "NEW_SESSION" }
   | { type: "SWITCH_SESSION"; sessionId: string }
   | { type: "DELETE_SESSION"; sessionId: string }
-  | { type: "COPY_PROMPT"; mode?: 'stable' | 'experimental' }
+  | { type: "COPY_PROMPT"; mode: 'system' | 'custom'; formatId: 'stable' | 'experimental'; customPath?: string }
   | { type: "DOWNLOAD_INSTRUCTIONS" }
   | { type: "SHOW_OUTPUT_LOG" }
   | { type: "OPEN_EXTERNAL_LINK"; url: string }

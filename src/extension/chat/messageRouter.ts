@@ -22,6 +22,7 @@ import { CompensationStore } from '@/extension/transactions/store/CompensationSt
 import type { DecorationService } from '@/extension/transactions/services/DecorationService';
 import type { OperationStatusUpdate } from '@/extension/transactions/core/TransactionEvents';
 import { VirtualConflictProvider } from '@/extension/vscode/VirtualConflictProvider';
+import { ClipboardObserverService } from '@/extension/services/ClipboardObserverService';
 
 export class MessageRouter {
     private readonly sessionManager: ChatSessionManager;
@@ -30,6 +31,7 @@ export class MessageRouter {
     private readonly pendingOperations = new Map<string, AnyOperation>();
     private readonly processPayloadUseCase: ProcessPayloadUseCase;
     private readonly snapshotService: SnapshotService;
+    
     private isProcessingLens = false;
     private isWalkthroughActive = false; 
     private activeAbortController: AbortController | null = null;
@@ -107,10 +109,27 @@ export class MessageRouter {
             () => this.syncState()
         );
 
+        const clipboardObserver = new ClipboardObserverService(
+            this.settingsManager,
+            (payload) => this.handleClipboardPayload(payload)
+        );
+        this.context.subscriptions.push(clipboardObserver);
+
         this.decorationService.onDidManualModifyBlock(({ uri, opId, blockId }) => {
             OutputLogger.log(`[Manual Override] User manually edited or reverted block ${blockId} in ${uri.fsPath}. Handing over control.`);
             this.checkPartialState(opId, uri);
         });
+    }
+
+    private handleClipboardPayload(payload: string): void {
+        vscode.commands.executeCommand('ai-diff-agent.start');
+        
+        if (this.activeAbortController) {
+            this.activeAbortController.abort();
+        }
+        
+        this.activeAbortController = new AbortController();
+        this.processPayloadUseCase.execute(payload, this.activeAbortController.signal);
     }
 
     public getPendingOperation(opId: string): AnyOperation | undefined {
@@ -197,7 +216,14 @@ export class MessageRouter {
             case 'OPEN_DIFF': this.handleOpenDiff(event.operationId); break;
             case 'OPEN_HISTORY_DIFF': this.handleOpenHistoryDiff(event.operationId, event.filePath); break;
             case 'OPEN_FILE_AT_RANGE': this.handleOpenFileAtRange(event.path, event.range); break;
-            case 'COPY_PROMPT': this.handleCopyPrompt(event.mode || 'stable'); break; 
+            // ФІКС: Оновлено сигнатуру виклику
+            case 'COPY_PROMPT': 
+                this.handleCopyPrompt(
+                    event.mode as any, 
+                    (event as any).formatId, 
+                    (event as any).customPath
+                ); 
+                break; 
             case 'DOWNLOAD_INSTRUCTIONS': this.handleDownloadInstructions(); break;
             case 'SHOW_OUTPUT_LOG': vscode.commands.executeCommand('ai-diff-agent.showLog'); break;
             case 'OPEN_EXTERNAL_LINK': vscode.env.openExternal(vscode.Uri.parse(event.url)); break;
@@ -403,21 +429,42 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         }
     }
 
-    private async handleCopyPrompt(mode: 'stable' | 'experimental'): Promise<void> {
+    // ФІКС: Повністю переписаний правильний метод обробки кастомних промптів
+    private async handleCopyPrompt(mode: 'system' | 'custom', formatId: 'stable' | 'experimental', customPath?: string): Promise<void> {
         try {
-            const fileName = mode === 'stable' ? 'prompt-stable.md' : 'prompt-experimental.md';
+            const fileName = formatId === 'stable' ? 'prompt-stable.md' : 'prompt-experimental.md';
             const instructionsPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', fileName);
             
+            let systemPrompt = '';
             try {
                 const fileBytes = await vscode.workspace.fs.readFile(instructionsPath);
-                await vscode.env.clipboard.writeText(new TextDecoder().decode(fileBytes));
-                this.postMessageCallback({ type: 'PROMPT_COPIED' });
+                systemPrompt = new TextDecoder().decode(fileBytes);
             } catch {
                 const fallbackPath = vscode.Uri.joinPath(this.context.extensionUri, 'resources', 'prompt-instructions.md');
                 const fallbackBytes = await vscode.workspace.fs.readFile(fallbackPath);
-                await vscode.env.clipboard.writeText(new TextDecoder().decode(fallbackBytes));
-                this.postMessageCallback({ type: 'PROMPT_COPIED' });
+                systemPrompt = new TextDecoder().decode(fallbackBytes);
             }
+
+            let finalPrompt = systemPrompt;
+
+            if (mode === 'custom' && customPath) {
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (workspaceFolders && workspaceFolders.length > 0) {
+                    try {
+                        const customUri = vscode.Uri.joinPath(workspaceFolders[0].uri, customPath.trim());
+                        const customBytes = await vscode.workspace.fs.readFile(customUri);
+                        const customText = new TextDecoder().decode(customBytes);
+                        
+                        finalPrompt = `--- CUSTOM ARCHITECTURE & CODING RULES ---\n${customText}\n\n--- CRITICAL SYSTEM INSTRUCTIONS (DO NOT IGNORE) ---\n${systemPrompt}`;
+                    } catch {
+                        OutputLogger.log(`Could not read custom prompt path: ${customPath}`, 'WARN');
+                        vscode.window.showWarningMessage(`Could not find custom rules file: ${customPath}. Copied default system instructions instead.`);
+                    }
+                }
+            }
+
+            await vscode.env.clipboard.writeText(finalPrompt);
+            this.postMessageCallback({ type: 'PROMPT_COPIED' });
         } catch (e) {
             OutputLogger.log(`Copy prompt operation failed: ${e}`, 'ERROR');
         }

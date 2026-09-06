@@ -85,8 +85,15 @@ export interface AstSettings {
   lspTimeoutMs: number;
 }
 
+export interface CustomPrompt {
+  id: string;
+  name: string;
+  path: string;
+  baseFormat: 'stable' | 'experimental';
+}
+
 export interface AiSettings {
-  feedbackLoopEnabled: boolean; 
+  customPrompts: CustomPrompt[];
 }
 
 export interface AgentSettings {
