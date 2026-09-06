@@ -8,10 +8,10 @@ import {
 } from '@vscode/webview-ui-toolkit/react';
 import { useAgentStore } from '@/webview/store/agentStore';
 import { useSettingsSync } from './hooks/useSettingsSync';
-import { IconArrowLeft } from '@tabler/icons-react';
+import { IconArrowLeft, IconPlus, IconX } from '@tabler/icons-react';
 import styles from './SettingsView.module.css';
 
-type TabId = 'ui' | 'workflow' | 'engine' | 'ast' | 'ai';
+type TabId = 'ui' | 'workflow' | 'engine' | 'ast' | 'ai' | 'bridge';
 
 const AVAILABLE_LANGUAGES = [
     { id: 'javascript', label: 'JavaScript / JSX' },
@@ -28,21 +28,83 @@ const AVAILABLE_LANGUAGES = [
     { id: 'bash', label: 'Bash' }
 ];
 
+// НОВИЙ КОМПОНЕНТ ДЛЯ МАСИВІВ (Тєги)
+const TagInputList = ({ 
+    items, 
+    onAdd, 
+    onRemove, 
+    placeholder 
+}: { 
+    items: string[], 
+    onAdd: (val: string) => void, 
+    onRemove: (val: string) => void, 
+    placeholder: string 
+}) => {
+    const [inputValue, setInputValue] = useState('');
+
+    const handleAdd = () => {
+        const val = inputValue.trim();
+        if (val && !items.includes(val)) {
+            onAdd(val);
+            setInputValue('');
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleAdd();
+        }
+    };
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+                <VSCodeTextField
+                    style={{ flex: 1 }}
+                    value={inputValue}
+                    onInput={(e: any) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={placeholder}
+                />
+                <button type="button" className={styles.addTagBtn} onClick={handleAdd} title="Add item">
+                    <IconPlus size={14} />
+                </button>
+            </div>
+            <div className={styles.tagList}>
+                {items.map(item => (
+                    <span key={item} className={styles.tag} title={item}>
+                        {item}
+                        <button type="button" className={styles.tagRemoveBtn} onClick={() => onRemove(item)} title="Remove item">
+                            <IconX size={12} />
+                        </button>
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 export const SettingsView = () => {
     const settings = useAgentStore((state) => state.settings);
     const toggleSettings = useAgentStore((state) => state.toggleSettings);
     const { updateSetting } = useSettingsSync();
 
     const [activeTab, setActiveTab] = useState<TabId>('ui');
+    
+    // Вхідні стейти (Local Inputs) для скалярних значень
     const [retentionInput, setRetentionInput] = useState(settings.workflow.backupRetentionDays.toString());
     const [fileSizeInput, setFileSizeInput] = useState(settings.engine.maxFileSizeMb.toString());
     const [candidatesInput, setCandidatesInput] = useState(settings.engine.maxGlobalSearchCandidates.toString());
     const [historyInput, setHistoryInput] = useState(settings.workflow.historyKeepCount.toString());
-    
-    const [ignoredDirsInput, setIgnoredDirsInput] = useState(settings.workflow.ignoredCleanupDirs.join(', '));
     const [parserTimeoutInput, setParserTimeoutInput] = useState(settings.ast.parserTimeoutMs.toString());
     const [lspTimeoutInput, setLspTimeoutInput] = useState(settings.ast.lspTimeoutMs.toString());
     
+    // Bridge стейти
+    const [bridgeUrlInput, setBridgeUrlInput] = useState(settings.bridge.customUrl);
+    const [bridgeFileSizeInput, setBridgeFileSizeInput] = useState(settings.bridge.maxFileSizeKb.toString());
+    const [bridgeProjectSizeInput, setBridgeProjectSizeInput] = useState(settings.bridge.maxProjectSizeMb.toString());
+
     const tabBarRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -50,41 +112,40 @@ export const SettingsView = () => {
         setFileSizeInput(settings.engine.maxFileSizeMb.toString());
         setCandidatesInput(settings.engine.maxGlobalSearchCandidates.toString());
         setHistoryInput(settings.workflow.historyKeepCount.toString());
-        setIgnoredDirsInput(settings.workflow.ignoredCleanupDirs.join(', '));
         setParserTimeoutInput(settings.ast.parserTimeoutMs.toString());
         setLspTimeoutInput(settings.ast.lspTimeoutMs.toString());
+        setBridgeUrlInput(settings.bridge.customUrl);
+        setBridgeFileSizeInput(settings.bridge.maxFileSizeKb.toString());
+        setBridgeProjectSizeInput(settings.bridge.maxProjectSizeMb.toString());
     }, [
         settings.workflow,
         settings.engine,
-        settings.ast
+        settings.ast,
+        settings.bridge
     ]);
 
-    const handleNumberChange = (category: 'workflow' | 'engine' | 'ast', key: string, val: string, setter: (val: string) => void) => {
+    const handleNumberChange = (category: 'workflow' | 'engine' | 'ast' | 'bridge', key: string, val: string, setter: (val: string) => void) => {
         setter(val);
         if (val.trim() === '') return; 
-        
         const parsed = parseInt(val, 10);
-        if (!isNaN(parsed) && parsed > 0) {
+        if (!isNaN(parsed) && parsed >= 0) {
             updateSetting(category, key, parsed);
         }
     };
 
-    const handleArrayChange = (category: 'workflow', key: string, val: string, setter: (val: string) => void) => {
+    const handleTextChange = (category: 'bridge', key: string, val: string, setter: (val: string) => void) => {
         setter(val);
-        const arr = val.split(',').map(s => s.trim()).filter(Boolean);
-        updateSetting(category, key, arr);
+        updateSetting(category, key, val);
     };
 
     const toggleLanguage = (langId: string, checked: boolean) => {
         const currentLangs = settings.ast.enabledLanguages;
         let newLangs: string[];
-        
         if (checked) {
             newLangs = [...new Set([...currentLangs, langId])];
         } else {
             newLangs = currentLangs.filter(l => l !== langId);
         }
-        
         updateSetting('ast', 'enabledLanguages', newLangs);
     };
 
@@ -95,6 +156,15 @@ export const SettingsView = () => {
                 tabBarRef.current.scrollLeft += e.deltaY;
             }
         }
+    };
+
+    // Хелпери для роботи з масивами-тегами
+    const handleAddTag = (category: any, key: string, currentArray: string[], value: string) => {
+        updateSetting(category, key, [...currentArray, value]);
+    };
+
+    const handleRemoveTag = (category: any, key: string, currentArray: string[], value: string) => {
+        updateSetting(category, key, currentArray.filter(v => v !== value));
     };
 
     return (
@@ -118,6 +188,7 @@ export const SettingsView = () => {
                 <button type="button" role="tab" aria-selected={activeTab === 'engine'} className={`${styles.tabBtn} ${activeTab === 'engine' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('engine')}>Diff Engine</button>
                 <button type="button" role="tab" aria-selected={activeTab === 'ast'} className={`${styles.tabBtn} ${activeTab === 'ast' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('ast')}>AST & Semantics</button>
                 <button type="button" role="tab" aria-selected={activeTab === 'ai'} className={`${styles.tabBtn} ${activeTab === 'ai' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('ai')}>AI Prompts</button>
+                <button type="button" role="tab" aria-selected={activeTab === 'bridge'} className={`${styles.tabBtn} ${activeTab === 'bridge' ? styles.tabBtnActive : ''}`} onClick={() => setActiveTab('bridge')}>Export Bridge</button>
             </div>
 
             <div className={styles.content}>
@@ -225,10 +296,16 @@ export const SettingsView = () => {
                             <p className={styles.description}>Removes scaffolded folders automatically if you roll back a file creation.</p>
                         </div>
 
+                        {/* НОВИЙ UI ДЛЯ ІГНОРОВАНИХ ПАПОК КЛІНАПУ */}
                         <div className={styles.settingItem}>
                             <label className={styles.label}>Ignored Cleanup Directories</label>
-                            <VSCodeTextField value={ignoredDirsInput} onInput={(e: any) => handleArrayChange('workflow', 'ignoredCleanupDirs', e.target.value, setIgnoredDirsInput)} />
-                            <p className={styles.description}>Comma-separated list of metadata files to ignore when checking if a directory is empty (e.g., .ds_store, desktop.ini).</p>
+                            <TagInputList 
+                                items={settings.workflow.ignoredCleanupDirs}
+                                placeholder="Add folder or file name (e.g. .ds_store)"
+                                onAdd={(val) => handleAddTag('workflow', 'ignoredCleanupDirs', settings.workflow.ignoredCleanupDirs, val)}
+                                onRemove={(val) => handleRemoveTag('workflow', 'ignoredCleanupDirs', settings.workflow.ignoredCleanupDirs, val)}
+                            />
+                            <p className={styles.description}>Files/folders to ignore when checking if a directory is empty.</p>
                         </div>
 
                         <div className={styles.settingItem}>
@@ -491,6 +568,112 @@ export const SettingsView = () => {
                                 ))}
                             </div>
                         )}
+                    </section>
+                )}
+
+                {/* --- BRIDGE SETTINGS --- */}
+                {activeTab === 'bridge' && (
+                    <section className={styles.section}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--vscode-panel-border)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <h3 className={styles.sectionTitle} style={{ margin: 0 }}>Localhost Bridge</h3>
+                                <p className={styles.description} style={{ marginTop: '4px' }}>Send your entire project context to Make1Txt.</p>
+                            </div>
+                            <VSCodeCheckbox 
+                                checked={settings.bridge.enableBridge} 
+                                onChange={(e: any) => updateSetting('bridge', 'enableBridge', e.target.checked)}
+                            >
+                                Enable
+                            </VSCodeCheckbox>
+                        </div>
+
+                        <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            gap: '16px', 
+                            opacity: settings.bridge.enableBridge ? 1 : 0.5, 
+                            pointerEvents: settings.bridge.enableBridge ? 'auto' : 'none',
+                            transition: 'opacity 0.2s ease'
+                        }}>
+                            
+                            {/* Target URL Group */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <VSCodeCheckbox 
+                                    checked={settings.bridge.useCustomUrl} 
+                                    onChange={(e: any) => updateSetting('bridge', 'useCustomUrl', e.target.checked)}
+                                >
+                                    Use Custom Target URL
+                                </VSCodeCheckbox>
+                                
+                                {settings.bridge.useCustomUrl && (
+                                    <div className={styles.settingItem} style={{ marginLeft: '24px' }}>
+                                        <VSCodeTextField 
+                                            value={bridgeUrlInput} 
+                                            placeholder="https://your-custom-instance.vercel.app"
+                                            onInput={(e: any) => handleTextChange('bridge', 'customUrl', e.target.value, setBridgeUrlInput)} 
+                                        />
+                                        <p className={styles.description}>The URL of your hosted Make1Txt instance. Must include http:// or https://.</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <VSCodeDivider />
+
+                            {/* Exclusions Group - НОВИЙ TAG-BASED UI */}
+                            <div className={styles.settingItem}>
+                                <VSCodeCheckbox 
+                                    checked={settings.bridge.respectGitIgnore} 
+                                    onChange={(e: any) => updateSetting('bridge', 'respectGitIgnore', e.target.checked)}
+                                >
+                                    Respect .gitignore (Global)
+                                </VSCodeCheckbox>
+                                <p className={styles.description}>Automatically drops files ignored by Git.</p>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <div className={styles.settingItem}>
+                                    <label className={styles.label}>Ignored Extensions</label>
+                                    <TagInputList 
+                                        items={settings.bridge.ignoredExtensions}
+                                        placeholder="Add extension (e.g. .exe)"
+                                        onAdd={(val) => handleAddTag('bridge', 'ignoredExtensions', settings.bridge.ignoredExtensions, val)}
+                                        onRemove={(val) => handleRemoveTag('bridge', 'ignoredExtensions', settings.bridge.ignoredExtensions, val)}
+                                    />
+                                </div>
+                                <div className={styles.settingItem}>
+                                    <label className={styles.label}>Ignored Directories</label>
+                                    <TagInputList 
+                                        items={settings.bridge.ignoredDirectories}
+                                        placeholder="Add directory (e.g. node_modules)"
+                                        onAdd={(val) => handleAddTag('bridge', 'ignoredDirectories', settings.bridge.ignoredDirectories, val)}
+                                        onRemove={(val) => handleRemoveTag('bridge', 'ignoredDirectories', settings.bridge.ignoredDirectories, val)}
+                                    />
+                                </div>
+                            </div>
+
+                            <VSCodeDivider />
+
+                            {/* Limits Group */}
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <div className={styles.settingItem} style={{ flex: 1 }}>
+                                    <label className={styles.label}>Max File Size (KB)</label>
+                                    <VSCodeTextField 
+                                        value={bridgeFileSizeInput} 
+                                        onInput={(e: any) => handleNumberChange('bridge', 'maxFileSizeKb', e.target.value, setBridgeFileSizeInput)} 
+                                    />
+                                    <p className={styles.description}>Files larger than this limit will be skipped. Set to 0 for unlimited.</p>
+                                </div>
+                                <div className={styles.settingItem} style={{ flex: 1 }}>
+                                    <label className={styles.label}>Total Project Limit (MB)</label>
+                                    <VSCodeTextField 
+                                        value={bridgeProjectSizeInput} 
+                                        onInput={(e: any) => handleNumberChange('bridge', 'maxProjectSizeMb', e.target.value, setBridgeProjectSizeInput)} 
+                                    />
+                                    <p className={styles.description}>Safety threshold. Export aborts if the total payload exceeds this memory limit.</p>
+                                </div>
+                            </div>
+
+                        </div>
                     </section>
                 )}
             </div>

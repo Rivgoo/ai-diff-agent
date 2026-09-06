@@ -6,12 +6,12 @@ import styles from './SessionTabs.module.css';
 
 export const SessionTabs = () => {
     const { sendEvent } = useIPC();
-    const context = useContext(AgentContext); // ФІКС
+    const context = useContext(AgentContext);
     
     const containerRef = useRef<HTMLDivElement>(null);
     
     if (!context) throw new Error('SessionTabs must be inside AgentProvider');
-    const { sessions, activeSessionId } = context.state;
+    const { sessions, activeSessionId, settings } = context.state;
 
     const sessionList = Object.values(sessions).sort((a, b) => Number(a.id) - Number(b.id));
 
@@ -34,8 +34,15 @@ export const SessionTabs = () => {
             <div className={styles.topActions} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '0 8px' }}>
                 <button 
                     className={styles.iconBtn} style={{ background: 'none', border: 'none', color: 'var(--vscode-icon-foreground)', cursor: 'pointer' }}
-                    onClick={() => sendEvent({ type: 'OPEN_EXTERNAL_LINK', url: 'https://make1txt.vercel.app/' })} 
-                    title="Convert Repo to TXT (Make1txt)"
+                    onClick={() => {
+                        // ФІКС: Логіка перенаправлення
+                        if (settings.bridge.enableBridge) {
+                            sendEvent({ type: 'BRIDGE_TO_MAKE1TXT' });
+                        } else {
+                            sendEvent({ type: 'OPEN_EXTERNAL_LINK', url: 'https://make1txt.vercel.app/' });
+                        }
+                    }} 
+                    title={settings.bridge.enableBridge ? "Export Project to Make1Txt" : "Open Make1Txt (Bridge Disabled)"}
                 >
                     <IconFolder size={14} />
                 </button>

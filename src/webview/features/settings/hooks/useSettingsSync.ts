@@ -8,7 +8,7 @@ export const useSettingsSync = () => {
     
     const timersRef = useRef<Map<string, number>>(new Map());
 
-    const updateSetting = useCallback((category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai', key: string, value: any) => {
+    const updateSetting = useCallback((category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai' | 'bridge', key: string, value: any) => {
         updateLocalSetting(category, key, value);
 
         const timerKey = `${category}.${key}`;

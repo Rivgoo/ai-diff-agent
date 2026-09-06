@@ -28,11 +28,12 @@ export class SettingsManager {
             workflow: this.configService.getWorkflowSettings(),
             engine: this.configService.getEngineSettings(),
             ast: this.configService.getAstSettings(),
-            ai: this.configService.getAiSettings()
+            ai: this.configService.getAiSettings(),
+            bridge: this.configService.getBridgeSettings()
         };
     }
 
-    public async updateSetting(category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai', key: string, value: any): Promise<void> {
+    public async updateSetting(category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai' | 'bridge', key: string, value: any): Promise<void> {
         try {
             await this.configService.updateSetting(category, key, value);
         } catch (error) {

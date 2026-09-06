@@ -96,12 +96,24 @@ export interface AiSettings {
   customPrompts: CustomPrompt[];
 }
 
+export interface BridgeSettings {
+  enableBridge: boolean;
+  useCustomUrl: boolean;
+  customUrl: string;
+  maxFileSizeKb: number;
+  maxProjectSizeMb: number;
+  respectGitIgnore: boolean;
+  ignoredExtensions: string[];
+  ignoredDirectories: string[];
+}
+
 export interface AgentSettings {
   ui: UiSettings;
   workflow: WorkflowSettings;
   engine: EngineSettings;
   ast: AstSettings;
   ai: AiSettings;
+  bridge: BridgeSettings;
 }
 
 export interface ChangeBlock {

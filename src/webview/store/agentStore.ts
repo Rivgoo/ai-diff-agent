@@ -53,7 +53,7 @@ interface AgentState {
         isPartiallyResolved?: boolean,
         blastRadiusWarning?: string
     ) => void;
-    updateLocalSetting: (category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai', key: string, value: any) => void;
+    updateLocalSetting: (category: 'ui' | 'workflow' | 'engine' | 'ast' | 'ai' | 'bridge', key: string, value: any) => void;
 }
 
 export const useAgentStore = create<AgentState>((set) => ({
@@ -128,6 +128,16 @@ export const useAgentStore = create<AgentState>((set) => ({
         },
         ai: {
             customPrompts: []
+        },
+        bridge: {
+            enableBridge: true,
+            useCustomUrl: false,
+            customUrl: 'https://make1txt.vercel.app',
+            maxFileSizeKb: 10240,
+            maxProjectSizeMb: 50,
+            respectGitIgnore: true,
+            ignoredExtensions: ['.exe', '.dll', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp', '.tiff', '.raw', '.heic', '.psd', '.ai', '.xd', '.sketch', '.fig', '.fbx', '.blend', '.stl', '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.pdf', '.zip', '.rar', '.7z', '.tar', '.gz', '.iso', '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'],
+            ignoredDirectories: ['.git', '.svn', '.hg', '.bzr', 'node_modules', 'bower_components', 'jspm_packages', '.npm', '.yarn', '.pnpm-store', 'venv', '.venv', 'env', '.env', '__pycache__', '.pytest_cache', '.tox', '.nox', '.mypy_cache', 'build', 'dist', 'out', 'target', 'bin', 'obj', '.next', '.nuxt', '.vue', '.svelte-kit', '.svelte', '.angular', 'coverage', '.nyc_output', 'vendor', 'var', '.cache', '.parcel-cache', '.vite', '.webpack', '.rollup.cache']
         }
     },
     isSettingsOpen: false,
@@ -173,7 +183,6 @@ export const useAgentStore = create<AgentState>((set) => ({
             const currentOp = state.operationsMap[opId];
             if (!currentOp) return state;
 
-            // ФІКС: Автоматичне очищення конфліктів при вирішенні
             const isResolved = status === 'saved' || status === 'reverted';
 
             return {

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { SYSTEM_CONSTANTS } from "@/shared/constants";
-import type { UiSettings, WorkflowSettings, EngineSettings, AstSettings, AiSettings } from "@/shared/models";
+import type { UiSettings, WorkflowSettings, EngineSettings, AstSettings, AiSettings, BridgeSettings } from "@/shared/models";
 
 export class ConfigurationService {
   public getUiSettings(): UiSettings {
@@ -84,7 +84,23 @@ export class ConfigurationService {
     };
   }
 
-  public async updateSetting(category: "ui" | "workflow" | "engine" | "ast" | "ai", key: string, value: any): Promise<void> {
+  public getBridgeSettings(): BridgeSettings {
+    const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
+    const bridge = config.get<Partial<BridgeSettings>>("bridge") || {};
+
+    return {
+      enableBridge: bridge.enableBridge ?? true,
+      useCustomUrl: bridge.useCustomUrl ?? false,
+      customUrl: bridge.customUrl ?? 'https://make1txt.vercel.app',
+      maxFileSizeKb: bridge.maxFileSizeKb ?? 10240,
+      maxProjectSizeMb: bridge.maxProjectSizeMb ?? 50,
+      respectGitIgnore: bridge.respectGitIgnore ?? true,
+      ignoredExtensions: bridge.ignoredExtensions ?? ['.exe', '.dll', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp', '.tiff', '.raw', '.heic', '.psd', '.ai', '.xd', '.sketch', '.fig', '.fbx', '.blend', '.stl', '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.pdf', '.zip', '.rar', '.7z', '.tar', '.gz', '.iso', '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'],
+      ignoredDirectories: bridge.ignoredDirectories ?? ['.git', '.svn', '.hg', '.bzr', 'node_modules', 'bower_components', 'jspm_packages', '.npm', '.yarn', '.pnpm-store', 'venv', '.venv', 'env', '.env', '__pycache__', '.pytest_cache', '.tox', '.nox', '.mypy_cache', 'build', 'dist', 'out', 'target', 'bin', 'obj', '.next', '.nuxt', '.vue', '.svelte-kit', '.svelte', '.angular', 'coverage', '.nyc_output', 'vendor', 'var', '.cache', '.parcel-cache', '.vite', '.webpack', '.rollup.cache']
+    };
+  }
+
+  public async updateSetting(category: "ui" | "workflow" | "engine" | "ast" | "ai" | "bridge", key: string, value: any): Promise<void> {
     const config = vscode.workspace.getConfiguration(SYSTEM_CONSTANTS.CONFIG_SECTION);
     
     const currentSection = { ...(config.get<Record<string, any>>(category) || {}) };

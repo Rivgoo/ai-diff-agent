@@ -339,6 +339,62 @@
           "default": {
             "customPrompts": []
           }
+        },
+        "aiDiffAgent.bridge": {
+          "type": "object",
+          "description": "Make1TXT Local Bridge Configuration",
+          "properties": {
+            "enableBridge": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable the Localhost Bridge to send project context directly to Make1TXT."
+            },
+            "useCustomUrl": {
+              "type": "boolean",
+              "default": false,
+              "description": "Use a custom URL instead of the default Make1TXT instance."
+            },
+            "customUrl": {
+              "type": "string",
+              "default": "https://make1txt.vercel.app",
+              "description": "Custom instance URL (must start with http:// or https://)."
+            },
+            "maxFileSizeKb": {
+              "type": "number",
+              "default": 10240,
+              "description": "Maximum size in KB for a single file to be included in the export (default: 10MB)."
+            },
+            "maxProjectSizeMb": {
+              "type": "number",
+              "default": 50,
+              "description": "Maximum total project size in MB before the bridge aborts to prevent OOM errors."
+            },
+            "respectGitIgnore": {
+              "type": "boolean",
+              "default": true,
+              "description": "Respect globally configured .gitignore exclusions during scanning."
+            },
+            "ignoredExtensions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": [".exe", ".dll", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".bmp", ".tiff", ".raw", ".heic", ".psd", ".ai", ".xd", ".sketch", ".fig", ".fbx", ".blend", ".stl", ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".pdf", ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".woff", ".woff2", ".ttf", ".eot", ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a"]
+            },
+            "ignoredDirectories": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": [".git", ".svn", ".hg", ".bzr", "node_modules", "bower_components", "jspm_packages", ".npm", ".yarn", ".pnpm-store", "venv", ".venv", "env", ".env", "__pycache__", ".pytest_cache", ".tox", ".nox", ".mypy_cache", "build", "dist", "out", "target", "bin", "obj", ".next", ".nuxt", ".vue", ".svelte-kit", ".svelte", ".angular", "coverage", ".nyc_output", "vendor", "var", ".cache", ".parcel-cache", ".vite", ".webpack", ".rollup.cache"]
+            }
+          },
+          "default": {
+            "enableBridge": true,
+            "useCustomUrl": false,
+            "customUrl": "https://make1txt.vercel.app",
+            "maxFileSizeKb": 10240,
+            "maxProjectSizeMb": 50,
+            "respectGitIgnore": true,
+            "ignoredExtensions": [".exe", ".dll", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".bmp", ".tiff", ".raw", ".heic", ".psd", ".ai", ".xd", ".sketch", ".fig", ".fbx", ".blend", ".stl", ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".pdf", ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".woff", ".woff2", ".ttf", ".eot", ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a"],
+            "ignoredDirectories": [".git", ".svn", ".hg", ".bzr", "node_modules", "bower_components", "jspm_packages", ".npm", ".yarn", ".pnpm-store", "venv", ".venv", "env", ".env", "__pycache__", ".pytest_cache", ".tox", ".nox", ".mypy_cache", "build", "dist", "out", "target", "bin", "obj", ".next", ".nuxt", ".vue", ".svelte-kit", ".svelte", ".angular", "coverage", ".nyc_output", "vendor", "var", ".cache", ".parcel-cache", ".vite", ".webpack", ".rollup.cache"]
+          }
         }
       }
     }

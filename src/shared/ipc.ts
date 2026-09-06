@@ -11,7 +11,7 @@ export type WebviewEvent =
   | { type: "REQUEST_SETTINGS_SYNC" }
   | { type: "REQUEST_HISTORY_SYNC" }
   | { type: "ROLLBACK_SAGA"; transactionIds: string[] }
-  | { type: "UPDATE_SETTING"; category: "ui" | "workflow" | "engine" | "ast" | "ai"; key: string; value: any; }
+  | { type: "UPDATE_SETTING"; category: "ui" | "workflow" | "engine" | "ast" | "ai" | "bridge"; key: string; value: any; }
   | { type: "SUBMIT_PAYLOAD"; payload: string }
   | { type: "CANCEL_PROCESSING" }
   | { type: "ACTION_SAVE_ALL"; hasConflicts?: boolean }
@@ -26,14 +26,15 @@ export type WebviewEvent =
   | { type: "NEW_SESSION" }
   | { type: "SWITCH_SESSION"; sessionId: string }
   | { type: "DELETE_SESSION"; sessionId: string }
-  | { type: "COPY_PROMPT"; mode: 'system' | 'custom'; formatId: 'stable' | 'experimental'; customPath?: string }
+  | { type: "COPY_PROMPT"; mode?: PromptMode }
   | { type: "DOWNLOAD_INSTRUCTIONS" }
   | { type: "SHOW_OUTPUT_LOG" }
   | { type: "OPEN_EXTERNAL_LINK"; url: string }
   | { type: "SMART_RETRY_CONTEXT"; operationId: string }
   | { type: "ACTION_JUMP_TO_NEXT_BLOCK" }
   | { type: "SET_WALKTHROUGH_STATE"; isActive: boolean }
-  | { type: "OPEN_PROBLEMS_PANEL" };
+  | { type: "OPEN_PROBLEMS_PANEL" }
+  | { type: "BRIDGE_TO_MAKE1TXT" };
 
 export type ExtensionEvent =
   | { type: "STATE_HYDRATE"; sessions: Record<string, ChatSession>; activeSessionId: string; }

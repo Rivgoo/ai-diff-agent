@@ -23,6 +23,7 @@ import type { DecorationService } from '@/extension/transactions/services/Decora
 import type { OperationStatusUpdate } from '@/extension/transactions/core/TransactionEvents';
 import { VirtualConflictProvider } from '@/extension/vscode/VirtualConflictProvider';
 import { ClipboardObserverService } from '@/extension/services/ClipboardObserverService';
+import { Make1TxtBridgeService } from '@/extension/services/Make1TxtBridgeService'; // ФІКС: Імпорт моста
 
 export class MessageRouter {
     private readonly sessionManager: ChatSessionManager;
@@ -31,6 +32,7 @@ export class MessageRouter {
     private readonly pendingOperations = new Map<string, AnyOperation>();
     private readonly processPayloadUseCase: ProcessPayloadUseCase;
     private readonly snapshotService: SnapshotService;
+    private readonly bridgeService: Make1TxtBridgeService; // ФІКС: Сервіс моста
     
     private isProcessingLens = false;
     private isWalkthroughActive = false; 
@@ -74,6 +76,7 @@ export class MessageRouter {
         const directoryCleanupService = new DirectoryCleanupService();
 
         this.snapshotService = new SnapshotService(context.globalStorageUri);
+        this.bridgeService = new Make1TxtBridgeService(this.settingsManager); // ФІКС: Ініціалізація
 
         this.transactionPipeline = new TransactionPipeline(
             this.store,
@@ -148,6 +151,9 @@ export class MessageRouter {
 
     public handleMessage(event: WebviewEvent): void {
         switch (event.type) {
+            case 'BRIDGE_TO_MAKE1TXT': // ФІКС: Запуск моста
+                this.bridgeService.startSync();
+                break;
             case 'REQUEST_STATE_SYNC': this.syncState(); break;
             case 'REQUEST_SETTINGS_SYNC': this.syncSettings(); break;
             case 'REQUEST_HISTORY_SYNC': this.syncHistory(); break; 
@@ -216,7 +222,6 @@ export class MessageRouter {
             case 'OPEN_DIFF': this.handleOpenDiff(event.operationId); break;
             case 'OPEN_HISTORY_DIFF': this.handleOpenHistoryDiff(event.operationId, event.filePath); break;
             case 'OPEN_FILE_AT_RANGE': this.handleOpenFileAtRange(event.path, event.range); break;
-            // ФІКС: Оновлено сигнатуру виклику
             case 'COPY_PROMPT': 
                 this.handleCopyPrompt(
                     event.mode as any, 
@@ -429,7 +434,6 @@ Please rewrite the \`<update_file>\` block with more specific or correct context
         }
     }
 
-    // ФІКС: Повністю переписаний правильний метод обробки кастомних промптів
     private async handleCopyPrompt(mode: 'system' | 'custom', formatId: 'stable' | 'experimental', customPath?: string): Promise<void> {
         try {
             const fileName = formatId === 'stable' ? 'prompt-stable.md' : 'prompt-experimental.md';
