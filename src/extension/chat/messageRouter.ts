@@ -304,6 +304,8 @@ export class MessageRouter {
                 explanation = `But this pattern was not found. The context may have changed.`;
             } else if (conflict.reason === 'SYNTAX_CORRUPTION_PREVENTED') {
                 explanation = `But applying this change would cause a critical syntax error (corruption).`;
+            } else {
+                explanation = `The system rejected the change due to an internal execution error: ${conflict.searchExcerpt}`;
             }
 
             const prompt = `I tried to apply your changes to \`${targetPath}\`, but it failed with: **${conflict.reason}**.

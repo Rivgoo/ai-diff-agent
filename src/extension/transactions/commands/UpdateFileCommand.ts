@@ -112,7 +112,6 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                 
                 const excerpt = change.search.split(/\r?\n/).slice(0, 3).join('\n');
                 
-                // ФІКС: Створюємо CoreDiagnostic для відправки в панель Problems
                 const diagnosticObj: CoreDiagnostic = match.diagnostic || {
                     operationId: this.operationId,
                     path: this.targetPath,
@@ -142,11 +141,10 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                         
                         if (uniqueFiles.size > 0) {
                             this.metadata.blastRadiusWarning = `⚠️ Blast Radius: Modifying this entity may affect ${uniqueFiles.size} other file(s).`;
-                            context.logger.warn(`[Blast Radius] Entity in ${this.targetPath} is referenced in ${uniqueFiles.size} external files.`);
                         }
                     }
                 } catch (e) {
-                    context.logger.info(`[Blast Radius] Provider not available or failed: ${e}`);
+                    context.logger.info(`[Blast Radius] Provider not available or failed.`);
                 }
             }
 
@@ -172,8 +170,16 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
                 }
             }
 
+            // ФІКС: Захист від інвертованих координат (start > end)
+            let safeStart = match.range.start;
+            let safeEnd = match.range.end;
+            if (safeStart.line > safeEnd.line || (safeStart.line === safeEnd.line && safeStart.character > safeEnd.character)) {
+                safeStart = match.range.end;
+                safeEnd = match.range.start;
+            }
+
             this.matchedBlocks.push({
-                range: match.range,
+                range: { start: safeStart, end: safeEnd },
                 replace: finalReplace,
                 requiresMerge
             });
@@ -181,6 +187,27 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
 
         if (allBlocksAlreadyApplied && this.operation.changes.length > 0) {
             this.metadata.alreadyApplied = true;
+            return Result.ok(undefined);
+        }
+
+        // ФІКС: Перевірка на перекриття блоків (Overlap Detection)
+        this.matchedBlocks.sort((a, b) => a.range.start.line - b.range.start.line);
+
+        for (let i = 0; i < this.matchedBlocks.length - 1; i++) {
+            const current = this.matchedBlocks[i];
+            const next = this.matchedBlocks[i + 1];
+            
+            if (current.range.end.line >= next.range.start.line) {
+                const excerpt = this.operation.changes[i + 1].search.split(/\r?\n/).slice(0, 3).join('\n');
+                return Result.fail(this.buildConflict('AMBIGUOUS_MATCH', undefined, i + 2, this.operation.changes.length, excerpt, {
+                    operationId: this.operationId,
+                    path: this.targetPath,
+                    severity: 'critical',
+                    title: 'Overlapping AI Edits',
+                    detailedMessage: `AI generated multiple replacement blocks that overlap each other at line ${current.range.end.line}. VS Code rejected the edit to prevent file corruption.`,
+                    code: 'OVERLAPPING_EDITS'
+                }));
+            }
         }
 
         return Result.ok(undefined);
@@ -194,6 +221,7 @@ export class UpdateFileCommand extends BaseCommand<UpdateFileOperation> {
     public async apply(context: ITransactionContext): Promise<void> {
         if (this.metadata.alreadyApplied) return; 
 
+        // Сортуємо з кінця в початок для безпечної вставки без зсуву координат
         this.matchedBlocks.sort((a, b) => b.range.start.line - a.range.start.line);
 
         for (const match of this.matchedBlocks) {

@@ -24,7 +24,13 @@ export class VsCodeUnitOfWork implements IUnitOfWork {
 
     public replace(path: string, range: Range, content: string): void {
         const uri = this.getAbsoluteUri(path);
-        const vsRange = new vscode.Range(range.start.line, range.start.character, range.end.line, range.end.character);
+        // ФІКС: Жорсткий захист від від'ємних координат
+        const startLine = Math.max(0, range.start.line);
+        const startChar = Math.max(0, range.start.character);
+        const endLine = Math.max(0, range.end.line);
+        const endChar = Math.max(0, range.end.character);
+        
+        const vsRange = new vscode.Range(startLine, startChar, endLine, endChar);
         this.edit.replace(uri, vsRange, content);
         this.trackPath(path);
     }

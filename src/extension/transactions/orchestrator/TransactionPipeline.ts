@@ -121,6 +121,7 @@ export class TransactionPipeline {
             
             if (abortSignal?.aborted) throw new Error('ABORTED_BY_USER');
 
+            // Якщо VS Code FS відхилить зміни (наприклад через блокування файлу), впаде помилка
             await this.commitPhase.execute(validCommands, validPendingOps, context, rootName, rootUri);
 
             const astSettings = this.settingsManager.getSettings().ast;
@@ -215,6 +216,7 @@ export class TransactionPipeline {
 
         } catch (err) {
             const isAborted = err instanceof Error && err.message === 'ABORTED_BY_USER';
+            const errorMsg = err instanceof Error ? err.message : String(err);
             
             if (isAborted) {
                 this.logger.warn(`Transaction cancelled by user. Rolling back applied operations.`);
@@ -229,12 +231,14 @@ export class TransactionPipeline {
                     this.logger.error(`Failed to revert operation ${cmd.operationId} during crash recovery: ${revertErr}`);
                 } finally {
                     this.transactionLock.release(cmd.operationId);
+                    
+                    // ФІКС: Зберігаємо нормальну помилку в UI замість UNKNOWN
                     this.onStatusUpdate({
                         operationId: cmd.operationId,
                         status: isAborted ? 'reverted' : 'error',
                         conflict: isAborted 
                             ? { reason: 'ABORTED', blockIndex: 0, totalBlocks: 0, searchExcerpt: 'Operation cancelled by user.', originalSearchBlock: '' }
-                            : { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: String(err), originalSearchBlock: '' }
+                            : { reason: 'UNKNOWN', blockIndex: 0, totalBlocks: 0, searchExcerpt: errorMsg, originalSearchBlock: '' }
                     });
                 }
             }
